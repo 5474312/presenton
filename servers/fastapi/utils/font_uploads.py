@@ -301,6 +301,23 @@ async def backfill_font_uploads_from_disk() -> None:
             await session.commit()
 
 
+async def _persist_built_font_upload(
+    font_upload: FontUpload,
+) -> FontUpload:
+    """
+    Commit a font upload row.
+
+    Flush and refresh before commit so a refresh failure cannot leave a
+    committed database row without a matching file on disk.
+    """
+    async with async_session_maker() as session:
+        session.add(font_upload)
+        await session.flush()
+        await session.refresh(font_upload)
+        await session.commit()
+    return font_upload
+
+
 async def persist_font_file(
     src_path: str,
     filename: Optional[str] = None,
@@ -312,17 +329,17 @@ async def persist_font_file(
         f"{Path(source_filename).stem}_{uuid.uuid4().hex[:8]}{extension}"
     )
     dest_path = os.path.join(get_fonts_directory(), unique_filename)
+    committed = False
     try:
         await _copy_file(src_path, dest_path)
 
         font_upload = _build_font_upload_from_path(dest_path, filename=unique_filename)
-        async with async_session_maker() as session:
-            session.add(font_upload)
-            await session.commit()
-            await session.refresh(font_upload)
+        font_upload = await _persist_built_font_upload(font_upload)
+        committed = True
         return font_upload, dest_path
     except Exception:
-        remove_font_file_quietly(dest_path)
+        if not committed:
+            remove_font_file_quietly(dest_path)
         raise
 
 
@@ -333,19 +350,19 @@ async def persist_upload_file(font_file: UploadFile) -> Tuple[FontUpload, str]:
     unique_filename = f"{Path(filename).stem}_{uuid.uuid4().hex[:8]}{extension}"
     dest_path = os.path.join(get_fonts_directory(), unique_filename)
 
+    committed = False
     try:
         content = await read_upload_with_size_limit(font_file)
         with open(dest_path, "wb") as file:
             file.write(content)
 
         font_upload = _build_font_upload_from_path(dest_path, filename=unique_filename)
-        async with async_session_maker() as session:
-            session.add(font_upload)
-            await session.commit()
-            await session.refresh(font_upload)
+        font_upload = await _persist_built_font_upload(font_upload)
+        committed = True
         return font_upload, dest_path
     except Exception:
-        remove_font_file_quietly(dest_path)
+        if not committed:
+            remove_font_file_quietly(dest_path)
         raise
 
 

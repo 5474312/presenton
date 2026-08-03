@@ -35,8 +35,12 @@ class DummyUploadFile:
         self._content = content
         self.size = len(content) if size is _SIZE_UNSET else size
 
-    async def read(self) -> bytes:
-        return self._content
+    async def read(self, size: int = -1) -> bytes:
+        if size is None or size < 0:
+            data, self._content = self._content, b""
+            return data
+        data, self._content = self._content[:size], self._content[size:]
+        return data
 
 
 async def _run_sync_in_test(func, *args, **kwargs):
