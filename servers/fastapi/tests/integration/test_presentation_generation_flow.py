@@ -68,6 +68,26 @@ def _template_layout_payload() -> dict:
     }
 
 
+def _template_theme_data() -> dict:
+    return {
+        "colors": {
+            "primary": "#2563EB",
+            "background": "#F8FAFC",
+            "card": "#FFFFFF",
+            "stroke": "#CBD5E1",
+            "background_text": "#111827",
+            "primary_text": "#FFFFFF",
+            **{f"graph_{index}": f"#{index + 1:06X}" for index in range(10)},
+        },
+        "fonts": {
+            "textFont": {
+                "name": "Inter",
+                "url": "https://example.com/inter.css",
+            }
+        },
+    }
+
+
 def test_generate_presentation_handler_full_flow_uses_mocked_dependencies():
     request = GeneratePresentationRequest(
         content="Create a two-slide deck about renewable energy.",
@@ -171,6 +191,7 @@ def test_generate_presentation_handler_uses_template_layout():
         id=template_id,
         name="Custom V2",
         layouts=_template_layout_payload(),
+        theme=_template_theme_data(),
         assets={"fonts": {"Inter": "https://example.com/inter.css"}},
     )
     session = FakeAsyncSession(get_results={template_id: template})
@@ -257,6 +278,13 @@ def test_generate_presentation_handler_uses_template_layout():
         "template_id": template_id,
     }
     assert presentation.fonts == {"Inter": "https://example.com/inter.css"}
+    assert presentation.theme == {
+        "name": "Custom V2 Theme",
+        "description": "Theme generated from the template",
+        "data": _template_theme_data(),
+        "source": "template",
+        "template_id": template_id,
+    }
     assert slide.layout_group == template_id
     assert slide.ui["components"][0]["elements"][0]["runs"][0]["text"] == "V2 headline"
 
@@ -272,7 +300,7 @@ def test_default_template_name_resolves_bundled_template_without_schema_page():
     )
     session = FakeAsyncSession(get_results={template_id: template})
 
-    layout_payload, layout_model, fonts = _run(
+    layout_payload, layout_model, fonts, theme = _run(
         presentation_endpoint._resolve_generation_layout("general", session)
     )
 
@@ -281,6 +309,7 @@ def test_default_template_name_resolves_bundled_template_without_schema_page():
     assert layout_payload["template_id"] == template_id
     assert layout_model.slides[0].id == "template-layout-1"
     assert fonts == {"Inter": "/app_data/templates/general/inter.ttf"}
+    assert theme is None
 
 
 def test_create_presentation_stores_current_version(fake_async_session):

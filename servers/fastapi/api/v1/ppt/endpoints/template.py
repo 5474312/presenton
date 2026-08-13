@@ -38,6 +38,7 @@ from enums.async_task_status import AsyncTaskStatus
 from models.api_error_model import APIErrorModel
 from models.sql.async_task import AsyncTaskModel
 from models.sql.template_v2 import TemplateV2
+from models.theme_data import PresentationThemeData
 from services.database import async_session_maker, get_async_session
 from services.export_task_service import EXPORT_TASK_SERVICE
 from templates.preview import (
@@ -58,6 +59,7 @@ from templates.v2.models.layouts import (
     SlideLayout,
     SlideLayouts,
 )
+from templates.v2.theme import generate_template_theme
 from utils.asset_directory_utils import resolve_app_path_to_filesystem
 from utils.file_utils import get_original_file_name
 from utils.icon_weights import (
@@ -218,6 +220,7 @@ class UpdateTemplateMetadataRequest(BaseModel):
     updated_at: Optional[datetime] = None
     merged_components: Optional[dict[str, Any]] = None
     layouts: Optional[dict[str, Any]] = None
+    theme: Optional[PresentationThemeData] = None
     fonts: Optional[dict[str, str]] = None
     icon_type: Optional[IconType] = None
 
@@ -245,6 +248,7 @@ class TemplateListResponse(BaseModel):
 class TemplateResponse(TemplateListItem):
     merged_components: Optional[dict[str, Any]] = None
     layouts: Optional[dict[str, Any]] = None
+    theme: Optional[PresentationThemeData] = None
     fonts: dict[str, str] = Field(default_factory=dict)
 
 
@@ -451,6 +455,21 @@ async def _merge_generated_components(layouts: SlideLayouts) -> MergedComponents
         len(merged_components.components),
     )
     return merged_components
+
+
+async def _generate_generated_theme(
+    layouts: SlideLayouts,
+    fonts: dict[str, str],
+) -> PresentationThemeData | None:
+    try:
+        return await _run_template_generation_thread(
+            generate_template_theme,
+            layouts,
+            fonts,
+        )
+    except Exception:
+        LOGGER.exception("[template.create] semantic theme generation failed")
+        return None
 
 
 async def _commit_template_task_progress(
@@ -1039,6 +1058,7 @@ def _build_created_template(
     available_fonts: dict[str, str],
     generated_layouts: SlideLayouts,
     merged_components: MergedComponents,
+    generated_theme: PresentationThemeData | None,
 ) -> TemplateV2:
     icon_type = _template_generated_icon_type(request, generated_layouts)
     return TemplateV2(
@@ -1051,6 +1071,11 @@ def _build_created_template(
             mode="json", exclude_none=True
         ),
         layouts=generated_layouts.model_dump(mode="json", exclude_none=True),
+        theme=(
+            generated_theme.model_dump(mode="json", exclude_none=True)
+            if generated_theme is not None
+            else None
+        ),
         assets={
             "icon_type": icon_type,
             "icon_weight": icon_type,
@@ -1074,7 +1099,10 @@ async def _create_template_sync(
         available_fonts,
     )
     generated_layouts = _with_randomized_layout_ids(generated_layouts)
-    merged_components = await _merge_generated_components(generated_layouts)
+    merged_components, generated_theme = await asyncio.gather(
+        _merge_generated_components(generated_layouts),
+        _generate_generated_theme(generated_layouts, available_fonts),
+    )
     template = _build_created_template(
         request,
         pptx_path=pptx_path,
@@ -1082,6 +1110,7 @@ async def _create_template_sync(
         available_fonts=available_fonts,
         generated_layouts=generated_layouts,
         merged_components=merged_components,
+        generated_theme=generated_theme,
     )
     LOGGER.info(
         "[template.create] persisting template name=%s slides=%d images=%d",
@@ -1141,7 +1170,10 @@ async def _create_template_with_task_progress(
             status_code=500,
             detail="Slide layout generation produced invalid output",
         ) from exc
-    merged_components = await _merge_generated_components(generated_layouts)
+    merged_components, generated_theme = await asyncio.gather(
+        _merge_generated_components(generated_layouts),
+        _generate_generated_theme(generated_layouts, available_fonts),
+    )
     template = _build_created_template(
         request,
         pptx_path=pptx_path,
@@ -1149,6 +1181,7 @@ async def _create_template_with_task_progress(
         available_fonts=available_fonts,
         generated_layouts=generated_layouts,
         merged_components=merged_components,
+        generated_theme=generated_theme,
     )
     LOGGER.info(
         "[template.create.async] persisting template task_id=%s name=%s "
@@ -1468,11 +1501,16 @@ async def generate_template_blocks(
             detail="Template layouts are invalid",
         ) from exc
 
-    merged_components = await _merge_generated_components(layouts)
+    merged_components, generated_theme = await asyncio.gather(
+        _merge_generated_components(layouts),
+        _generate_generated_theme(layouts, _get_template_fonts(template)),
+    )
     template.merged_components = merged_components.model_dump(
         mode="json",
         exclude_none=True,
     )
+    if generated_theme is not None:
+        template.theme = generated_theme.model_dump(mode="json", exclude_none=True)
     sql_session.add(template)
     await sql_session.commit()
     await sql_session.refresh(template)
@@ -1608,6 +1646,14 @@ async def update_template_metadata(
         template.assets = assets
         has_updates = True
 
+    if "theme" in request.model_fields_set:
+        template.theme = (
+            request.theme.model_dump(mode="json", exclude_none=True)
+            if request.theme is not None
+            else None
+        )
+        has_updates = True
+
     if "thumbnail" in request.model_fields_set:
         assets = dict(template.assets) if isinstance(template.assets, dict) else {}
         thumbnail = (request.thumbnail or "").strip()
@@ -1665,6 +1711,11 @@ async def get_template(
         updated_at=template.updated_at or get_current_utc_datetime(),
         merged_components=template.merged_components,
         layouts=template.layouts,
+        theme=(
+            PresentationThemeData.model_validate(template.theme)
+            if template.theme is not None
+            else None
+        ),
         fonts=_get_template_fonts(template),
     )
 
