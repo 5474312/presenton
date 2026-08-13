@@ -32,6 +32,7 @@ from templates.v2.models.layouts import (
     SimilarComponentsList,
     SlideLayout,
     SlideLayouts,
+    slide_layout_llm_json_schema,
 )
 from templates.v2.models.elements import Image as SlideImageElement
 from templates.v2.models.elements import ImageFit
@@ -1108,7 +1109,7 @@ def _generate_preview_candidate(
                 "response_format": JSONSchemaResponse(
                     name="SlideLayoutResponse",
                     strict=False,
-                    json_schema=SlideLayout,
+                    json_schema=slide_layout_llm_json_schema(),
                 ),
             }
             if max_tokens is not None:
@@ -1350,7 +1351,7 @@ def _generate_with_validation_retries(
                 response_format=JSONSchemaResponse(
                     name=response_name,
                     strict=False,
-                    json_schema=output_model,
+                    json_schema=_llm_response_schema(output_model),
                 ),
                 max_tokens=max_tokens,
             )
@@ -1563,9 +1564,21 @@ def _model_validation_repair_prompt(
             _json_dumps_for_prompt(invalid_response),
             "",
             "required_json_schema:",
-            _json_dumps_for_prompt(output_model.model_json_schema()),
+            _json_dumps_for_prompt(_llm_output_json_schema(output_model)),
         ]
     )
+
+
+def _llm_output_json_schema(output_model: type[BaseModel]) -> dict[str, Any]:
+    if output_model is SlideLayout:
+        return slide_layout_llm_json_schema()
+    return output_model.model_json_schema()
+
+
+def _llm_response_schema(output_model: type[BaseModel]) -> Any:
+    if output_model is SlideLayout:
+        return slide_layout_llm_json_schema()
+    return output_model
 
 
 def _format_error_for_prompt(error: Exception) -> str:
