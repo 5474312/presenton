@@ -9,11 +9,13 @@ from fastapi import HTTPException
 
 from api.v1.ppt.endpoints import presentation as presentation_endpoint
 from constants.presentation import MAX_NUMBER_OF_SLIDES
+from enums.async_task_status import AsyncTaskStatus
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_and_path import PresentationAndPath
 from models.presentation_from_template import EditPresentationRequest, SlideContentUpdate
 from models.presentation_outline_model import SlideOutlineModel
 from models.presentation_structure_model import PresentationStructureModel
+from models.sql.async_task import AsyncTaskModel
 from models.sql.presentation import PresentationModel, PresentationVersion
 from models.sql.slide import SlideModel
 from models.sql.template_v2 import TemplateV2
@@ -162,6 +164,116 @@ def test_generate_presentation_handler_full_flow_uses_mocked_dependencies():
     assert all(slide.ui is not None for slide in session.added_all)
     assert get_slide_content.call_args_list[0].kwargs["slide_number"] == 1
     assert get_slide_content.call_args_list[1].kwargs["slide_number"] == 2
+
+
+def test_async_task_data_carries_presentation_ref_for_polling_callers():
+    request = GeneratePresentationRequest(
+        content="Create a two-slide deck about renewable energy.",
+        n_slides=2,
+        language="English",
+        export_as="pptx",
+        template="general",
+    )
+    presentation_id = uuid.uuid4()
+    template_id = "general"
+    template = TemplateV2(
+        id=template_id,
+        name="General",
+        layouts=_template_layout_payload(),
+        is_default=True,
+    )
+    session = FakeAsyncSession(get_results={template_id: template})
+    async_status = AsyncTaskModel(
+        type=presentation_endpoint.ASYNC_TASK_TYPE_PRESENTATION_GENERATE,
+        status=AsyncTaskStatus.PENDING,
+        message="Queued for generation",
+    )
+
+    async def fake_outline_stream(*_args, **_kwargs):
+        yield '{"slides":[{"content":"## Intro"},{"content":"## Action Plan"}]}'
+
+    with patch.object(
+        presentation_endpoint.MEM0_PRESENTATION_MEMORY_SERVICE,
+        "store_generation_context",
+        new=AsyncMock(),
+    ), patch.object(
+        presentation_endpoint.MEM0_PRESENTATION_MEMORY_SERVICE,
+        "store_generated_outlines",
+        new=AsyncMock(),
+    ), patch.object(
+        presentation_endpoint,
+        "generate_ppt_outline",
+        side_effect=fake_outline_stream,
+    ), patch.object(
+        presentation_endpoint,
+        "generate_presentation_structure",
+        new=AsyncMock(return_value=PresentationStructureModel(slides=[0, 1])),
+    ), patch.object(
+        presentation_endpoint,
+        "get_slide_content_from_type_and_outline",
+        new=AsyncMock(return_value={"title": "Intro", "points": ["A"]}),
+    ), patch.object(
+        presentation_endpoint,
+        "process_slide_and_fetch_assets",
+        new=AsyncMock(return_value=[]),
+    ), patch.object(
+        presentation_endpoint,
+        "get_images_directory",
+        return_value="/tmp",
+    ), patch.object(
+        presentation_endpoint,
+        "ImageGenerationService",
+        return_value=Mock(),
+    ), patch.object(
+        presentation_endpoint,
+        "export_presentation",
+        new=AsyncMock(
+            return_value=PresentationAndPath(
+                presentation_id=presentation_id,
+                path="/tmp/generated/deck.pptx",
+            )
+        ),
+    ), patch.object(
+        presentation_endpoint.CONCURRENT_SERVICE,
+        "run_task",
+        new=Mock(),
+    ), patch.object(
+        presentation_endpoint,
+        "random",
+        new=Mock(randint=Mock(return_value=0)),
+    ):
+        response = _run(
+            presentation_endpoint.generate_presentation_handler(
+                request=request,
+                presentation_id=presentation_id,
+                async_status=async_status,
+                sql_session=session,
+            )
+        )
+
+    assert async_status.status == AsyncTaskStatus.COMPLETED
+    # A caller that only ever polls the task must be able to reach the file.
+    assert async_status.data["presentation_id"] == str(presentation_id)
+    assert async_status.data["path"] == response.path
+    assert async_status.data["edit_path"] == response.edit_path
+    # Progress fields are still reported alongside them.
+    assert async_status.data["created_slides"] == 2
+    assert async_status.data["remaining_slides"] == 0
+
+
+def test_async_task_data_carries_presentation_ref_before_completion():
+    """The id is present from creation, so a failed task is still identifiable."""
+    data = presentation_endpoint._presentation_task_progress_data(
+        created_slides=0,
+        remaining_slides=12,
+        presentation_id=uuid.UUID("11111111-2222-3333-4444-555555555555"),
+    )
+
+    assert data == {
+        "created_slides": 0,
+        "remaining_slides": 12,
+        "presentation_id": "11111111-2222-3333-4444-555555555555",
+    }
 
 
 def test_generate_presentation_handler_uses_template_layout():

@@ -157,11 +157,19 @@ def _blank_presentation_slide_ui() -> dict[str, Any]:
 def _presentation_task_progress_data(
     created_slides: int,
     remaining_slides: int,
-) -> dict[str, int]:
-    return {
+    presentation_id: Optional[uuid.UUID | str] = None,
+) -> dict[str, Any]:
+    data: dict[str, Any] = {
         "created_slides": max(created_slides, 0),
         "remaining_slides": max(remaining_slides, 0),
     }
+    # Carried from the moment the task is created, so a polling caller can
+    # identify the presentation even while it is still generating -- and,
+    # more importantly, after a task ends in error, when there is no
+    # response body to learn it from.
+    if presentation_id is not None:
+        data["presentation_id"] = str(presentation_id)
+    return data
 
 
 def _requested_slide_count(request: GeneratePresentationRequest) -> int:
@@ -2358,6 +2366,7 @@ async def generate_presentation_handler(
                 async_status.data = _presentation_task_progress_data(
                     created_slides=0,
                     remaining_slides=_requested_slide_count(request),
+                    presentation_id=presentation_id,
                 )
                 async_status.updated_at = datetime.now()
                 sql_session.add(async_status)
@@ -2592,6 +2601,7 @@ async def generate_presentation_handler(
             async_status.data = _presentation_task_progress_data(
                 created_slides=0,
                 remaining_slides=final_n_slides or 0,
+                presentation_id=presentation_id,
             )
             async_status.updated_at = datetime.now()
             sql_session.add(async_status)
@@ -2653,6 +2663,7 @@ async def generate_presentation_handler(
                 async_status.data = _presentation_task_progress_data(
                     created_slides=len(slides),
                     remaining_slides=total_slides_to_create - len(slides),
+                    presentation_id=presentation_id,
                 )
                 async_status.updated_at = datetime.now()
                 sql_session.add(async_status)
@@ -2686,6 +2697,7 @@ async def generate_presentation_handler(
             async_status.data = _presentation_task_progress_data(
                 created_slides=len(slides),
                 remaining_slides=0,
+                presentation_id=presentation_id,
             )
             async_status.updated_at = datetime.now()
             sql_session.add(async_status)
@@ -2733,10 +2745,20 @@ async def generate_presentation_handler(
         if async_status:
             async_status.message = "Presentation generation completed"
             async_status.status = AsyncTaskStatus.COMPLETED
-            async_status.data = _presentation_task_progress_data(
-                created_slides=len(slides),
-                remaining_slides=0,
-            )
+            async_status.data = {
+                **_presentation_task_progress_data(
+                    created_slides=len(slides),
+                    remaining_slides=0,
+                    presentation_id=presentation_id,
+                ),
+                # The same fields the synchronous endpoint returns in its
+                # response body. Without them a polling caller learns only
+                # that *a* task finished, with no way to reach the file it
+                # produced -- the result was previously reachable only by
+                # receiving the completion webhook.
+                "path": response.path,
+                "edit_path": response.edit_path,
+            }
             async_status.updated_at = datetime.now()
             sql_session.add(async_status)
             await sql_session.commit()
@@ -2821,6 +2843,7 @@ async def _run_generate_presentation_task(
         async_status.data = _presentation_task_progress_data(
             created_slides=0,
             remaining_slides=_requested_slide_count(request),
+            presentation_id=presentation_id,
         )
         async_status.updated_at = datetime.now()
         sql_session.add(async_status)
@@ -2852,6 +2875,7 @@ async def generate_presentation_async(
             data=_presentation_task_progress_data(
                 created_slides=0,
                 remaining_slides=_requested_slide_count(request),
+                presentation_id=presentation_id,
             ),
         )
         sql_session.add(async_status)
