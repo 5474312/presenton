@@ -71,10 +71,15 @@ async def _generate_structured_content(
     text_chunk_callback: Optional[TextChunkCallback] = None,
     **kwargs: Any,
 ) -> Optional[dict]:
-    if disconnect_checker is None and text_chunk_callback is None:
-        response = await asyncio.to_thread(client.generate, **kwargs)
-        return extract_structured_content(response.content)
-
+    # Always stream, even with nothing to stream *to*. Structured generation
+    # runs without an explicit max_tokens, so providers default to the model
+    # ceiling, and the Anthropic SDK refuses a non-streaming request whose
+    # estimated duration exceeds ten minutes -- it raises before sending
+    # anything, so the call fails in seconds rather than running long. That
+    # only bit callers with no disconnect checker and no chunk callback, i.e.
+    # background generation, which made it look provider- or size-specific.
+    # Streaming is what the SDK asks for here and is accepted identically by
+    # the other providers, so it is the single path.
     completion_content: Any = None
     streamed_text: list[str] = []
     async for event in stream_generate_events(
