@@ -1082,3 +1082,63 @@ def test_derive_presentation_hydrates_template_slide_ui():
     assert new_presentation.version == PresentationVersion.V2_STANDARD
     assert new_slide.presentation == new_presentation.id
     assert title_element["runs"][0]["text"] == "Derived headline"
+
+
+def test_export_existing_presentation_returns_path_without_regenerating():
+    """A presentation that already exists can be exported on its own.
+
+    Regression cover for the gap this endpoint closes: export used to happen
+    only as a side effect of /generate, /edit and /derive, so an interrupted
+    request left a stored presentation whose file could never be retrieved.
+    """
+    presentation_id = uuid.uuid4()
+    presentation = PresentationModel(
+        id=presentation_id,
+        version=PresentationVersion.V2_STANDARD,
+        content="deck",
+        n_slides=1,
+        language="English",
+        layout=_template_layout_payload(),
+        tone="default",
+        verbosity="standard",
+        instructions=None,
+        title="Existing deck",
+    )
+    session = FakeAsyncSession(get_results={presentation_id: presentation})
+
+    with patch.object(
+        presentation_endpoint,
+        "export_presentation",
+        new=_fake_export_presentation,
+    ):
+        response = _run(
+            presentation_endpoint.export_existing_presentation(
+                id=presentation_id,
+                request_http=FakeRequest(),
+                export_as="pptx",
+                sql_session=session,
+            )
+        )
+
+    assert response.presentation_id == presentation_id
+    assert response.path == "/tmp/generated/deck.pptx"
+    assert response.edit_path == f"/presentation?id={presentation_id}"
+    # Nothing may be mutated or re-created — this only exports what exists.
+    assert session.added == []
+    assert session.commit_count == 0
+
+
+def test_export_existing_presentation_404s_for_unknown_id():
+    session = FakeAsyncSession(get_results={})
+
+    with pytest.raises(HTTPException) as exc_info:
+        _run(
+            presentation_endpoint.export_existing_presentation(
+                id=uuid.uuid4(),
+                request_http=FakeRequest(),
+                export_as="pptx",
+                sql_session=session,
+            )
+        )
+
+    assert exc_info.value.status_code == 404
