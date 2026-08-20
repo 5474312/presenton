@@ -800,7 +800,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               loading={loading}
             />
           </div>
-          <div className="relative h-full min-w-0 flex-1 px-3 pb-3 pt-[18px] md:px-0 max-md:ml-3">
+          <div className="relative h-full min-w-0 flex-1 px-3 pb-6 pt-[18px] md:px-0 max-md:ml-3">
             {showNavigationHint ? (
               <div
                 className="pointer-events-none fixed top-[72px] z-[95] hidden items-center gap-3 rounded-full border border-[#E1E3E9] bg-white/95 py-2 pl-3 pr-2 font-syne text-[13px] text-[#344054] shadow-[0_8px_24px_rgba(16,24,40,0.14)] backdrop-blur md:flex"

@@ -125,7 +125,7 @@ const SlideContent = ({
         <div
           className={cn(
             "w-full shrink-0",
-            fitToContainer ? "my-2" : "my-3 xl:my-4",
+            fitToContainer ? "mt-5" : "my-3 xl:my-4",
           )}
         >
           <SlideActionBar
