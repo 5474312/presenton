@@ -368,7 +368,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
 
   useEffect(() => {
     if (!showNavigationHint) return;
-    const timer = window.setTimeout(dismissNavigationHint, 15_000);
+    const timer = window.setTimeout(dismissNavigationHint, 5_000);
     return () => window.clearTimeout(timer);
   }, [dismissNavigationHint, showNavigationHint]);
 

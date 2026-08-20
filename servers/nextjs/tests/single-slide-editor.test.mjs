@@ -116,7 +116,7 @@ test("desktop editor centers and dismisses its navigation introduction", async (
   );
   assert.match(
     presentationPageSource,
-    /window\.setTimeout\(dismissNavigationHint, 15_000\)/,
+    /window\.setTimeout\(dismissNavigationHint, 5_000\)/,
   );
   assert.match(
     presentationPageSource,
