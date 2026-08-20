@@ -282,8 +282,12 @@ type ElementAlignmentDragState = {
   targets: AlignmentSnapTargets;
 };
 
-const ALIGNMENT_GUIDE_COLOR = "#D946EF";
-const ALIGNMENT_GUIDE_SNAP_DISTANCE_PX = 5;
+const ALIGNMENT_GUIDE_COLOR = "#7A5AF8";
+const ALIGNMENT_GUIDE_HALO_COLOR = "rgba(255, 255, 255, 0.72)";
+const ALIGNMENT_GUIDE_SNAP_DISTANCE_PX = 8;
+const ALIGNMENT_GUIDE_STROKE_WIDTH_PX = 1.25;
+const ALIGNMENT_GUIDE_HALO_WIDTH_PX = 2.5;
+const ALIGNMENT_GUIDE_DASH_PX = [5, 5] as const;
 
 function renderedNodeBox(node: Konva.Node, fallback: Box): Box {
   const stage = node.getStage();
@@ -356,6 +360,8 @@ function TemplateV2KonvaSlideComponent({
   const alignmentGuideLayerRef = useRef<Konva.Layer | null>(null);
   const verticalAlignmentGuideRef = useRef<Konva.Line | null>(null);
   const horizontalAlignmentGuideRef = useRef<Konva.Line | null>(null);
+  const verticalAlignmentGuideHaloRef = useRef<Konva.Line | null>(null);
+  const horizontalAlignmentGuideHaloRef = useRef<Konva.Line | null>(null);
   const imageUploadInputRef = useRef<HTMLInputElement | null>(null);
   const pendingImageUploadRef = useRef<ElementSelection | null>(null);
   const undoStackRef = useRef<RawUi[]>([]);
@@ -377,7 +383,20 @@ function TemplateV2KonvaSlideComponent({
       horizontalAlignmentGuideRef.current,
       horizontal,
     );
-    if (verticalChanged || horizontalChanged) {
+    const verticalHaloChanged = syncAlignmentGuideNode(
+      verticalAlignmentGuideHaloRef.current,
+      vertical,
+    );
+    const horizontalHaloChanged = syncAlignmentGuideNode(
+      horizontalAlignmentGuideHaloRef.current,
+      horizontal,
+    );
+    if (
+      verticalChanged ||
+      horizontalChanged ||
+      verticalHaloChanged ||
+      horizontalHaloChanged
+    ) {
       alignmentGuideLayerRef.current?.batchDraw();
     }
   }, []);
@@ -2609,15 +2628,44 @@ function TemplateV2KonvaSlideComponent({
         {isEditMode ? (
           <Layer ref={alignmentGuideLayerRef} listening={false}>
             <Line
+              ref={verticalAlignmentGuideHaloRef}
+              points={[0, 0, 0, 0]}
+              visible={false}
+              stroke={ALIGNMENT_GUIDE_HALO_COLOR}
+              strokeWidth={ALIGNMENT_GUIDE_HALO_WIDTH_PX / effectiveDisplayScale}
+              dash={ALIGNMENT_GUIDE_DASH_PX.map(
+                (value) => value / effectiveDisplayScale,
+              )}
+              lineCap="round"
+              listening={false}
+              perfectDrawEnabled={false}
+              shadowForStrokeEnabled={false}
+            />
+            <Line
+              ref={horizontalAlignmentGuideHaloRef}
+              points={[0, 0, 0, 0]}
+              visible={false}
+              stroke={ALIGNMENT_GUIDE_HALO_COLOR}
+              strokeWidth={ALIGNMENT_GUIDE_HALO_WIDTH_PX / effectiveDisplayScale}
+              dash={ALIGNMENT_GUIDE_DASH_PX.map(
+                (value) => value / effectiveDisplayScale,
+              )}
+              lineCap="round"
+              listening={false}
+              perfectDrawEnabled={false}
+              shadowForStrokeEnabled={false}
+            />
+            <Line
               ref={verticalAlignmentGuideRef}
               points={[0, 0, 0, 0]}
               visible={false}
               stroke={ALIGNMENT_GUIDE_COLOR}
-              strokeWidth={1.5 / effectiveDisplayScale}
-              dash={[
-                0.1 / effectiveDisplayScale,
-                5 / effectiveDisplayScale,
-              ]}
+              strokeWidth={
+                ALIGNMENT_GUIDE_STROKE_WIDTH_PX / effectiveDisplayScale
+              }
+              dash={ALIGNMENT_GUIDE_DASH_PX.map(
+                (value) => value / effectiveDisplayScale,
+              )}
               lineCap="round"
               listening={false}
               perfectDrawEnabled={false}
@@ -2628,11 +2676,12 @@ function TemplateV2KonvaSlideComponent({
               points={[0, 0, 0, 0]}
               visible={false}
               stroke={ALIGNMENT_GUIDE_COLOR}
-              strokeWidth={1.5 / effectiveDisplayScale}
-              dash={[
-                0.1 / effectiveDisplayScale,
-                5 / effectiveDisplayScale,
-              ]}
+              strokeWidth={
+                ALIGNMENT_GUIDE_STROKE_WIDTH_PX / effectiveDisplayScale
+              }
+              dash={ALIGNMENT_GUIDE_DASH_PX.map(
+                (value) => value / effectiveDisplayScale,
+              )}
               lineCap="round"
               listening={false}
               perfectDrawEnabled={false}

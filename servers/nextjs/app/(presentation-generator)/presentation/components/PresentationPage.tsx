@@ -19,7 +19,13 @@ import SlideContent from "./SlideContent";
 import { Button } from "@/components/ui/button";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { AlertCircle, Keyboard, Sparkles, X } from "lucide-react";
+import {
+  AlertCircle,
+  ChevronRight,
+  Keyboard,
+  Sparkles,
+  X,
+} from "lucide-react";
 import {
   usePresentationStreaming,
   usePresentationData,
@@ -130,6 +136,8 @@ const IDLE_LOADING_STATE: LoadingState = {
 
 const NAVIGATION_HINT_STORAGE_KEY = "presenton:editor-navigation-hint:v1";
 const NAVIGATION_HINT_KEYS = ["←", "↑", "↓", "→"];
+const NAVIGATION_SCROLL_THRESHOLD = 240;
+const NAVIGATION_SCROLL_WINDOW_MS = 800;
 
 const PresentationPage: React.FC<PresentationPageProps> = ({
   presentation_id,
@@ -168,9 +176,11 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const [error, setError] = useState(false);
   const mobileAssistantTriggerRef = useRef<HTMLButtonElement | null>(null);
   const mobileAssistantCloseRef = useRef<HTMLButtonElement | null>(null);
+  const presentationCanvasRef = useRef<HTMLDivElement | null>(null);
   const templateV2EditorLoadedKeyRef = useRef<string | null>(null);
   const navigationHintShownRef = useRef(false);
   const navigationHintSlideRef = useRef<number | null>(null);
+  const navigationScrollIntentRef = useRef({ amount: 0, lastAt: 0 });
   const router = useRouter();
   const shouldPreloadTemplateV2Presentation =
     searchParams.get("editor") === "v2" || searchParams.get("type") === "smart";
@@ -358,9 +368,58 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
 
   useEffect(() => {
     if (!showNavigationHint) return;
-    const timer = window.setTimeout(dismissNavigationHint, 15_000);
+    const timer = window.setTimeout(dismissNavigationHint, 5_000);
     return () => window.clearTimeout(timer);
   }, [dismissNavigationHint, showNavigationHint]);
+
+  useEffect(() => {
+    const canvas = presentationCanvasRef.current;
+    if (
+      !canvas ||
+      isPresentMode ||
+      loading ||
+      isStreaming ||
+      slidesLength <= 1 ||
+      !window.matchMedia("(min-width: 768px)").matches
+    ) {
+      return;
+    }
+
+    const handleWheel = (event: WheelEvent) => {
+      if (showNavigationHint || Math.abs(event.deltaY) < 4) return;
+
+      const now = Date.now();
+      const scrollIntent = navigationScrollIntentRef.current;
+      if (now - scrollIntent.lastAt > NAVIGATION_SCROLL_WINDOW_MS) {
+        scrollIntent.amount = 0;
+      }
+
+      const multiplier =
+        event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? 16
+          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? window.innerHeight
+            : 1;
+      scrollIntent.amount += Math.abs(event.deltaY) * multiplier;
+      scrollIntent.lastAt = now;
+
+      if (scrollIntent.amount < NAVIGATION_SCROLL_THRESHOLD) return;
+
+      scrollIntent.amount = 0;
+      navigationHintSlideRef.current = selectedSlide;
+      setShowNavigationHint(true);
+    };
+
+    canvas.addEventListener("wheel", handleWheel, { passive: true });
+    return () => canvas.removeEventListener("wheel", handleWheel);
+  }, [
+    isPresentMode,
+    isStreaming,
+    loading,
+    selectedSlide,
+    showNavigationHint,
+    slidesLength,
+  ]);
 
   useEffect(() => {
     if (
@@ -786,7 +845,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           generationMode={isSmartPresentation ? "smart" : "standard"}
         />
         <div className="flex flex-1 min-h-0 gap-3 overflow-hidden xl:gap-5 2xl:gap-6">
-          <div className="hidden h-full w-[120px] shrink-0 self-start sticky top-0 pt-[18px] md:block">
+          <div className="sticky top-0 hidden h-full w-[150px] shrink-0 self-start md:block">
             <SidePanel
               selectedSlide={selectedSlide}
               onSlideClick={handleEditorSlideNavigation}
@@ -794,7 +853,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               loading={loading}
             />
           </div>
-          <div className="relative h-full min-w-0 flex-1 px-3 pb-3 pt-[18px] md:px-0 max-md:ml-3">
+          <div
+            ref={presentationCanvasRef}
+            className="relative h-full min-w-0 flex-1 px-3 pb-6 pt-[18px] md:px-0 max-md:ml-3"
+          >
             {showNavigationHint ? (
               <div
                 className="pointer-events-none fixed top-[72px] z-[95] hidden items-center gap-3 rounded-full border border-[#E1E3E9] bg-white/95 py-2 pl-3 pr-2 font-syne text-[13px] text-[#344054] shadow-[0_8px_24px_rgba(16,24,40,0.14)] backdrop-blur md:flex"
@@ -905,13 +967,27 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
             aria-label={isMobileAssistantOpen ? "AI Assistant" : undefined}
             aria-modal={isMobileAssistantOpen ? true : undefined}
             className={cn(
-              "h-screen w-[calc(100vw-16px)] max-w-[375px] shrink-0 flex-col bg-white shadow-[-12px_0_32px_rgba(16,24,40,0.18)] transition-[width] duration-200 xl:static xl:z-auto xl:h-full xl:max-w-none xl:self-start xl:shadow-none",
-              isRightPanelOpen ? "xl:w-[375px]" : "xl:w-[70px]",
+              "h-screen w-[calc(100vw-16px)] max-w-[375px] shrink-0 flex-col bg-white shadow-[-12px_0_32px_rgba(16,24,40,0.18)] transition-[width] duration-200 xl:relative xl:z-auto xl:h-full xl:max-w-none xl:self-start xl:border-l xl:border-[#EDEEEF] xl:shadow-none",
+              isRightPanelOpen ? "xl:w-[383px]" : "xl:w-[78px]",
               isMobileAssistantOpen
                 ? "fixed inset-y-0 right-0 z-[70] flex"
                 : "hidden xl:flex"
             )}
           >
+            {isRightPanelOpen ? (
+              <button
+                type="button"
+                aria-label="Close tools panel"
+                onClick={() => setIsRightPanelOpen(false)}
+                className="absolute -left-[10px] top-1/2 z-[80] hidden h-[36px] w-[16px] -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#E8E5FF] bg-[#FEFEFF] text-[#6938EF] shadow-[0_10px_26px_rgba(52,48,96,0.10)] transition-[border-color,box-shadow,color] hover:border-[#D9D6FE] hover:text-[#5925DC] hover:shadow-[0_12px_30px_rgba(52,48,96,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-2 xl:flex"
+              >
+                <ChevronRight
+                  className="h-4 w-4"
+                  strokeWidth={2.5}
+                  aria-hidden="true"
+                />
+              </button>
+            ) : null}
             <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#EDEEEF] px-4 xl:hidden">
               <div className="flex items-center gap-2 text-sm font-semibold text-[#101323]">
                 <Sparkles className="h-4 w-4 text-[#7A5AF8]" aria-hidden="true" />
