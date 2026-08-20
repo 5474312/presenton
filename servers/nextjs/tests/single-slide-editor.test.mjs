@@ -122,4 +122,14 @@ test("desktop editor centers and dismisses its navigation introduction", async (
     presentationPageSource,
     /navigationHintSlideRef\.current === selectedSlide[\s\S]*?return;[\s\S]*?dismissNavigationHint\(\)/,
   );
+  assert.match(presentationPageSource, /NAVIGATION_SCROLL_THRESHOLD = 240/);
+  assert.match(presentationPageSource, /NAVIGATION_SCROLL_WINDOW_MS = 800/);
+  assert.match(
+    presentationPageSource,
+    /addEventListener\("wheel", handleWheel, \{ passive: true \}\)/,
+  );
+  assert.match(
+    presentationPageSource,
+    /scrollIntent\.amount < NAVIGATION_SCROLL_THRESHOLD[\s\S]*?setShowNavigationHint\(true\)/,
+  );
 });

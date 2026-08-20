@@ -136,6 +136,8 @@ const IDLE_LOADING_STATE: LoadingState = {
 
 const NAVIGATION_HINT_STORAGE_KEY = "presenton:editor-navigation-hint:v1";
 const NAVIGATION_HINT_KEYS = ["←", "↑", "↓", "→"];
+const NAVIGATION_SCROLL_THRESHOLD = 240;
+const NAVIGATION_SCROLL_WINDOW_MS = 800;
 
 const PresentationPage: React.FC<PresentationPageProps> = ({
   presentation_id,
@@ -174,9 +176,11 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const [error, setError] = useState(false);
   const mobileAssistantTriggerRef = useRef<HTMLButtonElement | null>(null);
   const mobileAssistantCloseRef = useRef<HTMLButtonElement | null>(null);
+  const presentationCanvasRef = useRef<HTMLDivElement | null>(null);
   const templateV2EditorLoadedKeyRef = useRef<string | null>(null);
   const navigationHintShownRef = useRef(false);
   const navigationHintSlideRef = useRef<number | null>(null);
+  const navigationScrollIntentRef = useRef({ amount: 0, lastAt: 0 });
   const router = useRouter();
   const shouldPreloadTemplateV2Presentation =
     searchParams.get("editor") === "v2" || searchParams.get("type") === "smart";
@@ -367,6 +371,55 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     const timer = window.setTimeout(dismissNavigationHint, 15_000);
     return () => window.clearTimeout(timer);
   }, [dismissNavigationHint, showNavigationHint]);
+
+  useEffect(() => {
+    const canvas = presentationCanvasRef.current;
+    if (
+      !canvas ||
+      isPresentMode ||
+      loading ||
+      isStreaming ||
+      slidesLength <= 1 ||
+      !window.matchMedia("(min-width: 768px)").matches
+    ) {
+      return;
+    }
+
+    const handleWheel = (event: WheelEvent) => {
+      if (showNavigationHint || Math.abs(event.deltaY) < 4) return;
+
+      const now = Date.now();
+      const scrollIntent = navigationScrollIntentRef.current;
+      if (now - scrollIntent.lastAt > NAVIGATION_SCROLL_WINDOW_MS) {
+        scrollIntent.amount = 0;
+      }
+
+      const multiplier =
+        event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? 16
+          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? window.innerHeight
+            : 1;
+      scrollIntent.amount += Math.abs(event.deltaY) * multiplier;
+      scrollIntent.lastAt = now;
+
+      if (scrollIntent.amount < NAVIGATION_SCROLL_THRESHOLD) return;
+
+      scrollIntent.amount = 0;
+      navigationHintSlideRef.current = selectedSlide;
+      setShowNavigationHint(true);
+    };
+
+    canvas.addEventListener("wheel", handleWheel, { passive: true });
+    return () => canvas.removeEventListener("wheel", handleWheel);
+  }, [
+    isPresentMode,
+    isStreaming,
+    loading,
+    selectedSlide,
+    showNavigationHint,
+    slidesLength,
+  ]);
 
   useEffect(() => {
     if (
@@ -800,7 +853,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               loading={loading}
             />
           </div>
-          <div className="relative h-full min-w-0 flex-1 px-3 pb-6 pt-[18px] md:px-0 max-md:ml-3">
+          <div
+            ref={presentationCanvasRef}
+            className="relative h-full min-w-0 flex-1 px-3 pb-6 pt-[18px] md:px-0 max-md:ml-3"
+          >
             {showNavigationHint ? (
               <div
                 className="pointer-events-none fixed top-[72px] z-[95] hidden items-center gap-3 rounded-full border border-[#E1E3E9] bg-white/95 py-2 pl-3 pr-2 font-syne text-[13px] text-[#344054] shadow-[0_8px_24px_rgba(16,24,40,0.14)] backdrop-blur md:flex"
