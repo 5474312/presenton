@@ -19,7 +19,13 @@ import SlideContent from "./SlideContent";
 import { Button } from "@/components/ui/button";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { AlertCircle, Keyboard, Sparkles, X } from "lucide-react";
+import {
+  AlertCircle,
+  ChevronRight,
+  Keyboard,
+  Sparkles,
+  X,
+} from "lucide-react";
 import {
   usePresentationStreaming,
   usePresentationData,
@@ -905,13 +911,27 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
             aria-label={isMobileAssistantOpen ? "AI Assistant" : undefined}
             aria-modal={isMobileAssistantOpen ? true : undefined}
             className={cn(
-              "h-screen w-[calc(100vw-16px)] max-w-[375px] shrink-0 flex-col bg-white shadow-[-12px_0_32px_rgba(16,24,40,0.18)] transition-[width] duration-200 xl:static xl:z-auto xl:h-full xl:max-w-none xl:self-start xl:shadow-none",
-              isRightPanelOpen ? "xl:w-[375px]" : "xl:w-[70px]",
+              "h-screen w-[calc(100vw-16px)] max-w-[375px] shrink-0 flex-col bg-white shadow-[-12px_0_32px_rgba(16,24,40,0.18)] transition-[width] duration-200 xl:relative xl:z-auto xl:h-full xl:max-w-none xl:self-start xl:border-l xl:border-[#EDEEEF] xl:shadow-none",
+              isRightPanelOpen ? "xl:w-[383px]" : "xl:w-[78px]",
               isMobileAssistantOpen
                 ? "fixed inset-y-0 right-0 z-[70] flex"
                 : "hidden xl:flex"
             )}
           >
+            {isRightPanelOpen ? (
+              <button
+                type="button"
+                aria-label="Close tools panel"
+                onClick={() => setIsRightPanelOpen(false)}
+                className="absolute -left-[10px] top-1/2 z-[80] hidden h-[36px] w-[16px] -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#E8E5FF] bg-[#FEFEFF] text-[#6938EF] shadow-[0_10px_26px_rgba(52,48,96,0.10)] transition-[border-color,box-shadow,color] hover:border-[#D9D6FE] hover:text-[#5925DC] hover:shadow-[0_12px_30px_rgba(52,48,96,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-2 xl:flex"
+              >
+                <ChevronRight
+                  className="h-4 w-4"
+                  strokeWidth={2.5}
+                  aria-hidden="true"
+                />
+              </button>
+            ) : null}
             <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#EDEEEF] px-4 xl:hidden">
               <div className="flex items-center gap-2 text-sm font-semibold text-[#101323]">
                 <Sparkles className="h-4 w-4 text-[#7A5AF8]" aria-hidden="true" />

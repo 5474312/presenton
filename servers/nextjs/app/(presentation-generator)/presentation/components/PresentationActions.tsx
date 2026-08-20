@@ -209,6 +209,16 @@ const insertActions: ActionItem[] = [
   { id: "elements", label: "Elements", icon: Shapes },
 ];
 
+const actionIconSrc: Record<ActionId, string> = {
+  ai: "/figma/presentation-actions/ai.svg",
+  blocks: "/figma/presentation-actions/blocks.svg",
+  texts: "/figma/presentation-actions/texts.svg",
+  charts: "/figma/presentation-actions/charts.svg",
+  tables: "/figma/presentation-actions/tables.svg",
+  images: "/figma/presentation-actions/images.svg",
+  elements: "/figma/presentation-actions/elements.svg",
+};
+
 export const textItems = [
   { id: "equation", label: "Equation", icon: Sigma },
   { id: "equation-quadratic", label: "Quadratic", icon: Sigma },
@@ -330,34 +340,34 @@ const NavButton = ({
   active: boolean;
   onClick: () => void;
 }) => {
-  const Icon = item.icon;
-
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "group flex w-full flex-col items-center justify-center gap-1 text-[clamp(10px,0.75vw,12px)] leading-none transition-colors",
-        active ? "text-[#101323]" : "text-[#111827] ",
+        "group flex w-full flex-col items-center justify-center text-[12px] font-normal leading-normal transition-colors",
+        item.id === "images" ? "h-[52px] gap-2" : "h-12 gap-1",
+        active ? "text-[#7A5AF8]" : "text-black",
       )}
       aria-pressed={active}
     >
       <span
         className={cn(
-          "flex h-[30px] w-[30px] items-center justify-center rounded-[10px] border border-transparent text-black transition-all",
-          active && "bg-white   border-[#EDEEEF]",
-          active && "text-[#101323]",
+          "flex h-[30px] w-[30px] items-center justify-center rounded-[10px] border border-transparent transition-all",
+          active && "border-[#EDEEEF] bg-white",
         )}
         style={{
           boxShadow: active ? "0 6.6px 13.2px 0 rgba(124, 81, 248, 0.14)" : "",
         }}
       >
-        <Icon
-          className="h-[clamp(12px,0.9vw,14px)] w-[clamp(12px,0.9vw,14px)]"
-          aria-hidden
+        <img
+          alt=""
+          aria-hidden="true"
+          className="h-[14px] w-[14px]"
+          src={actionIconSrc[item.id]}
         />
       </span>
-      <span className="">{item.label}</span>
+      <span>{item.label}</span>
     </button>
   );
 };
@@ -1097,76 +1107,18 @@ export const BlocksPanel = ({
   );
 };
 
-function AiSparklesIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="19"
-      height="18"
-      viewBox="0 0 19 18"
-      fill="none"
-    >
-      <path
-        d="M14.9386 7.38709C12.9195 7.19256 11.3219 5.59566 11.1276 3.57829L10.7997 0.171875L10.4718 3.57829C10.2775 5.596 8.67987 7.1929 6.66079 7.38709L3.25684 7.71473L6.66079 8.04237C8.67987 8.23691 10.2775 9.8338 10.4718 11.8512L10.7997 15.2576L11.1276 11.8512C11.3219 9.83346 12.9195 8.23656 14.9386 8.04237L18.3426 7.71473L14.9386 7.38709Z"
-        fill="#7A5AF8"
-      />
-      <path
-        d="M7.08427 13.146C5.95358 13.0371 5.0589 12.1428 4.95008 11.0131L4.76648 9.10547L4.58288 11.0131C4.47406 12.143 3.57938 13.0372 2.44869 13.146L0.54248 13.3295L2.44869 13.5129C3.57938 13.6219 4.47406 14.5161 4.58288 15.6459L4.76648 17.5535L4.95008 15.6459C5.0589 14.516 5.95358 13.6217 7.08427 13.5129L8.99048 13.3295L7.08427 13.146Z"
-        fill="#7A5AF8"
-      />
-    </svg>
-  );
-}
-
-function BlocksIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      viewBox="0 0 14 14"
-      fill="none"
-    >
-      <path
-        d="M2.3335 8.16602H5.8335"
-        stroke="#7A5AF8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M2.3335 1.16602H8.16683"
-        stroke="#7A5AF8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M11.0835 10.5H2.91683C2.59466 10.5 2.3335 10.7612 2.3335 11.0833V12.25C2.3335 12.5722 2.59466 12.8333 2.91683 12.8333H11.0835C11.4057 12.8333 11.6668 12.5722 11.6668 12.25V11.0833C11.6668 10.7612 11.4057 10.5 11.0835 10.5Z"
-        stroke="#7A5AF8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M11.0835 3.5H2.91683C2.59466 3.5 2.3335 3.76117 2.3335 4.08333V5.25C2.3335 5.57217 2.59466 5.83333 2.91683 5.83333H11.0835C11.4057 5.83333 11.6668 5.57217 11.6668 5.25V4.08333C11.6668 3.76117 11.4057 3.5 11.0835 3.5Z"
-        stroke="#7A5AF8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function PrimaryActionButton({
   active,
   disabled = false,
   disabledReason,
-  icon,
+  iconSrc,
   label,
   onClick,
 }: {
   active: boolean;
   disabled?: boolean;
   disabledReason?: string;
-  icon: React.ReactNode;
+  iconSrc: string;
   label: string;
   onClick: () => void;
 }) {
@@ -1177,23 +1129,29 @@ function PrimaryActionButton({
       title={disabled ? disabledReason : undefined}
       aria-label={disabled && disabledReason ? `${label}: ${disabledReason}` : label}
       className={cn(
-        "flex flex-col items-center justify-center",
+        "flex h-12 w-[82px] flex-col items-center justify-center gap-1",
         disabled && "cursor-not-allowed opacity-40",
       )}
       onClick={onClick}
     >
-      <p
-        className={`p-1.5 flex items-center justify-center rounded-[10px] border border-transparent ${active ? "border-[#EDEEEF] bg-white" : ""
-          }`}
+      <span
+        className={`flex h-[30px] w-[30px] items-center justify-center rounded-[10px] border border-transparent ${
+          active ? "border-[#EDEEEF] bg-white" : ""
+        }`}
         style={{
           boxShadow: active ? "0 6.6px 13.2px 0 rgba(124, 81, 248, 0.14)" : "",
         }}
       >
-        {icon}
-      </p>
-      <p className="mt-1 text-[clamp(10px,0.75vw,12px)] text-[#7A5AF8]">
+        <img
+          alt=""
+          aria-hidden="true"
+          className={label === "AI" ? "h-[18px] w-[18.643px]" : "h-[14px] w-[14px]"}
+          src={iconSrc}
+        />
+      </span>
+      <span className="text-[12px] font-normal leading-normal text-[#7A5AF8]">
         {label}
-      </p>
+      </span>
     </button>
   );
 }
@@ -1202,52 +1160,38 @@ function ActionsSidebar({
   activeAction,
   aiOnly = false,
   blocksUnavailable = false,
-  panelOpen,
-  onPanelOpenChange,
   onActionSelect,
 }: {
   activeAction: ActionId;
   aiOnly?: boolean;
   blocksUnavailable?: boolean;
-  panelOpen: boolean;
-  onPanelOpenChange: (open: boolean) => void;
   onActionSelect: (action: ActionId) => void;
 }) {
   return (
-    <aside className="ml-auto flex h-full w-[70px] shrink-0 flex-col items-center gap-3 border-l border-[#EDEEEF] px-[6px] py-2">
-      <button
-        type="button"
-        aria-label={panelOpen ? "Close tools panel" : "Open tools panel"}
-        aria-expanded={panelOpen}
-        onClick={() => onPanelOpenChange(!panelOpen)}
-        className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-[#E6E6EC] bg-white text-[#667085] shadow-sm transition hover:bg-[#F6F6F9] hover:text-[#101323] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] xl:flex"
-      >
-        {panelOpen ? (
-          <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        ) : (
-          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-        )}
-      </button>
+    <aside
+      aria-label="Editor tools"
+      className="ml-auto flex h-full w-[78px] shrink-0 flex-col items-center gap-5 bg-white px-[10px] py-2"
+    >
       <div
-        className="flex w-full shrink-0 flex-col items-center gap-5 rounded-[10px] py-5"
+        className="flex w-full shrink-0 flex-col items-center gap-5 rounded-[10px] py-7"
         style={{
           background: "rgba(244, 243, 255, 0.60)",
         }}
       >
         <PrimaryActionButton
           active={activeAction === "ai"}
-          icon={<AiSparklesIcon />}
+          iconSrc={actionIconSrc.ai}
           label="AI"
           onClick={() => onActionSelect("ai")}
         />
         {!aiOnly && (
           <>
-            <div className="h-px w-[30px] bg-[#EDEEEF]" />
+            <div className="h-0 w-[30px] border-t border-[#EDEEEF]" />
             <PrimaryActionButton
               active={activeAction === "blocks"}
               disabled={blocksUnavailable}
               disabledReason="Blocks require a presentation template"
-              icon={<BlocksIcon />}
+              iconSrc={actionIconSrc.blocks}
               label="Blocks"
               onClick={() => onActionSelect("blocks")}
             />
@@ -1257,7 +1201,7 @@ function ActionsSidebar({
 
       {!aiOnly && (
         <>
-          <div className="h-px w-[30px] shrink-0 bg-[#EDEEEF]" />
+          <div className="h-0 w-[30px] shrink-0 border-t border-[#EDEEEF]" />
           <nav className="flex w-full flex-col items-center gap-5">
             {insertActions.map((item) => (
               <React.Fragment key={item.id}>
@@ -1266,7 +1210,7 @@ function ActionsSidebar({
                   active={activeAction === item.id}
                   onClick={() => onActionSelect(item.id)}
                 />
-                <div className="h-px w-[30px] shrink-0 bg-[#EDEEEF]" />
+                <div className="h-0 w-[30px] shrink-0 border-t border-[#EDEEEF]" />
               </React.Fragment>
             ))}
           </nav>
@@ -1649,20 +1593,25 @@ const PresentationActions = (props: PresentationActionsProps) => {
     }
   };
 
-  const handleActionSelect = (activeAction: ActionId) => {
-    if (aiOnly && activeAction !== "ai") {
+  const handleActionSelect = (nextAction: ActionId) => {
+    if (aiOnly && nextAction !== "ai") {
       return;
     }
-    if (blocksUnavailable && activeAction === "blocks") {
+    if (blocksUnavailable && nextAction === "blocks") {
+      return;
+    }
+
+    if (panelOpen && nextAction === activeAction) {
+      onPanelOpenChange(false);
       return;
     }
 
     trackEvent(MixpanelEvent.Editor_Side_Panel_Tab_Selected, {
       presentation_id: props.presentationId,
-      tab: activeAction,
+      tab: nextAction,
       variant: "template-v2",
     });
-    dispatchUiState({ type: "selectAction", activeAction });
+    dispatchUiState({ type: "selectAction", activeAction: nextAction });
     onPanelOpenChange(true);
   };
 
@@ -1703,8 +1652,6 @@ const PresentationActions = (props: PresentationActionsProps) => {
         activeAction={activeAction}
         aiOnly={aiOnly}
         blocksUnavailable={blocksUnavailable}
-        panelOpen={panelOpen}
-        onPanelOpenChange={onPanelOpenChange}
         onActionSelect={handleActionSelect}
       />
     </div>
