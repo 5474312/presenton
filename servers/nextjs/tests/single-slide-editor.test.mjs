@@ -14,6 +14,14 @@ const presentationActionsUrl = new URL(
   "../app/(presentation-generator)/presentation/components/PresentationActions.tsx",
   import.meta.url,
 );
+const sidePanelUrl = new URL(
+  "../app/(presentation-generator)/presentation/components/SidePanel.tsx",
+  import.meta.url,
+);
+const slideThumbnailCardUrl = new URL(
+  "../app/(presentation-generator)/presentation/components/SlideThumbnailCard.tsx",
+  import.meta.url,
+);
 const presentationRenderUrl = new URL(
   "../app/(presentation-generator)/components/PresentationRender.tsx",
   import.meta.url,
@@ -48,14 +56,38 @@ test("right tools rail stays visible and opens its panel on tab selection", asyn
     readFile(presentationActionsUrl, "utf8"),
   ]);
 
-  assert.match(presentationPageSource, /isRightPanelOpen \? "xl:w-\[375px\]" : "xl:w-\[70px\]"/);
+  assert.match(presentationPageSource, /isRightPanelOpen \? "xl:w-\[383px\]" : "xl:w-\[78px\]"/);
   assert.match(presentationActionsSource, /onPanelOpenChange\(true\)/);
-  assert.match(presentationActionsSource, /<aside className="ml-auto /);
+  assert.match(presentationActionsSource, /aria-label="Editor tools"/);
+  assert.match(presentationActionsSource, /w-\[78px\][\s\S]*?px-\[10px\] py-2/);
   assert.match(
     presentationActionsSource,
     /\{panelOpen \? \([\s\S]*?<ActionsPanel[\s\S]*?<ActionsSidebar/,
   );
-  assert.match(presentationActionsSource, /aria-label=\{panelOpen \? "Close tools panel" : "Open tools panel"\}/);
+  assert.match(
+    presentationActionsSource,
+    /panelOpen && nextAction === activeAction[\s\S]*?onPanelOpenChange\(false\)/,
+  );
+  assert.match(presentationActionsSource, /actionIconSrc: Record<ActionId, string>/);
+  assert.match(presentationPageSource, /aria-label="Close tools panel"/);
+  assert.match(
+    presentationPageSource,
+    /h-\[36px\] w-\[16px\][\s\S]*?<ChevronRight/,
+  );
+  assert.match(presentationPageSource, /onClick=\{\(\) => setIsRightPanelOpen\(false\)\}/);
+});
+
+test("active slide thumbnail is obvious and remains in view", async () => {
+  const [sidePanelSource, slideThumbnailCardSource] = await Promise.all([
+    readFile(sidePanelUrl, "utf8"),
+    readFile(slideThumbnailCardUrl, "utf8"),
+  ]);
+
+  assert.match(sidePanelSource, /data-slide-thumbnail-index/);
+  assert.match(sidePanelSource, /scrollIntoView\(\{[\s\S]*?block: "nearest"/);
+  assert.match(slideThumbnailCardSource, /aria-current=\{selected \? "true" : undefined\}/);
+  assert.match(slideThumbnailCardSource, /border-2 border-\[#7A5AF8\]/);
+  assert.match(slideThumbnailCardSource, /shadow-\[0_0_0_3px_rgba\(122,90,248,0\.16\)\]/);
 });
 
 test("active slide can scale above its authored size to fill the viewport", async () => {
