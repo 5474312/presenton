@@ -709,6 +709,21 @@ function TemplateV2KonvaSlideComponent({
   const chartEditorElement = chartEditorSelection
     ? getElementAtSelection(uiDraft, chartEditorSelection)
     : null;
+  const chartEditorBox = chartEditorSelection
+    ? absoluteBoxForSelection(uiDraft, chartEditorSelection)
+    : null;
+  const chartEditorBase =
+    chartEditorElement && readString(chartEditorElement.type) === "chart"
+      ? rawChartToEditorChart(chartEditorElement)
+      : null;
+  const chartEditorChart = chartEditorBase
+    ? {
+        ...chartEditorBase,
+        size: chartEditorBox
+          ? { width: chartEditorBox.width, height: chartEditorBox.height }
+          : chartEditorBase.size,
+      }
+    : null;
   const surfaceSlideIndex = useMemo(() => {
     const index = typeof renderIndex === "number" ? renderIndex : slideIndex;
     return Number.isFinite(index) ? index : null;
@@ -2803,11 +2818,10 @@ function TemplateV2KonvaSlideComponent({
       ) : null}
       {isEditMode &&
         chartEditorSelection &&
-        chartEditorElement &&
-        readString(chartEditorElement.type) === "chart" ? (
+        chartEditorChart ? (
         <ChartDataEditorPopover
           key={keyForSelection(chartEditorSelection)}
-          chart={rawChartToEditorChart(chartEditorElement)}
+          chart={chartEditorChart}
           chartPath={keyForSelection(chartEditorSelection)}
           onChange={(chart) =>
             updateElement(chartEditorSelection, (element) =>
