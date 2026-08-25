@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { notify } from "@/components/ui/sonner";
+import { Switch } from "@/components/ui/switch";
 import { LLMConfig } from "@/types/llm_config";
 import { getApiErrorMessage, getApiUrl } from "@/utils/api";
 
@@ -339,38 +340,16 @@ export default function AdvancedTextProviderSettings({ config, onChange }: Props
                   <span className="text-xs font-semibold text-[#52525B]">
                     {reasoningEnabled ? "On" : "Off"}
                   </span>
-                  <button
-                    type="button"
+                  <Switch
                     id={reasoningToggleId}
-                    role="switch"
-                    aria-checked={reasoningEnabled}
+                    checked={reasoningEnabled}
                     aria-label={`Turn reasoning ${reasoningEnabled ? "off" : "on"}`}
-                    onClick={() =>
+                    onCheckedChange={() =>
                       setReasoningMode(
                         reasoningEnabled ? "disabled" : "enabled"
                       )
                     }
-                    className="relative shrink-0 cursor-pointer rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[#7A5AF8]/30 focus-visible:ring-offset-2"
-                    style={{
-                      width: 36,
-                      height: 20,
-                      padding: 0,
-                      border: 0,
-                      backgroundColor: reasoningEnabled ? "#7A5AF8" : "#D9DCE3",
-                    }}
-                  >
-                    <span
-                      className="absolute rounded-full bg-white shadow-sm transition-transform"
-                      style={{
-                        width: 16,
-                        height: 16,
-                        left: 2,
-                        top: 2,
-                        transform: `translateX(${reasoningEnabled ? 16 : 0}px)`,
-                      }}
-                      aria-hidden="true"
-                    />
-                  </button>
+                  />
                 </div>
               </div>
 
