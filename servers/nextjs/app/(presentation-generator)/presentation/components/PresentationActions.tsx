@@ -95,6 +95,10 @@ import TemplateService from "../../services/api/template";
 import { TemplateV2HtmlSlidePreview } from "../../components/TemplateV2HtmlSlidePreview";
 import { isTemplateFreePresentation } from "../../_shared/blank-slide";
 import {
+  resolvePresentationTheme,
+  type TemplateTheme,
+} from "@/lib/template-theme";
+import {
   InsertPalettePreview,
   type InsertPalettePreviewKind,
 } from "./InsertPalettePreview";
@@ -414,11 +418,13 @@ const PaletteCard = ({
   item,
   onClick,
   previewKind,
+  theme,
 }: {
   disabled?: boolean;
   item: PaletteItem;
   onClick?: () => void;
   previewKind: InsertPalettePreviewKind;
+  theme: TemplateTheme;
 }) => (
   <button
     type="button"
@@ -433,7 +439,7 @@ const PaletteCard = ({
     title={item.label}
   >
     <div className="aspect-video w-full overflow-hidden bg-white">
-      <InsertPalettePreview itemId={item.id} kind={previewKind} />
+      <InsertPalettePreview itemId={item.id} kind={previewKind} theme={theme} />
     </div>
     <span className="block truncate border-t border-[#F0F1F3] px-2.5 py-2 text-[11px] font-medium leading-4 text-[#344054]">
       {item.label}
@@ -446,11 +452,13 @@ const PaletteGrid = ({
   items,
   onSelect,
   previewKind,
+  theme,
 }: {
   disabled?: boolean;
   items: PaletteItem[];
   onSelect?: (item: PaletteItem) => void;
   previewKind: InsertPalettePreviewKind;
+  theme: TemplateTheme;
 }) => (
   <div className="grid grid-cols-2 gap-[clamp(8px,0.8vw,10px)]">
     {items.map((item) => (
@@ -460,6 +468,7 @@ const PaletteGrid = ({
         disabled={disabled}
         onClick={onSelect && !disabled ? () => onSelect(item) : undefined}
         previewKind={previewKind}
+        theme={theme}
       />
     ))}
   </div>
@@ -471,6 +480,7 @@ export const InsertPanel = ({
   groups,
   onItemSelect,
   previewKind,
+  theme,
 }: {
   disabled?: boolean;
   title: string;
@@ -480,6 +490,7 @@ export const InsertPanel = ({
   }>;
   onItemSelect?: (item: PaletteItem) => void;
   previewKind: InsertPalettePreviewKind;
+  theme: TemplateTheme;
 }) => (
   <div className="h-full overflow-y-auto px-[clamp(14px,1.4vw,20px)] pb-[clamp(24px,2.2vw,32px)] pt-[clamp(24px,2.2vw,32px)] hide-scrollbar">
     <h3 className="mb-[clamp(24px,2.2vw,32px)] text-[clamp(13px,0.95vw,15px)] font-semibold leading-5 text-[#101323]">
@@ -494,6 +505,7 @@ export const InsertPanel = ({
             items={group.items}
             onSelect={onItemSelect}
             previewKind={previewKind}
+            theme={theme}
           />
         </section>
       ))}
@@ -1271,6 +1283,7 @@ function ActionsPanel({
   onTextItemSelect,
   presentationData,
   presentationId,
+  templateTheme,
 }: {
   activeAction: ActionId;
   aiOnly?: boolean;
@@ -1292,6 +1305,7 @@ function ActionsPanel({
   onTextItemSelect: (item: PaletteItem) => void;
   presentationData?: unknown;
   presentationId: string;
+  templateTheme: TemplateTheme;
 }) {
   return (
     <div className="min-w-0 flex-1 bg-white">
@@ -1318,6 +1332,7 @@ function ActionsPanel({
           groups={[{ label: "Add", items: textItems }]}
           onItemSelect={onTextItemSelect}
           previewKind="text"
+          theme={templateTheme}
         />
       )}
       {!aiOnly && activeAction === "charts" && (
@@ -1327,6 +1342,7 @@ function ActionsPanel({
           groups={[{ label: "Chart Type", items: chartTypeItems }]}
           onItemSelect={onChartItemSelect}
           previewKind="chart"
+          theme={templateTheme}
         />
       )}
       {!aiOnly && activeAction === "infographics" && (
@@ -1336,6 +1352,7 @@ function ActionsPanel({
           groups={[{ label: "Choose a layout", items: infographicItems }]}
           onItemSelect={onInfographicItemSelect}
           previewKind="infographic"
+          theme={templateTheme}
         />
       )}
       {!aiOnly && activeAction === "tables" && (
@@ -1345,6 +1362,7 @@ function ActionsPanel({
           groups={[{ label: "Table Type", items: tableTypeItems }]}
           onItemSelect={onTableItemSelect}
           previewKind="table"
+          theme={templateTheme}
         />
       )}
       {!aiOnly && activeAction === "images" && (
@@ -1354,6 +1372,7 @@ function ActionsPanel({
           groups={[{ label: "Add", items: imageItems }]}
           onItemSelect={onImageItemSelect}
           previewKind="image"
+          theme={templateTheme}
         />
       )}
       {!aiOnly && activeAction === "elements" && (
@@ -1363,6 +1382,7 @@ function ActionsPanel({
           groups={elementItemGroups}
           onItemSelect={onElementItemSelect}
           previewKind="element"
+          theme={templateTheme}
         />
       )}
     </div>
@@ -1401,6 +1421,10 @@ const PresentationActions = (props: PresentationActionsProps) => {
   } = props;
   const aiOnly = props.presentationType === "smart";
   const blocksUnavailable = isTemplateFreePresentation(presentationData);
+  const templateTheme = useMemo(
+    () => resolvePresentationTheme(presentationData),
+    [presentationData],
+  );
   const [{ activeAction }, dispatchUiState] = useReducer(
     presentationActionsUiReducer,
     initialPresentationActionsUiState,
@@ -1524,7 +1548,12 @@ const PresentationActions = (props: PresentationActionsProps) => {
   };
 
   const handleTextItemSelect = (item: PaletteItem) => {
-    if (insertEditorElements(createTextInsertElements(item.id), item.label)) {
+    if (
+      insertEditorElements(
+        createTextInsertElements(item.id, templateTheme),
+        item.label,
+      )
+    ) {
       trackEvent(MixpanelEvent.Editor_Insert_Palette_Item_Selected, {
         presentation_id: props.presentationId,
         category: "texts",
@@ -1536,7 +1565,7 @@ const PresentationActions = (props: PresentationActionsProps) => {
   };
 
   const handleChartItemSelect = (item: PaletteItem) => {
-    const chartElements = createChartInsertElements(item.id);
+    const chartElements = createChartInsertElements(item.id, templateTheme);
     if (insertEditorElements(chartElements, item.label)) {
       trackEvent(MixpanelEvent.Editor_Insert_Palette_Item_Selected, {
         presentation_id: props.presentationId,
@@ -1549,7 +1578,10 @@ const PresentationActions = (props: PresentationActionsProps) => {
   };
 
   const handleInfographicItemSelect = (item: PaletteItem) => {
-    const infographicElements = createInfographicInsertElements(item.id);
+    const infographicElements = createInfographicInsertElements(
+      item.id,
+      templateTheme,
+    );
     if (insertEditorElements(infographicElements, item.label)) {
       trackEvent(MixpanelEvent.Editor_Insert_Palette_Item_Selected, {
         presentation_id: props.presentationId,
@@ -1562,7 +1594,12 @@ const PresentationActions = (props: PresentationActionsProps) => {
   };
 
   const handleTableItemSelect = (item: PaletteItem) => {
-    if (insertEditorElements(createTableInsertElements(item.id), item.label)) {
+    if (
+      insertEditorElements(
+        createTableInsertElements(item.id, templateTheme),
+        item.label,
+      )
+    ) {
       trackEvent(MixpanelEvent.Editor_Insert_Palette_Item_Selected, {
         presentation_id: props.presentationId,
         category: "tables",
@@ -1574,7 +1611,12 @@ const PresentationActions = (props: PresentationActionsProps) => {
   };
 
   const handleImageItemSelect = (item: PaletteItem) => {
-    if (insertEditorContent(createImageInsertContent(item.id), item.label)) {
+    if (
+      insertEditorContent(
+        createImageInsertContent(item.id, templateTheme),
+        item.label,
+      )
+    ) {
       trackEvent(MixpanelEvent.Editor_Insert_Palette_Item_Selected, {
         presentation_id: props.presentationId,
         category: "images",
@@ -1586,7 +1628,12 @@ const PresentationActions = (props: PresentationActionsProps) => {
   };
 
   const handleElementItemSelect = (item: PaletteItem) => {
-    if (insertEditorElements(createElementInsertElements(item.id), item.label)) {
+    if (
+      insertEditorElements(
+        createElementInsertElements(item.id, templateTheme),
+        item.label,
+      )
+    ) {
       trackEvent(MixpanelEvent.Editor_Insert_Palette_Item_Selected, {
         presentation_id: props.presentationId,
         category: "elements",
@@ -1695,6 +1742,7 @@ const PresentationActions = (props: PresentationActionsProps) => {
           onTextItemSelect={handleTextItemSelect}
           presentationData={presentationData}
           presentationId={props.presentationId}
+          templateTheme={templateTheme}
         />
       ) : null}
       <ActionsSidebar

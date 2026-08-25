@@ -26,6 +26,7 @@ import {
 import { COMMIT_TEMPLATE_V2_INLINE_TEXT_EVENT } from "@/components/slide-editor/text/TiptapInlineTextEditor";
 import { normalizeBackendAssetUrls } from "@/utils/api";
 import { ensureTailwindBrowserScript } from "@/lib/tailwind-browser";
+import { resolveTemplateTheme } from "@/lib/template-theme";
 import TemplateService from "../../services/api/template";
 import { useTemplateDetails } from "../../hooks/useTemplateDetails";
 import {
@@ -150,6 +151,10 @@ const GroupLayoutPreview = ({
 
   const { template, layouts, fonts, loading, error } =
     useTemplateDetails(templateId);
+  const templateTheme = useMemo(
+    () => resolveTemplateTheme(template),
+    [template],
+  );
   const [editableLayouts, setEditableLayouts] = useState<TemplateV2Layout[]>([]);
   const editableLayoutsRef = useRef<TemplateV2Layout[]>([]);
   const [activeLayoutIndex, setActiveLayoutIndex] = useState(0);
@@ -873,7 +878,12 @@ const GroupLayoutPreview = ({
 
   const handleTextItemSelect = useCallback(
     (item: PaletteItem) => {
-      if (!insertEditorElements(createTextInsertElements(item.id), item.label)) {
+      if (
+        !insertEditorElements(
+          createTextInsertElements(item.id, templateTheme),
+          item.label,
+        )
+      ) {
         return;
       }
       track(ANALYTICS_EVENTS.EDITOR_PALETTE_ITEM_INSERTED, {
@@ -883,12 +893,12 @@ const GroupLayoutPreview = ({
         layout_index: activeLayoutIndex,
       });
     },
-    [activeLayoutIndex, insertEditorElements, templateId],
+    [activeLayoutIndex, insertEditorElements, templateId, templateTheme],
   );
 
   const handleChartItemSelect = useCallback(
     (item: PaletteItem) => {
-      const chartElements = createChartInsertElements(item.id);
+      const chartElements = createChartInsertElements(item.id, templateTheme);
       if (!insertEditorElements(chartElements, item.label)) return;
 
       track(ANALYTICS_EVENTS.EDITOR_PALETTE_ITEM_INSERTED, {
@@ -898,14 +908,14 @@ const GroupLayoutPreview = ({
         layout_index: activeLayoutIndex,
       });
     },
-    [activeLayoutIndex, insertEditorElements, templateId],
+    [activeLayoutIndex, insertEditorElements, templateId, templateTheme],
   );
 
   const handleInfographicItemSelect = useCallback(
     (item: PaletteItem) => {
       if (
         !insertEditorElements(
-          createInfographicInsertElements(item.id),
+          createInfographicInsertElements(item.id, templateTheme),
           item.label,
         )
       ) {
@@ -919,13 +929,16 @@ const GroupLayoutPreview = ({
         layout_index: activeLayoutIndex,
       });
     },
-    [activeLayoutIndex, insertEditorElements, templateId],
+    [activeLayoutIndex, insertEditorElements, templateId, templateTheme],
   );
 
   const handleTableItemSelect = useCallback(
     (item: PaletteItem) => {
       if (
-        !insertEditorElements(createTableInsertElements(item.id), item.label)
+        !insertEditorElements(
+          createTableInsertElements(item.id, templateTheme),
+          item.label,
+        )
       ) {
         return;
       }
@@ -936,12 +949,17 @@ const GroupLayoutPreview = ({
         layout_index: activeLayoutIndex,
       });
     },
-    [activeLayoutIndex, insertEditorElements, templateId],
+    [activeLayoutIndex, insertEditorElements, templateId, templateTheme],
   );
 
   const handleImageItemSelect = useCallback(
     (item: PaletteItem) => {
-      if (!insertEditorContent(createImageInsertContent(item.id), item.label)) {
+      if (
+        !insertEditorContent(
+          createImageInsertContent(item.id, templateTheme),
+          item.label,
+        )
+      ) {
         return;
       }
       track(ANALYTICS_EVENTS.EDITOR_PALETTE_ITEM_INSERTED, {
@@ -951,13 +969,16 @@ const GroupLayoutPreview = ({
         layout_index: activeLayoutIndex,
       });
     },
-    [activeLayoutIndex, insertEditorContent, templateId],
+    [activeLayoutIndex, insertEditorContent, templateId, templateTheme],
   );
 
   const handleElementItemSelect = useCallback(
     (item: PaletteItem) => {
       if (
-        !insertEditorElements(createElementInsertElements(item.id), item.label)
+        !insertEditorElements(
+          createElementInsertElements(item.id, templateTheme),
+          item.label,
+        )
       ) {
         return;
       }
@@ -968,7 +989,7 @@ const GroupLayoutPreview = ({
         layout_index: activeLayoutIndex,
       });
     },
-    [activeLayoutIndex, insertEditorElements, templateId],
+    [activeLayoutIndex, insertEditorElements, templateId, templateTheme],
   );
 
   const handleBlockSelect = useCallback(
@@ -1306,6 +1327,7 @@ const GroupLayoutPreview = ({
                 onTextItemSelect={handleTextItemSelect}
                 template={template}
                 templateId={templateId}
+                templateTheme={templateTheme}
               />
             )}
           </>

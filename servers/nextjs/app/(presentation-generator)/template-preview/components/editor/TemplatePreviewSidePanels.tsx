@@ -19,6 +19,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import type { TemplateTheme } from "@/lib/template-theme";
 import type { Density, PanelMode, SchemaField } from "./templatePreviewUtils";
 import {
   BlocksPanel,
@@ -177,6 +178,7 @@ export function TemplateInsertPanel({
   onTextItemSelect,
   template,
   templateId,
+  templateTheme,
 }: {
   activePanel: PanelMode;
   onBlockSelect: (block: TemplateBlock) => void;
@@ -188,6 +190,7 @@ export function TemplateInsertPanel({
   onTextItemSelect: (item: PaletteItem) => void;
   template: unknown;
   templateId: string;
+  templateTheme: TemplateTheme;
 }) {
   return (
     <aside className="hidden w-[299px] shrink-0 overflow-hidden bg-[#FEFEFF] lg:block">
@@ -203,6 +206,7 @@ export function TemplateInsertPanel({
           groups={[{ label: "Add", items: textItems }]}
           onItemSelect={onTextItemSelect}
           previewKind="text"
+          theme={templateTheme}
         />
       ) : activePanel === "charts" ? (
         <InsertPanel
@@ -210,6 +214,7 @@ export function TemplateInsertPanel({
           groups={[{ label: "Chart Type", items: chartTypeItems }]}
           onItemSelect={onChartItemSelect}
           previewKind="chart"
+          theme={templateTheme}
         />
       ) : activePanel === "infographics" ? (
         <InsertPanel
@@ -217,6 +222,7 @@ export function TemplateInsertPanel({
           groups={[{ label: "Layouts", items: infographicItems }]}
           onItemSelect={onInfographicItemSelect}
           previewKind="infographic"
+          theme={templateTheme}
         />
       ) : activePanel === "tables" ? (
         <InsertPanel
@@ -224,6 +230,7 @@ export function TemplateInsertPanel({
           groups={[{ label: "Table Type", items: tableTypeItems }]}
           onItemSelect={onTableItemSelect}
           previewKind="table"
+          theme={templateTheme}
         />
       ) : activePanel === "images" ? (
         <InsertPanel
@@ -231,6 +238,7 @@ export function TemplateInsertPanel({
           groups={[{ label: "Add", items: imageItems }]}
           onItemSelect={onImageItemSelect}
           previewKind="image"
+          theme={templateTheme}
         />
       ) : activePanel === "elements" ? (
         <InsertPanel
@@ -238,6 +246,7 @@ export function TemplateInsertPanel({
           groups={elementItemGroups}
           onItemSelect={onElementItemSelect}
           previewKind="element"
+          theme={templateTheme}
         />
       ) : null}
     </aside>

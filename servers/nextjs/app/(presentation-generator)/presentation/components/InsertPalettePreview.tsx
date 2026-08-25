@@ -14,6 +14,7 @@ import {
   TEMPLATE_V2_HTML_HEIGHT,
   TEMPLATE_V2_HTML_WIDTH,
 } from "@/lib/template-v2-json-to-html";
+import type { TemplateTheme } from "@/lib/template-theme";
 import { TemplateV2HtmlSlidePreview } from "../../components/TemplateV2HtmlSlidePreview";
 
 export type InsertPalettePreviewKind =
@@ -41,21 +42,22 @@ const PREVIEW_FIT: Record<
 
 function createPreviewContent(
   kind: InsertPalettePreviewKind,
-  itemId?: string,
+  itemId: string | undefined,
+  theme: TemplateTheme,
 ): EditorInsertContent {
   switch (kind) {
     case "text":
-      return { elements: createTextInsertElements(itemId) };
+      return { elements: createTextInsertElements(itemId, theme) };
     case "chart":
-      return { elements: createChartInsertElements(itemId) };
+      return { elements: createChartInsertElements(itemId, theme) };
     case "infographic":
-      return { elements: createInfographicInsertElements(itemId) };
+      return { elements: createInfographicInsertElements(itemId, theme) };
     case "table":
-      return { elements: createTableInsertElements(itemId) };
+      return { elements: createTableInsertElements(itemId, theme) };
     case "image":
-      return createImageInsertContent(itemId);
+      return createImageInsertContent(itemId, theme);
     case "element":
-      return { elements: createElementInsertElements(itemId) };
+      return { elements: createElementInsertElements(itemId, theme) };
   }
 }
 
@@ -163,12 +165,16 @@ function compactTextElements(elements: PreviewElement[]) {
   });
 }
 
-function clarifyVectors(elements: PreviewElement[]) {
+function clarifyVectors(elements: PreviewElement[], theme: TemplateTheme) {
   return elements.map((element) =>
     element.type === "vector" && element.closed === false && element.stroke
       ? {
           ...element,
-          stroke: { ...element.stroke, color: "101323", width: Math.max(element.stroke.width ?? 0, 5) },
+          stroke: {
+            ...element.stroke,
+            color: theme.background_text,
+            width: Math.max(element.stroke.width ?? 0, 5),
+          },
         }
       : element,
   );
@@ -263,13 +269,17 @@ function getPreviewBounds(
   };
 }
 
-function createPreviewSlide(kind: InsertPalettePreviewKind, itemId?: string) {
-  const content = createPreviewContent(kind, itemId);
+function createPreviewSlide(
+  kind: InsertPalettePreviewKind,
+  itemId: string | undefined,
+  theme: TemplateTheme,
+) {
+  const content = createPreviewContent(kind, itemId, theme);
   const sourceElements =
     kind === "text"
       ? compactTextElements(content.elements ?? [])
       : kind === "element"
-        ? clarifyVectors(content.elements ?? [])
+        ? clarifyVectors(content.elements ?? [], theme)
         : content.elements ?? [];
   const elements = centerElements(sourceElements);
   const components = centerComponents(content.components);
@@ -278,7 +288,7 @@ function createPreviewSlide(kind: InsertPalettePreviewKind, itemId?: string) {
     slide: {
       ui: {
         id: `insert-preview-${kind}-${itemId ?? "default"}`,
-        background: "#FFFFFF",
+        background: theme.background,
         elements,
         components,
       },
@@ -289,15 +299,21 @@ function createPreviewSlide(kind: InsertPalettePreviewKind, itemId?: string) {
 export function InsertPalettePreview({
   itemId,
   kind,
+  theme,
 }: {
   itemId?: string;
   kind: InsertPalettePreviewKind;
+  theme: TemplateTheme;
 }) {
-  const preview = useMemo(() => createPreviewSlide(kind, itemId), [itemId, kind]);
+  const preview = useMemo(
+    () => createPreviewSlide(kind, itemId, theme),
+    [itemId, kind, theme],
+  );
   const fit = PREVIEW_FIT[kind];
   return (
     <TemplateV2HtmlSlidePreview
       slide={preview.slide}
+      fonts={theme.fonts}
       fitBounds={preview.bounds}
       fitPadding={fit.padding}
       fitMaxScale={fit.maxScale}
