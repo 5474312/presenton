@@ -1448,6 +1448,45 @@ async def duplicate_presentation(
     )
 
 
+@PRESENTATION_ROUTER.post("/{id}/export", response_model=PresentationPathAndEditPath)
+async def export_existing_presentation(
+    id: uuid.UUID,
+    request_http: Request,
+    export_as: Annotated[Literal["pptx", "pdf"], Body(embed=True)] = "pptx",
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    """Export a presentation that already exists.
+
+    Until now export could only happen as a side effect of the endpoint that
+    created a presentation (`/generate`, `/edit`, `/derive`). If that request
+    was interrupted — a reverse proxy closing a long-running connection, a
+    client disconnect, a browser tab closing — the presentation itself was
+    still generated and stored, but the exported file could no longer be
+    reached through the API at all. The work was done and paid for, and the
+    only way back to it was generating the whole thing again.
+
+    This exposes the same `export_presentation` helper those endpoints already
+    call, keyed on an existing presentation id, so an interrupted export can be
+    retried without regenerating. It also makes the self-hosted v1 API
+    consistent with the hosted v3 API, which offers `POST /presentation/export`.
+    """
+    presentation = await sql_session.get(PresentationModel, id)
+    if not presentation:
+        raise HTTPException(404, "Presentation not found")
+
+    presentation_and_path = await export_presentation(
+        presentation.id,
+        presentation.title or str(uuid.uuid4()),
+        export_as,
+        cookie_header=_build_export_cookie_header(request_http),
+    )
+
+    return PresentationPathAndEditPath(
+        **presentation_and_path.model_dump(),
+        edit_path=f"/presentation?id={presentation.id}",
+    )
+
+
 @PRESENTATION_ROUTER.post("/create", response_model=PresentationModel)
 async def create_presentation(
     content: Annotated[str, Body()],
