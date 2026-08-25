@@ -1740,14 +1740,20 @@ export const ELEMENT_INSERT_GROUPS = [
     label: "Lines & Arrows",
     items: [
       { id: "vector-line", label: "Line" },
-      { id: "vector-line-arrow", label: "Open Right" },
-      { id: "vector-line-arrow-left", label: "Open Left" },
-      { id: "vector-line-arrow-up", label: "Open Up" },
-      { id: "vector-line-arrow-down", label: "Open Down" },
-      { id: "vector-arrowhead-filled-right", label: "Filled Right" },
+      { id: "vector-line-arrow", label: "Arrow" },
+      { id: "vector-line-arrow-left", label: "Arrow Left" },
+      { id: "vector-line-arrow-up", label: "Arrow Up" },
+      { id: "vector-line-arrow-down", label: "Arrow Down" },
+      { id: "vector-line-arrow-both", label: "Double Arrow" },
+      { id: "vector-line-stealth", label: "Stealth Arrow" },
+      { id: "vector-arrowhead-filled-right", label: "Filled Arrow" },
       { id: "vector-arrowhead-filled-left", label: "Filled Left" },
       { id: "vector-arrowhead-filled-up", label: "Filled Up" },
       { id: "vector-arrowhead-filled-down", label: "Filled Down" },
+      { id: "vector-line-filled-both", label: "Filled Double" },
+      { id: "vector-line-circle-arrow", label: "Circle + Arrow" },
+      { id: "vector-line-square-arrow", label: "Square + Arrow" },
+      { id: "vector-line-diamond-arrow", label: "Diamond + Arrow" },
     ],
   },
   {
@@ -1797,6 +1803,8 @@ function makeVector({
   stroke = DEFAULT_VECTOR_STROKE,
   curve,
   cornerRadii,
+  startMarker,
+  endMarker,
 }: {
   points: Array<{ x: number; y: number }>;
   shape?: "polygon" | "ellipse";
@@ -1805,6 +1813,20 @@ function makeVector({
   stroke?: Stroke | null;
   curve?: { type: "smooth"; tension?: number; segments?: number };
   cornerRadii?: number[];
+  startMarker?:
+    | "arrow"
+    | "stealth"
+    | "triangle"
+    | "circle"
+    | "square"
+    | "diamond";
+  endMarker?:
+    | "arrow"
+    | "stealth"
+    | "triangle"
+    | "circle"
+    | "square"
+    | "diamond";
 }): SlideElement {
   return {
     type: "vector",
@@ -1813,6 +1835,8 @@ function makeVector({
     closed,
     ...(curve ? { curve } : {}),
     ...(cornerRadii ? { corner_radii: cornerRadii } : {}),
+    ...(startMarker ? { start_marker: startMarker } : {}),
+    ...(endMarker ? { end_marker: endMarker } : {}),
     ...(fill ? { fill } : {}),
     ...(stroke ? { stroke } : {}),
   };
@@ -2292,77 +2316,131 @@ function createDefaultElementInsertElements(kind?: string): SlideElement[] {
     case "vector-line-arrow":
       return [
         makeVector({
-          points: openArrowheadVectorPoints(),
+          points: horizontalLineVectorPoints(),
           closed: false,
           fill: null,
           stroke: DEFAULT_VECTOR_LINE_STROKE,
+          endMarker: "arrow",
         }),
       ];
     case "vector-line-arrow-left":
       return [
         makeVector({
-          points: mirrorVectorPoints(openArrowheadVectorPoints(), 338),
+          points: horizontalLineVectorPoints(),
           closed: false,
           fill: null,
           stroke: DEFAULT_VECTOR_LINE_STROKE,
+          startMarker: "arrow",
         }),
       ];
     case "vector-line-arrow-up":
       return [
         makeVector({
-          points: rotateVectorPoints(
-            openArrowheadVectorPoints(),
-            338,
-            248,
-            -90,
-          ),
+          points: verticalLineVectorPoints(true),
           closed: false,
           fill: null,
           stroke: DEFAULT_VECTOR_LINE_STROKE,
+          endMarker: "arrow",
         }),
       ];
     case "vector-line-arrow-down":
       return [
         makeVector({
-          points: rotateVectorPoints(
-            openArrowheadVectorPoints(),
-            338,
-            248,
-            90,
-          ),
+          points: verticalLineVectorPoints(false),
           closed: false,
           fill: null,
           stroke: DEFAULT_VECTOR_LINE_STROKE,
+          endMarker: "arrow",
+        }),
+      ];
+    case "vector-line-arrow-both":
+      return [
+        makeVector({
+          points: horizontalLineVectorPoints(),
+          closed: false,
+          fill: null,
+          stroke: DEFAULT_VECTOR_LINE_STROKE,
+          startMarker: "arrow",
+          endMarker: "arrow",
+        }),
+      ];
+    case "vector-line-stealth":
+      return [
+        makeVector({
+          points: horizontalLineVectorPoints(),
+          closed: false,
+          fill: null,
+          stroke: DEFAULT_VECTOR_LINE_STROKE,
+          endMarker: "stealth",
         }),
       ];
     case "vector-arrowhead-filled-right":
-      return [makeVector({ points: filledArrowheadVectorPoints() })];
+      return [
+        makeVector({
+          points: horizontalLineVectorPoints(),
+          closed: false,
+          fill: null,
+          stroke: DEFAULT_VECTOR_LINE_STROKE,
+          endMarker: "triangle",
+        }),
+      ];
     case "vector-arrowhead-filled-left":
       return [
         makeVector({
-          points: mirrorVectorPoints(filledArrowheadVectorPoints(), 338),
+          points: horizontalLineVectorPoints(),
+          closed: false,
+          fill: null,
+          stroke: DEFAULT_VECTOR_LINE_STROKE,
+          startMarker: "triangle",
         }),
       ];
     case "vector-arrowhead-filled-up":
       return [
         makeVector({
-          points: rotateVectorPoints(
-            filledArrowheadVectorPoints(),
-            338,
-            248,
-            -90,
-          ),
+          points: verticalLineVectorPoints(true),
+          closed: false,
+          fill: null,
+          stroke: DEFAULT_VECTOR_LINE_STROKE,
+          endMarker: "triangle",
         }),
       ];
     case "vector-arrowhead-filled-down":
       return [
         makeVector({
-          points: rotateVectorPoints(
-            filledArrowheadVectorPoints(),
-            338,
-            248,
-            90,
-          ),
+          points: verticalLineVectorPoints(false),
+          closed: false,
+          fill: null,
+          stroke: DEFAULT_VECTOR_LINE_STROKE,
+          endMarker: "triangle",
+        }),
+      ];
+    case "vector-line-filled-both":
+      return [
+        makeVector({
+          points: horizontalLineVectorPoints(),
+          closed: false,
+          fill: null,
+          stroke: DEFAULT_VECTOR_LINE_STROKE,
+          startMarker: "triangle",
+          endMarker: "triangle",
+        }),
+      ];
+    case "vector-line-circle-arrow":
+    case "vector-line-square-arrow":
+    case "vector-line-diamond-arrow":
+      return [
+        makeVector({
+          points: horizontalLineVectorPoints(),
+          closed: false,
+          fill: null,
+          stroke: DEFAULT_VECTOR_LINE_STROKE,
+          startMarker:
+            kind === "vector-line-circle-arrow"
+              ? "circle"
+              : kind === "vector-line-square-arrow"
+                ? "square"
+                : "diamond",
+          endMarker: "triangle",
         }),
       ];
     default:
@@ -2414,20 +2492,23 @@ function rightArrowVectorPoints() {
   ];
 }
 
-function openArrowheadVectorPoints() {
+function horizontalLineVectorPoints() {
   return [
-    { x: 246, y: 154 },
-    { x: 430, y: 248 },
-    { x: 246, y: 342 },
+    { x: 134, y: 248 },
+    { x: 574, y: 248 },
   ];
 }
 
-function filledArrowheadVectorPoints() {
-  return [
-    { x: 246, y: 168 },
-    { x: 430, y: 248 },
-    { x: 246, y: 328 },
-  ];
+function verticalLineVectorPoints(up: boolean) {
+  return up
+    ? [
+        { x: 354, y: 378 },
+        { x: 354, y: 118 },
+      ]
+    : [
+        { x: 354, y: 118 },
+        { x: 354, y: 378 },
+      ];
 }
 
 function mirrorVectorPoints(

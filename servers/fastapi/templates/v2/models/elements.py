@@ -287,6 +287,16 @@ class VectorShape(str, Enum):
     ELLIPSE = "ellipse"
 
 
+class VectorMarker(str, Enum):
+    NONE = "none"
+    ARROW = "arrow"
+    STEALTH = "stealth"
+    TRIANGLE = "triangle"
+    CIRCLE = "circle"
+    SQUARE = "square"
+    DIAMOND = "diamond"
+
+
 class VectorCurve(BaseModel):
     type: Literal["smooth"]
     tension: Optional[float] = Field(default=None, ge=0, le=1)
@@ -300,6 +310,8 @@ class Vector(BaseModel):
     closed: Optional[bool] = None
     curve: Optional[VectorCurve] = None
     corner_radii: Optional[list[Annotated[float, Field(ge=0)]]] = None
+    start_marker: Optional[VectorMarker] = None
+    end_marker: Optional[VectorMarker] = None
     rotation: Optional[float] = None
     opacity: Optional[float] = None
     fill: Optional[Fill] = None
@@ -592,5 +604,6 @@ __all__ = [
     "VerticalAlignment",
     "Vector",
     "VectorCurve",
+    "VectorMarker",
     "VectorShape",
 ]

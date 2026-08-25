@@ -509,6 +509,18 @@ export type VectorCurve = {
 
 export type VectorShape = "polygon" | "ellipse";
 
+// Endpoint styles intentionally mirror the useful subset offered by Google
+// Slides. They remain properties of a vector line, so moving either endpoint
+// changes the complete arrow geometry instead of scaling an arrowhead asset.
+export type VectorMarker =
+  | "none"
+  | "arrow"
+  | "stealth"
+  | "triangle"
+  | "circle"
+  | "square"
+  | "diamond";
+
 export type VectorElement = Omit<ElementBase, "decorative" | "name"> & {
   type: "vector";
   decorative?: never;
@@ -518,6 +530,8 @@ export type VectorElement = Omit<ElementBase, "decorative" | "name"> & {
   closed?: boolean | null;
   curve?: VectorCurve | null;
   corner_radii?: number[] | null;
+  start_marker?: VectorMarker | null;
+  end_marker?: VectorMarker | null;
   fill?: Fill | null;
   stroke?: Stroke | null;
 };

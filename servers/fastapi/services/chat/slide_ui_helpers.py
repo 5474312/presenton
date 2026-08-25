@@ -54,6 +54,15 @@ SUPPORTED_CHART_TYPES = {
     "stacked_bar",
 }
 DATA_LABEL_POSITIONS = {"base", "mid", "top", "outside"}
+VECTOR_MARKERS = {
+    "none",
+    "arrow",
+    "stealth",
+    "triangle",
+    "circle",
+    "square",
+    "diamond",
+}
 DEFAULT_CHART_COLORS = [
     "#7F22FE",
     "#155DFC",
@@ -322,6 +331,12 @@ def _validate_vector_element(element: dict[str, Any]) -> None:
     corner_radii = element.get("corner_radii")
     if isinstance(corner_radii, list) and len(corner_radii) != len(points):
         raise ValueError("vector.corner_radii must match the number of points.")
+    for field in ("start_marker", "end_marker"):
+        marker = element.get(field)
+        if marker is not None and marker not in VECTOR_MARKERS:
+            raise ValueError(
+                f"vector.{field} must be a supported line endpoint marker."
+            )
 
 
 def _validate_infographic_element(element: dict[str, Any]) -> None:
@@ -1800,7 +1815,15 @@ def _content_update_requested_for_type(
 
 
 def _update_vector_element(element: dict[str, Any], vector: dict[str, Any]) -> None:
-    for key in ("shape", "points", "closed", "curve", "corner_radii"):
+    for key in (
+        "shape",
+        "points",
+        "closed",
+        "curve",
+        "corner_radii",
+        "start_marker",
+        "end_marker",
+    ):
         if key in vector:
             element[key] = copy.deepcopy(vector[key])
     _validate_vector_element(element)
