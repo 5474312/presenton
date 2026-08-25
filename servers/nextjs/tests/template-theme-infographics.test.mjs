@@ -20,7 +20,7 @@ test.before(async () => {
     entryFile,
     [
       `export { createInfographicInsertElements } from ${JSON.stringify(path.resolve("components/slide-editor/insert/insert-elements.ts"))};`,
-      `export { normalizeTemplateTheme, resolveTemplateTheme } from ${JSON.stringify(path.resolve("lib/template-theme.ts"))};`,
+      `export { normalizeTemplateTheme, resolveTemplateIdFromPresentation, resolveTemplateTheme } from ${JSON.stringify(path.resolve("lib/template-theme.ts"))};`,
       `export { default as TemplateService } from ${JSON.stringify(path.resolve("app/(presentation-generator)/services/api/template.ts"))};`,
     ].join("\n"),
   );
@@ -149,4 +149,26 @@ test("loads and caches normalized template themes from the theme endpoint", asyn
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("resolves the template id used when a presentation loads", () => {
+  assert.equal(
+    themedInserts.resolveTemplateIdFromPresentation({
+      template_id: "template-top-level",
+      slides: [{ layout_group: "template-from-slide" }],
+    }),
+    "template-top-level",
+  );
+  assert.equal(
+    themedInserts.resolveTemplateIdFromPresentation({
+      slides: [{ layout_group: "template-from-slide" }],
+    }),
+    "template-from-slide",
+  );
+  assert.equal(
+    themedInserts.resolveTemplateIdFromPresentation({
+      slides: [{ layout_group: "blank" }],
+    }),
+    "",
+  );
 });

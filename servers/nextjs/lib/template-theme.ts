@@ -121,6 +121,33 @@ export function resolvePresentationTheme(value: unknown): TemplateTheme {
   return normalizeTemplateTheme(presentation?.theme) ?? DEFAULT_TEMPLATE_THEME;
 }
 
+export function resolveTemplateIdFromPresentation(value: unknown): string {
+  const presentation = asRecord(value);
+  if (!presentation) return "";
+
+  for (const key of ["template_id", "design_v2_id"]) {
+    const id = nonEmptyString(presentation[key]);
+    if (id) return id;
+  }
+
+  const slides = Array.isArray(presentation.slides) ? presentation.slides : [];
+  const firstSlide = asRecord(slides[0]);
+  const layoutGroup = nonEmptyString(firstSlide?.layout_group);
+  if (
+    layoutGroup &&
+    !["no", "blank", "template-v2"].includes(layoutGroup)
+  ) {
+    return layoutGroup;
+  }
+
+  const layout = nonEmptyString(presentation.layout);
+  if (layout && !["no", "blank", "template-v2"].includes(layout)) {
+    return layout;
+  }
+
+  return "";
+}
+
 type ThemeColorStats = {
   fill: number;
   graph: number;
