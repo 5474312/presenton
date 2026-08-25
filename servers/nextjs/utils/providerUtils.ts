@@ -1,4 +1,7 @@
-import { getApiUrl } from "@/utils/api";
+import {
+  BackendConnectionError,
+  getApiUrl,
+} from "@/utils/api";
 import { LLMConfig } from "@/types/llm_config";
 
 const LOCALHOST_OLLAMA_URL = "http://localhost:11434";
@@ -230,15 +233,32 @@ const fetchAvailableOllamaModels = async (
   ollamaUrl?: string
 ): Promise<AvailableOllamaModel[]> => {
   const normalizedUrl = normalizeOllamaUrl(ollamaUrl);
-  const response = await fetch(
-    getOllamaApiUrl("/api/v1/ppt/ollama/models/available", {
-      ollama_url: normalizedUrl,
-    })
-  );
+  let response: Response;
+  try {
+    response = await fetch(
+      getOllamaApiUrl("/api/v1/ppt/ollama/models/available", {
+        ollama_url: normalizedUrl,
+      })
+    );
+  } catch {
+    throw new BackendConnectionError();
+  }
+
+  const contentType = response.headers.get("content-type")?.toLowerCase() || "";
+  const isJson =
+    contentType.includes("application/json") || contentType.includes("+json");
+  if (!isJson) {
+    throw new BackendConnectionError();
+  }
   if (!response.ok) {
     throw new Error(await getApiErrorMessage(response, "Could not list Ollama models"));
   }
-  const models: unknown = await response.json();
+  let models: unknown;
+  try {
+    models = await response.json();
+  } catch {
+    throw new BackendConnectionError();
+  }
   if (!Array.isArray(models)) {
     throw new Error("Ollama returned an invalid model list");
   }

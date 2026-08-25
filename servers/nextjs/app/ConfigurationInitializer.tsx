@@ -7,7 +7,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useDispatch } from 'react-redux';
 import { isOllamaModelAvailable } from '@/utils/providerUtils';
 import { LLMConfig } from '@/types/llm_config';
-import { getApiUrl } from '@/utils/api';
+import {
+  assertBackendReachable,
+  getApiUrl,
+  isBackendConnectionError,
+} from '@/utils/api';
 import { notify } from '@/components/ui/sonner';
 import { PRESENTON_SPLASH_MIN_DURATION_MS } from '@/components/ui/presenton-splash-loader';
 
@@ -81,7 +85,10 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
         const configResponse = await fetch('/api/user-config', {
           cache: 'no-store',
         });
-        if (!configResponse.ok) return;
+        if (!configResponse.ok) {
+          await assertBackendReachable();
+          throw new Error(`user-config returned ${configResponse.status}`);
+        }
 
         const config = normalizeLLMConfig(await configResponse.json());
         selectedProvider = config.LLM;
@@ -105,9 +112,11 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
           getApiUrl('/api/v1/auth/presenton/status'),
           { cache: 'no-store', credentials: 'include' }
         );
-        const status = statusResponse.ok
-          ? await statusResponse.json() as { linked?: boolean }
-          : null;
+        if (!statusResponse.ok) {
+          await assertBackendReachable();
+          throw new Error(`Presenton status returned ${statusResponse.status}`);
+        }
+        const status = await statusResponse.json() as { linked?: boolean };
 
         if (!cancelled && !status?.linked) {
           dispatch(setLLMConfig({ ...config, LLM: '' }));
@@ -120,8 +129,24 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
         }
       } catch (error) {
         console.error('Failed to revalidate provider configuration:', error);
-        if (!cancelled && selectedProvider === 'presenton') {
-          router.replace('/');
+        if (!cancelled && isBackendConnectionError(error)) {
+          notify.error(
+            "Cannot reach backend",
+            error.message,
+            { id: "backend-unreachable" }
+          );
+        } else if (!cancelled && selectedProvider === 'presenton') {
+          notify.error(
+            "Could not verify Presenton Cloud",
+            "Your current page has been kept open. Try again after checking the backend service.",
+            { id: "presenton-status-unavailable" }
+          );
+        } else if (!cancelled) {
+          notify.error(
+            "Could not verify provider settings",
+            "Your current page has been kept open. Refresh after checking the backend service.",
+            { id: "configuration-unavailable" }
+          );
         }
       }
     };
@@ -167,6 +192,19 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
 
     setIsLoading(true);
 
+    try {
+      await assertBackendReachable();
+    } catch (error) {
+      console.error('Failed to reach the FastAPI backend:', error);
+      notify.error(
+        "Cannot reach backend",
+        error instanceof Error ? error.message : "Check the backend service and try again.",
+        { id: "backend-unreachable" }
+      );
+      setIsLoading(false);
+      return;
+    }
+
     let canChangeKeys = false;
     try {
       const res = await fetch('/api/can-change-keys');
@@ -175,7 +213,13 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
       canChangeKeys = data.canChange ?? false;
     } catch (e) {
       console.error('Failed to fetch can-change-keys:', e);
-      canChangeKeys = false;
+      notify.error(
+        "Could not load configuration",
+        "Your current page has been kept open. Refresh after checking the backend service.",
+        { id: "configuration-unavailable" }
+      );
+      setIsLoading(false);
+      return;
     }
     dispatch(setCanChangeKeys(canChangeKeys));
 
@@ -187,24 +231,44 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
         llmConfig = await res.json();
       } catch (e) {
         console.error('Failed to fetch user config:', e);
-        llmConfig = {};
+        notify.error(
+          "Could not load provider settings",
+          "Your current page has been kept open. Refresh after checking the backend service.",
+          { id: "configuration-unavailable" }
+        );
+        setIsLoading(false);
+        return;
       }
       llmConfig = normalizeLLMConfig(llmConfig);
 
       dispatch(setLLMConfig(llmConfig));
 
       let hasPresentonCloud = false;
-      try {
-        const response = await fetch(
-          getApiUrl('/api/v1/auth/presenton/status'),
-          { cache: 'no-store', credentials: 'include' }
-        );
-        if (response.ok) {
+      if (llmConfig.LLM === 'presenton') {
+        try {
+          const response = await fetch(
+            getApiUrl('/api/v1/auth/presenton/status'),
+            { cache: 'no-store', credentials: 'include' }
+          );
+          if (!response.ok) {
+            await assertBackendReachable();
+            throw new Error(`Presenton status returned ${response.status}`);
+          }
           const status = await response.json();
           hasPresentonCloud = Boolean(status.linked);
+        } catch (error) {
+          console.error('Failed to fetch Presenton cloud status:', error);
+          const backendUnavailable = isBackendConnectionError(error);
+          notify.error(
+            backendUnavailable ? "Cannot reach backend" : "Could not verify Presenton Cloud",
+            backendUnavailable
+              ? error.message
+              : "Your current page has been kept open. Refresh after checking the backend service.",
+            { id: backendUnavailable ? "backend-unreachable" : "presenton-status-unavailable" }
+          );
+          setIsLoading(false);
+          return;
         }
-      } catch (error) {
-        console.error('Failed to fetch Presenton cloud status:', error);
       }
       const isValid = hasValidLLMConfig(llmConfig) &&
         (llmConfig.LLM !== 'presenton' || hasPresentonCloud);
@@ -222,10 +286,14 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
               llmConfig.OLLAMA_URL
             );
           } catch (error) {
+            const backendUnavailable = isBackendConnectionError(error);
             notify.error(
-              "Could not connect to Ollama",
-              error instanceof Error ? error.message : "Check the Ollama URL and try again."
+              backendUnavailable ? "Cannot reach backend" : "Could not connect to Ollama",
+              error instanceof Error ? error.message : "Check the Ollama URL and try again.",
+              { id: backendUnavailable ? "backend-unreachable" : "ollama-unreachable" }
             );
+            setIsLoading(false);
+            return;
           }
           if (!isAvailable) {
             router.push('/');
@@ -256,23 +324,29 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
         const res = await fetch("/api/runtime-config", {
           cache: "no-store",
         });
-        if (res.ok) {
-          const runtime = await res.json();
-          const runtimeConfig = normalizeLLMConfig(
-            (runtime.config || {}) as LLMConfig
+        if (!res.ok) throw new Error(`runtime-config returned ${res.status}`);
+        const runtime = await res.json();
+        const runtimeConfig = normalizeLLMConfig(
+          (runtime.config || {}) as LLMConfig
+        );
+        dispatch(setLLMConfig(runtimeConfig));
+        if (!runtime.configured) {
+          notify.error(
+            "Instance not configured",
+            "Ask the administrator to configure the AI providers in Settings."
           );
-          dispatch(setLLMConfig(runtimeConfig));
-          if (!runtime.configured) {
-            notify.error(
-              "Instance not configured",
-              "Ask the administrator to configure the AI providers in Settings."
-            );
-            setIsLoading(false);
-            return;
-          }
+          setIsLoading(false);
+          return;
         }
       } catch (error) {
         console.error("Failed to fetch runtime configuration:", error);
+        notify.error(
+          "Could not load provider settings",
+          "Your current page has been kept open. Refresh after checking the backend service.",
+          { id: "configuration-unavailable" }
+        );
+        setIsLoading(false);
+        return;
       }
       if (route === '/') {
         router.push('/upload');
