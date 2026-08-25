@@ -889,16 +889,32 @@ const GroupLayoutPreview = ({
   const handleChartItemSelect = useCallback(
     (item: PaletteItem) => {
       const chartElements = createChartInsertElements(item.id);
-      const category = chartElements.length > 0 ? "charts" : "infographics";
-      const elements =
-        chartElements.length > 0
-          ? chartElements
-          : createInfographicInsertElements(item.id);
-      if (!insertEditorElements(elements, item.label)) return;
+      if (!insertEditorElements(chartElements, item.label)) return;
 
       track(ANALYTICS_EVENTS.EDITOR_PALETTE_ITEM_INSERTED, {
         template_id: templateId,
-        category,
+        category: "charts",
+        item_id: item.id,
+        layout_index: activeLayoutIndex,
+      });
+    },
+    [activeLayoutIndex, insertEditorElements, templateId],
+  );
+
+  const handleInfographicItemSelect = useCallback(
+    (item: PaletteItem) => {
+      if (
+        !insertEditorElements(
+          createInfographicInsertElements(item.id),
+          item.label,
+        )
+      ) {
+        return;
+      }
+
+      track(ANALYTICS_EVENTS.EDITOR_PALETTE_ITEM_INSERTED, {
+        template_id: templateId,
+        category: "infographics",
         item_id: item.id,
         layout_index: activeLayoutIndex,
       });
@@ -1283,6 +1299,7 @@ const GroupLayoutPreview = ({
                 activePanel={activePanel}
                 onBlockSelect={handleBlockSelect}
                 onChartItemSelect={handleChartItemSelect}
+                onInfographicItemSelect={handleInfographicItemSelect}
                 onElementItemSelect={handleElementItemSelect}
                 onImageItemSelect={handleImageItemSelect}
                 onTableItemSelect={handleTableItemSelect}

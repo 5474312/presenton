@@ -68,6 +68,7 @@ const insertNavItems: Array<{
   { id: "blocks", label: "Blocks", Icon: BlocksIcon },
   { id: "texts", label: "Texts", Icon: Type },
   { id: "charts", label: "Charts", Icon: BarChart3 },
+  { id: "infographics", label: "Infographics", Icon: Sparkles },
   { id: "tables", label: "Tables", Icon: Rows3 },
   { id: "images", label: "Images", Icon: ImageIcon },
   { id: "elements", label: "Elements", Icon: Shapes },
@@ -169,6 +170,7 @@ export function TemplateInsertPanel({
   activePanel,
   onBlockSelect,
   onChartItemSelect,
+  onInfographicItemSelect,
   onElementItemSelect,
   onImageItemSelect,
   onTableItemSelect,
@@ -179,6 +181,7 @@ export function TemplateInsertPanel({
   activePanel: PanelMode;
   onBlockSelect: (block: TemplateBlock) => void;
   onChartItemSelect: (item: PaletteItem) => void;
+  onInfographicItemSelect: (item: PaletteItem) => void;
   onElementItemSelect: (item: PaletteItem) => void;
   onImageItemSelect: (item: PaletteItem) => void;
   onTableItemSelect: (item: PaletteItem) => void;
@@ -199,33 +202,42 @@ export function TemplateInsertPanel({
           title="Texts"
           groups={[{ label: "Add", items: textItems }]}
           onItemSelect={onTextItemSelect}
+          previewKind="text"
         />
       ) : activePanel === "charts" ? (
         <InsertPanel
           title="Charts"
-          groups={[
-            { label: "Chart Type", items: chartTypeItems },
-            { label: "Infographics", items: infographicItems },
-          ]}
+          groups={[{ label: "Chart Type", items: chartTypeItems }]}
           onItemSelect={onChartItemSelect}
+          previewKind="chart"
+        />
+      ) : activePanel === "infographics" ? (
+        <InsertPanel
+          title="Infographics"
+          groups={[{ label: "Layouts", items: infographicItems }]}
+          onItemSelect={onInfographicItemSelect}
+          previewKind="infographic"
         />
       ) : activePanel === "tables" ? (
         <InsertPanel
           title="Tables"
           groups={[{ label: "Table Type", items: tableTypeItems }]}
           onItemSelect={onTableItemSelect}
+          previewKind="table"
         />
       ) : activePanel === "images" ? (
         <InsertPanel
           title="Images"
           groups={[{ label: "Add", items: imageItems }]}
           onItemSelect={onImageItemSelect}
+          previewKind="image"
         />
       ) : activePanel === "elements" ? (
         <InsertPanel
           title="Elements"
           groups={elementItemGroups}
           onItemSelect={onElementItemSelect}
+          previewKind="element"
         />
       ) : null}
     </aside>
