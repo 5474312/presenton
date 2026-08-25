@@ -83,7 +83,7 @@ export function getDefaultOllamaUrl(): string {
 export const updateLLMConfig = (
   currentConfig: LLMConfig,
   field: string,
-  value: string | boolean
+  value: string | boolean | number | string[]
 ): LLMConfig => {
   const fieldMappings: Record<string, keyof LLMConfig> = {
     openai_api_key: "OPENAI_API_KEY",
@@ -142,6 +142,16 @@ export const updateLLMConfig = (
     disable_image_generation: "DISABLE_IMAGE_GENERATION",
     disable_thinking: "DISABLE_THINKING",
     extended_reasoning: "EXTENDED_REASONING",
+    llm_generation_profile: "LLM_GENERATION_PROFILE",
+    llm_max_output_tokens: "LLM_MAX_OUTPUT_TOKENS",
+    llm_reasoning_mode: "LLM_REASONING_MODE",
+    llm_reasoning_effort: "LLM_REASONING_EFFORT",
+    llm_reasoning_budget_tokens: "LLM_REASONING_BUDGET_TOKENS",
+    openrouter_provider_order: "OPENROUTER_PROVIDER_ORDER",
+    openrouter_allow_fallbacks: "OPENROUTER_ALLOW_FALLBACKS",
+    openrouter_require_parameters: "OPENROUTER_REQUIRE_PARAMETERS",
+    openrouter_data_collection: "OPENROUTER_DATA_COLLECTION",
+    openrouter_zdr: "OPENROUTER_ZDR",
     web_grounding: "WEB_GROUNDING",
     web_search_provider: "WEB_SEARCH_PROVIDER",
     web_search_max_results: "WEB_SEARCH_MAX_RESULTS",
