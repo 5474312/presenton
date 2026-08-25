@@ -306,7 +306,7 @@ def _extract_template_fonts_from_assets(assets: Any) -> Optional[dict[str, str]]
 
 
 def _presentation_response_data(presentation: PresentationModel) -> dict:
-    data = presentation.model_dump(exclude={"layout", "structure", "theme"})
+    data = presentation.model_dump(exclude={"layout", "structure"})
     data["type"] = (
         "smart" if presentation.generation_mode == "smart" else "standard"
     )

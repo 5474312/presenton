@@ -767,7 +767,7 @@ def test_get_presentation_preserves_template_detail_payload():
     assert response.version == PresentationVersion.V2_STANDARD
     assert not hasattr(response, "layout")
     assert not hasattr(response, "structure")
-    assert not hasattr(response, "theme")
+    assert response.theme is presentation.theme
     assert not hasattr(response, "components")
     assert not hasattr(response, "merged_components")
     assert response.fonts == {
