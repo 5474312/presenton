@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated, Literal, Optional, TypeAlias, Union, List
+from typing import Annotated, Any, Literal, Optional, TypeAlias, Union, List
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from utils.infographic_catalog import normalize_infographic_data
 
 
 def _validate_min_max(
@@ -370,6 +372,30 @@ class Chart(BaseModel):
 class InfographicType(str, Enum):
     PROGRESS_BAR = "progress_bar"
     GAUGE = "gauge"
+    GANTT = "gantt"
+    TIMELINE = "timeline"
+    ROADMAP = "roadmap"
+    MILESTONE_TIMELINE = "milestone_timeline"
+    STAIRCASE = "staircase"
+    SUPPLY_CHAIN = "supply_chain"
+    STAIR_STEP_BLOCKS = "stair_step_blocks"
+    MATURITY_MODEL = "maturity_model"
+    PILLAR_FRAMEWORK = "pillar_framework"
+    TRANSFORMATION_HUB = "transformation_hub"
+    DIAGONAL_CIRCLES = "diagonal_circles"
+    RISK_MATRIX = "risk_matrix"
+    CHEVRON_PROCESS = "chevron_process"
+    RADIAL_CYCLE = "radial_cycle"
+    CONVERSION_FUNNEL = "conversion_funnel"
+    PYRAMID = "pyramid"
+    SEGMENTED_WHEEL = "segmented_wheel"
+    CUSTOMER_JOURNEY = "customer_journey"
+    BEFORE_AFTER = "before_after"
+    IMPACT_EFFORT_MATRIX = "impact_effort_matrix"
+    COMPARISON_MATRIX = "comparison_matrix"
+    ORG_CHART = "org_chart"
+    DECISION_TREE = "decision_tree"
+    MIND_MAP = "mind_map"
 
 
 class ProgressBarInfographicData(BaseModel):
@@ -386,18 +412,67 @@ class GaugeInfographicData(BaseModel):
     value: float
 
 
+StructuralInfographicType = Literal[
+    "gantt",
+    "timeline",
+    "roadmap",
+    "milestone_timeline",
+    "staircase",
+    "supply_chain",
+    "stair_step_blocks",
+    "maturity_model",
+    "pillar_framework",
+    "transformation_hub",
+    "diagonal_circles",
+    "risk_matrix",
+    "chevron_process",
+    "radial_cycle",
+    "conversion_funnel",
+    "pyramid",
+    "segmented_wheel",
+    "customer_journey",
+    "before_after",
+    "impact_effort_matrix",
+    "comparison_matrix",
+    "org_chart",
+    "decision_tree",
+    "mind_map",
+]
+
+
+class StructuralInfographicData(BaseModel):
+    type: StructuralInfographicType
+
+    model_config = ConfigDict(extra="allow")
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_structural_data(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        infographic_type = value.get("type")
+        if not isinstance(infographic_type, str):
+            return value
+        return normalize_infographic_data(infographic_type, value)  # type: ignore[arg-type]
+
+
 class Infographic(BaseModel):
     type: Literal["infographic"]
     position: Optional[Position] = None
     size: Optional[Size] = None
     rotation: Optional[float] = None
     data: Annotated[
-        Union[ProgressBarInfographicData, GaugeInfographicData],
+        Union[
+            ProgressBarInfographicData,
+            GaugeInfographicData,
+            StructuralInfographicData,
+        ],
         Field(discriminator="type"),
     ]
 
     # Design
     colors: List[str] = Field(default_factory=list)
+    text_color: Optional[str] = None
 
     # Schema
     decorative: bool
@@ -501,6 +576,8 @@ __all__ = [
     "Padding",
     "Position",
     "ProgressBarInfographicData",
+    "StructuralInfographicData",
+    "StructuralInfographicType",
     "Shadow",
     "Size",
     "SlideElement",
