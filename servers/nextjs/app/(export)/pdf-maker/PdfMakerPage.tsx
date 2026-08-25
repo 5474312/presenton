@@ -39,7 +39,7 @@ const PDF_PRINT_STYLE = `
     gap: 0 !important;
   }
 
-  #presentation-slides-wrapper .slides-export-stack {
+  #presentation-slides-wrapper {
     width: 100% !important;
     display: flex !important;
     flex-direction: column !important;
@@ -140,8 +140,8 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
   const exportCookieFromHash =
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.hash.replace(/^#/, "")).get(
-          "exportCookie"
-        ) ?? undefined
+        "exportCookie"
+      ) ?? undefined
       : undefined;
   const effectiveExportCookie = exportCookie ?? exportCookieFromHash;
 
@@ -298,8 +298,8 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
                 </div>
               </div>
             ) : (
-              <div className="slides-export-stack font-inter">
-                {slides.map((slide: any, index: number) => {
+              {
+                slides.map((slide: any, index: number) => {
                   const useTemplateV2HtmlPreview =
                     shouldRenderTemplateV2HtmlPreview(
                       slide,
@@ -338,8 +338,8 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
                       </div>
                     </div>
                   );
-                })}
-              </div>
+                })
+              }
             )}
           </div>
         </>
