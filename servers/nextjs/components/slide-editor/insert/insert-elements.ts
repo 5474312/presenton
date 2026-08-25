@@ -15,6 +15,8 @@ import type {
   Stroke,
   TableCell,
 } from "@/components/slide-editor/types";
+import { INFOGRAPHIC_EXAMPLE_ICON_URLS } from "@/components/slide-editor/infographics/infographic-icons";
+import { fitInfographicElementToData } from "@/components/slide-editor/infographics/infographic-sizing";
 
 const DEFAULT_CHART_INSERT_POSITION = { x: 128, y: 115 };
 const DEFAULT_CHART_INSERT_SIZE = { width: 717, height: 410 };
@@ -605,6 +607,76 @@ function infographicTypeFromPaletteId(id?: string): InfographicType | null {
     case "gauge":
     case "gauge-chart":
       return "gauge";
+    case "gantt":
+    case "gantt-chart":
+      return "gantt";
+    case "timeline":
+      return "timeline";
+    case "roadmap":
+    case "road-map":
+      return "roadmap";
+    case "milestone_timeline":
+    case "milestone-timeline":
+      return "milestone_timeline";
+    case "staircase":
+    case "staircase-steps":
+      return "staircase";
+    case "supply_chain":
+    case "supply-chain":
+      return "supply_chain";
+    case "stair_step_blocks":
+    case "stair-step-blocks":
+      return "stair_step_blocks";
+    case "maturity_model":
+    case "maturity-model":
+      return "maturity_model";
+    case "pillar_framework":
+    case "pillar-framework":
+      return "pillar_framework";
+    case "transformation_hub":
+    case "transformation-hub":
+      return "transformation_hub";
+    case "diagonal_circles":
+    case "diagonal-circles":
+      return "diagonal_circles";
+    case "risk_matrix":
+    case "risk-matrix":
+      return "risk_matrix";
+    case "chevron_process":
+    case "chevron-process":
+      return "chevron_process";
+    case "radial_cycle":
+    case "radial-cycle":
+      return "radial_cycle";
+    case "conversion_funnel":
+    case "conversion-funnel":
+      return "conversion_funnel";
+    case "pyramid":
+      return "pyramid";
+    case "segmented_wheel":
+    case "segmented-wheel":
+      return "segmented_wheel";
+    case "customer_journey":
+    case "customer-journey":
+      return "customer_journey";
+    case "before_after":
+    case "before-after":
+      return "before_after";
+    case "impact_effort_matrix":
+    case "impact-effort-matrix":
+      return "impact_effort_matrix";
+    case "comparison_matrix":
+    case "comparison-matrix":
+      return "comparison_matrix";
+    case "org_chart":
+    case "org-chart":
+      return "org_chart";
+    case "decision_tree":
+    case "decision-tree":
+      return "decision_tree";
+    case "mind_map":
+    case "mind-map":
+      return "mind_map";
     default:
       return null;
   }
@@ -623,8 +695,821 @@ function makeInfographicElement(infographicType: InfographicType): SlideElement 
         value: 68,
       },
       colors: ["E5E7EB", "2563EB"],
+      text_color: "111111",
       decorative: false,
       name: "progress_bar",
+    };
+  }
+
+  if (infographicType === "gantt") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 300 },
+      data: {
+        type: "gantt",
+        columns: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug"].map((label) => ({
+          label,
+        })),
+        rows: [
+          {
+            label: "Research & Discovery",
+            items: [
+              {
+                name: "Research & Discovery",
+                start: { column: 0, offset: 0 },
+                end: { column: 2, offset: 0.5 },
+              },
+            ],
+          },
+          {
+            label: "Content Planning",
+            items: [
+              {
+                name: "Content Planning",
+                start: { column: 1, offset: 0.14 },
+                end: { column: 2, offset: 0.88 },
+              },
+            ],
+          },
+          {
+            label: "Strategy Development",
+            items: [
+              {
+                name: "Strategy Development",
+                start: { column: 2, offset: 0.34 },
+                end: { column: 4, offset: 0.86 },
+              },
+            ],
+          },
+          {
+            label: "Design & Production",
+            items: [{
+              name: "Design & Production",
+              start: { column: 4, offset: 0 },
+              end: { column: 6, offset: 0.38 },
+            }],
+          },
+          {
+            label: "Content Creation",
+            items: [{
+              name: "Content Creation",
+              start: { column: 5, offset: 0 },
+              end: { column: 7, offset: 1 },
+            }],
+          },
+          {
+            label: "Campaign Launch",
+            items: [{
+              name: "Campaign Launch",
+              start: { column: 5, offset: 0.52 },
+              end: { column: 7, offset: 0.68 },
+            }],
+          },
+          {
+            label: "Performance Tracking",
+            items: [{
+              name: "Performance Tracking",
+              start: { column: 4, offset: 0.3 },
+              end: { column: 7, offset: 1 },
+            }],
+          },
+          {
+            label: "Optimization",
+            items: [{
+              name: "Optimization",
+              start: { column: 6, offset: 0.9 },
+              end: { column: 7, offset: 1 },
+            }],
+          },
+          {
+            label: "Final Review",
+            items: [{
+              name: "Final Review",
+              start: { column: 6, offset: 0.56 },
+              end: { column: 7, offset: 1 },
+            }],
+          },
+        ],
+      },
+      colors: [
+        "FFFFFF",
+        "102E79",
+        "24468E",
+        "385EAA",
+        "4D73BE",
+        "6388D0",
+        "7CA2E5",
+        "9AC8ED",
+        "B5DCF4",
+        "CBEAF7",
+      ],
+      text_color: "111111",
+      decorative: false,
+      name: "gantt_chart",
+    };
+  }
+
+  if (infographicType === "timeline") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 260 },
+      data: {
+        type: "timeline",
+        items: [
+          {
+            icon: {
+              url: INFOGRAPHIC_EXAMPLE_ICON_URLS.discover,
+              color: "FFFFFF",
+            },
+            heading: "Discover",
+            description: "Research the challenge and identify key needs.",
+          },
+          {
+            icon: {
+              url: INFOGRAPHIC_EXAMPLE_ICON_URLS.define,
+              color: "FFFFFF",
+            },
+            heading: "Define",
+            description: "Set clear goals, priorities, and direction.",
+          },
+          {
+            icon: {
+              url: INFOGRAPHIC_EXAMPLE_ICON_URLS.plan,
+              color: "FFFFFF",
+            },
+            heading: "Plan",
+            description: "Build the strategy, timeline, and action plan.",
+          },
+          {
+            icon: {
+              url: INFOGRAPHIC_EXAMPLE_ICON_URLS.execute,
+              color: "FFFFFF",
+            },
+            heading: "Execute",
+            description: "Put the plan into action and track progress.",
+          },
+          {
+            icon: {
+              url: INFOGRAPHIC_EXAMPLE_ICON_URLS.measure,
+              color: "FFFFFF",
+            },
+            heading: "Measure",
+            description: "Review results against key performance indicators.",
+          },
+        ],
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0"],
+      text_color: "111111",
+      decorative: false,
+      name: "timeline",
+    };
+  }
+
+  if (infographicType === "roadmap") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 252 },
+      data: {
+        type: "roadmap",
+        items: [
+          {
+            heading: "Discover",
+            description: "Research the challenge and identify key needs.",
+          },
+          {
+            heading: "Define",
+            description: "Set clear goals, priorities, and direction.",
+          },
+          {
+            heading: "Plan",
+            description: "Build the strategy, timeline, and action plan.",
+          },
+          {
+            heading: "Execute",
+            description: "Put the plan into action and track progress.",
+          },
+          {
+            heading: "Measure",
+            description: "Review results against key performance indicators.",
+          },
+          {
+            heading: "Review",
+            description: "Capture lessons and decide the next direction.",
+          },
+        ],
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "7CA2E5"],
+      text_color: null,
+      decorative: false,
+      name: "roadmap",
+    };
+  }
+
+  if (infographicType === "milestone_timeline") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 260 },
+      data: {
+        type: "milestone_timeline",
+        items: Array.from({ length: 7 }, (_, index) => ({
+          heading: String(2020 + index),
+          description: "Defined the project vision, objectives, and strategic direction.",
+        })),
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "7CA2E5", "D6D6D6"],
+      text_color: null,
+      decorative: false,
+      name: "milestone_timeline",
+    };
+  }
+
+  if (infographicType === "staircase") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 340 },
+      data: {
+        type: "staircase",
+        items: [
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.discover, color: "FFFFFF" },
+            heading: "Drive Growth",
+            description: "Expand customer reach, improve engagement, and increase revenue.",
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.define, color: "FFFFFF" },
+            heading: "Enter the Market",
+            description: "Launch strategically and establish a strong market presence.",
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.plan, color: "FFFFFF" },
+            heading: "Build the Solution",
+            description: "Develop products, services, and experiences.",
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.execute, color: "FFFFFF" },
+            heading: "Understand Market",
+            description: "Identify customer needs, market trends, and competitive gaps.",
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.measure, color: "FFFFFF" },
+            heading: "Define the Vision",
+            description: "Set clear goals, priorities, and a long-term direction.",
+          },
+        ],
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0"],
+      text_color: null,
+      decorative: false,
+      name: "staircase",
+    };
+  }
+
+  if (infographicType === "supply_chain") {
+    const entries = [
+      ["SOURCING", "Raw materials\nSupplier network"],
+      ["PROCUREMENT", "Purchasing\nQuality & cost"],
+      ["PRODUCTION", "Manufacturing\nQuality control"],
+      ["DISTRIBUTION", "Warehousing\nLogistics & delivery"],
+      ["END MARKET", "Retail / B2B\nCustomer delivery"],
+    ] as const;
+    return { type: "infographic", position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION }, size: { width: 720, height: 300 }, data: { type: "supply_chain", items: entries.map(([heading, description], index) => ({ icon: { url: Object.values(INFOGRAPHIC_EXAMPLE_ICON_URLS)[index % 5], color: "FFFFFF" }, heading, description })) }, colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "D6D6D6"], text_color: null, decorative: false, name: "supply_chain" };
+  }
+
+  if (infographicType === "stair_step_blocks") {
+    const entries = [
+      ["Foundation", "Establish core capabilities, clear processes, resources, and operating structures."],
+      ["Optimize", "Streamline workflows, improve efficiency, reduce bottlenecks, and strengthen performance."],
+      ["Scale", "Expand capacity, customer reach, technology, and operational capabilities to support growth."],
+      ["Accelerate", "Invest in innovation, new opportunities, partnerships, and high-impact growth initiatives."],
+      ["Lead", "Build market leadership through continuous improvement and differentiation."],
+    ] as const;
+    return { type: "infographic", position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION }, size: { width: 720, height: 350 }, data: { type: "stair_step_blocks", items: entries.map(([heading, description], index) => ({ icon: { url: Object.values(INFOGRAPHIC_EXAMPLE_ICON_URLS)[index % 5], color: "FFFFFF" }, heading, description })) }, colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0"], text_color: null, decorative: false, name: "stair_step_blocks" };
+  }
+
+  if (infographicType === "maturity_model") {
+    const entries = [
+      ["Initial", "Capabilities are continuously refined through automation, innovation, advanced analytics, and proactive performance management."],
+      ["Developing", "Performance is actively measured through KPIs and data, enabling teams to identify gaps and manage outcomes."],
+      ["Defined", "Core processes are standardized, documented, and consistently applied, with clearer roles and governance."],
+      ["Managed", "Basic processes and responsibilities are emerging, but execution varies across teams."],
+      ["Optimized", "Processes are largely informal and reactive, with limited standardization or clear ownership."],
+    ] as const;
+    return { type: "infographic", position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION }, size: { width: 720, height: 390 }, data: { type: "maturity_model", items: entries.map(([heading, description], index) => ({ icon: { url: Object.values(INFOGRAPHIC_EXAMPLE_ICON_URLS)[index % 5], color: "FFFFFF" }, heading, description })) }, colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0"], text_color: null, decorative: false, name: "maturity_model" };
+  }
+
+  if (infographicType === "pillar_framework") {
+    const entries = [
+      ["Customer", "Strengthen customer relationships, improve experience, and deliver greater value across key touchpoints.", "Experience & Value"],
+      ["Growth", "Expand market presence, develop new opportunities, and build sustainable revenue streams.", "Revenue & Market"],
+      ["Operations", "Simplify processes, improve productivity, and build scalable operating capabilities.", "Efficiency & Scale"],
+      ["Innovation", "Leverage technology, data, and innovation to create new solutions and differentiation.", "Digital & New Ideas"],
+      ["People", "Develop capabilities, strengthen leadership, and create a culture of ownership and continuous improvement.", "Talent & Culture"],
+    ] as const;
+    return { type: "infographic", position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION }, size: { width: 720, height: 380 }, data: { type: "pillar_framework", title: "Growth & Transformation Framework", items: entries.map(([heading, description, focus], index) => ({ icon: { url: Object.values(INFOGRAPHIC_EXAMPLE_ICON_URLS)[index % 5], color: "FFFFFF" }, heading, description, focus })) }, colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "D6D6D6"], text_color: null, decorative: false, name: "pillar_framework" };
+  }
+
+  if (infographicType === "transformation_hub") {
+    return { type: "infographic", position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION }, size: { width: 720, height: 300 }, data: { type: "transformation_hub", center_label: "Business\nTransformation", items: ["Strategy", "Customer", "People", "Process", "Technology", "Data"].map((heading) => ({ heading })) }, colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "D6D6D6"], text_color: null, decorative: false, name: "transformation_hub" };
+  }
+
+  if (infographicType === "diagonal_circles") {
+    const entries = [
+      ["Strategy", "Defines the organization's direction, priorities, objectives, and investment focus."],
+      ["People", "Builds the skills, leadership, accountability, and culture required to execute strategy."],
+      ["Customer", "Focuses on customer needs, experience, engagement, and value creation."],
+      ["Process", "Improves workflows, standardization, efficiency, and governance."],
+      ["Technology", "Enables digital transformation through systems, automation, integration, and data-driven capabilities."],
+    ] as const;
+    return { type: "infographic", position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION }, size: { width: 720, height: 430 }, data: { type: "diagonal_circles", items: entries.map(([heading, description], index) => ({ icon: { url: Object.values(INFOGRAPHIC_EXAMPLE_ICON_URLS)[index % 5], color: "FFFFFF" }, heading, description })) }, colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "D6D6D6"], text_color: null, decorative: false, name: "diagonal_circles" };
+  }
+
+  if (infographicType === "risk_matrix") {
+    const entries = [
+      ["Identify", "Detect potential risks across operations, technology, finance, people, and external factors."],
+      ["Prioritize", "Rank risks by severity to focus attention and resources on the most critical areas."],
+      ["Assess", "Evaluate likelihood, impact, and exposure to understand each risk."],
+      ["Respond", "Define mitigation actions, controls, owners, and contingency plans for priority risks."],
+    ] as const;
+    return { type: "infographic", position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION }, size: { width: 720, height: 370 }, data: { type: "risk_matrix", center_label: "RISK", items: entries.map(([heading, description], index) => ({ icon: { url: Object.values(INFOGRAPHIC_EXAMPLE_ICON_URLS)[index % 5], color: "FFFFFF" }, heading, description })) }, colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "D6D6D6"], text_color: null, decorative: false, name: "risk_matrix" };
+  }
+
+  if (infographicType === "chevron_process") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 360 },
+      data: {
+        type: "chevron_process",
+        items: [
+          {
+            heading: "Discover",
+            description: "Understand the business, market, and key challenges.",
+          },
+          {
+            heading: "Analyze",
+            description: "Evaluate data, trends, competitors, and opportunities.",
+          },
+          {
+            heading: "Define",
+            description: "Prioritize strategic issues and define objectives.",
+          },
+          {
+            heading: "Design",
+            description: "Develop solutions, initiatives, and strategic priorities.",
+          },
+          {
+            heading: "Implement",
+            description: "Build the roadmap, actions, owners, and next steps.",
+          },
+        ],
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0"],
+      text_color: null,
+      decorative: false,
+      name: "chevron_process",
+    };
+  }
+
+  if (infographicType === "radial_cycle") {
+    return {
+      type: "infographic",
+      position: { x: 250, y: 100 },
+      size: { width: 560, height: 520 },
+      data: {
+        type: "radial_cycle",
+        center_image:
+          "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=900&q=80",
+        items: [
+          {
+            heading: "Discover",
+            description: "Understand the business, market, and key challenges.",
+          },
+          {
+            heading: "Analyze",
+            description: "Review data, identify patterns, and evaluate opportunities.",
+          },
+          {
+            heading: "Plan",
+            description: "Define priorities, develop the approach, and establish clear actions.",
+          },
+          {
+            heading: "Execute",
+            description: "Implement the recommended actions and track progress.",
+          },
+          {
+            heading: "Optimize",
+            description: "Measure performance and improve the plan.",
+          },
+          {
+            heading: "Finalize",
+            description: "Capture outcomes, decisions, and next steps.",
+          },
+        ],
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "7CA2E5"],
+      text_color: null,
+      decorative: false,
+      name: "radial_cycle",
+    };
+  }
+
+  if (infographicType === "conversion_funnel") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 320 },
+      data: {
+        type: "conversion_funnel",
+        items: [
+          {
+            value: 57,
+            heading: "Awareness",
+            description: "Implement the recommended actions and track progress.",
+          },
+          {
+            value: 42,
+            heading: "Interest",
+            description: "Users showing engagement with the offering.",
+          },
+          {
+            value: 36,
+            heading: "Consideration",
+            description: "Prospects evaluating the solution.",
+          },
+          {
+            value: 27,
+            heading: "Intent",
+            description: "Users showing strong purchase interest.",
+          },
+        ],
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "7CA2E5"],
+      text_color: null,
+      decorative: false,
+      name: "conversion_funnel",
+    };
+  }
+
+  if (infographicType === "pyramid") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 400 },
+      data: {
+        type: "pyramid",
+        items: [
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.discover, color: "FFFFFF" },
+            heading: "Foundation",
+            description: "Establish strong processes, capabilities, and resources.",
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.define, color: "FFFFFF" },
+            heading: "Efficiency",
+            description: "Streamline operations, reduce gaps, and optimize costs.",
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.plan, color: "FFFFFF" },
+            heading: "Growth",
+            description: "Enter new markets, strengthen offerings, and increase reach.",
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.execute, color: "FFFFFF" },
+            heading: "Innovation",
+            description: "Develop new ideas, solutions, and competitive advantages.",
+          },
+        ],
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE"],
+      text_color: null,
+      decorative: false,
+      name: "pyramid",
+    };
+  }
+
+  if (infographicType === "segmented_wheel") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 460 },
+      data: {
+        type: "segmented_wheel",
+        items: [
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.measure, color: "FFFFFF" },
+            heading: "Foundation",
+            description: "Establish strong processes, capabilities, and resources.",
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.define, color: "FFFFFF" },
+            heading: "Efficiency",
+            description: "Streamline operations, reduce gaps, and optimize costs.",
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.execute, color: "FFFFFF" },
+            heading: "Growth",
+            description: "Enter new markets, strengthen offerings, and increase reach.",
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.plan, color: "FFFFFF" },
+            heading: "Innovation",
+            description: "Develop new ideas, solutions, and competitive advantages.",
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.discover, color: "FFFFFF" },
+            heading: "Leadership",
+            description: "Build long-term resilience, market leadership, and value creation.",
+          },
+        ],
+      },
+      colors: ["FFFFFF", "24468E", "385EAA", "4D73BE", "6388D0", "102E79"],
+      text_color: null,
+      decorative: false,
+      name: "segmented_wheel",
+    };
+  }
+
+  if (infographicType === "customer_journey") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 420 },
+      data: {
+        type: "customer_journey",
+        items: [
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.discover, color: "111111" },
+            heading: null,
+            description: null,
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.measure, color: "FFFFFF" },
+            heading: "Awareness",
+            description: "Customer discovers the brand through marketing and referrals.",
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.discover, color: "FFFFFF" },
+            heading: "Consideration",
+            description: "Customer explores options, compares alternatives.",
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.define, color: "FFFFFF" },
+            heading: "Purchase",
+            description: "Customer makes a decision and completes the transaction.",
+          },
+          {
+            icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.execute, color: "FFFFFF" },
+            heading: "Experience",
+            description: "Customer uses the product or service and interacts with support.",
+          },
+        ],
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "D6D6D6"],
+      text_color: null,
+      decorative: false,
+      name: "customer_journey",
+    };
+  }
+
+  if (infographicType === "before_after") {
+    const beforeItems = [
+      ["Manual Processes", "Time-consuming workflows."],
+      ["Limited Visibility", "Data is difficult to access."],
+      ["Fragmented Workflows", "Teams work in silos."],
+    ] as const;
+    const afterItems = [
+      ["Automated Processes", "Faster, streamlined operations."],
+      ["Faster Decisions", "Quicker, data-driven actions."],
+      ["Connected Workflows", "Better team collaboration."],
+    ] as const;
+    const beforeIcons = [
+      INFOGRAPHIC_EXAMPLE_ICON_URLS.measure,
+      INFOGRAPHIC_EXAMPLE_ICON_URLS.discover,
+      INFOGRAPHIC_EXAMPLE_ICON_URLS.define,
+    ];
+    const afterIcons = [
+      INFOGRAPHIC_EXAMPLE_ICON_URLS.plan,
+      INFOGRAPHIC_EXAMPLE_ICON_URLS.execute,
+      INFOGRAPHIC_EXAMPLE_ICON_URLS.measure,
+    ];
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 460 },
+      data: {
+        type: "before_after",
+        before_label: "Before",
+        after_label: "After",
+        items: beforeItems.flatMap(([beforeHeading, beforeDescription], index) => [
+          {
+            icon: { url: beforeIcons[index], color: "FFFFFF" },
+            heading: beforeHeading,
+            description: beforeDescription,
+          },
+          {
+            icon: { url: afterIcons[index], color: "FFFFFF" },
+            heading: afterItems[index][0],
+            description: afterItems[index][1],
+          },
+        ]),
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "7CA2E5"],
+      text_color: null,
+      decorative: false,
+      name: "before_after",
+    };
+  }
+
+  if (infographicType === "impact_effort_matrix") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 420 },
+      data: {
+        type: "impact_effort_matrix",
+        x_axis_label: "Impact",
+        y_axis_label: "Effort",
+        low_label: "Low",
+        high_label: "High",
+        items: [
+          {
+            heading: "Quick Wins",
+            description: "High-impact initiatives that require relatively low effort, making them ideal for immediate execution and fast results.",
+          },
+          {
+            heading: "Strategic Priorities",
+            description: "High-impact initiatives that require significant investment, planning, and resources but can drive long-term business value.",
+          },
+          {
+            heading: "Deprioritize",
+            description: "Low-impact initiatives requiring substantial effort or resources, making them less suitable for immediate focus.",
+          },
+          {
+            heading: "Fill-ins",
+            description: "Low-impact initiatives that are easy to implement and can be addressed when resources are available.",
+          },
+        ],
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "D6D6D6"],
+      text_color: null,
+      decorative: false,
+      name: "impact_effort_matrix",
+    };
+  }
+
+  if (infographicType === "comparison_matrix") {
+    const criteria = [
+      "Market Access",
+      "Investment Required",
+      "Speed to Market",
+      "Control",
+      "Scalability",
+    ];
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 340 },
+      data: {
+        type: "comparison_matrix",
+        criteria,
+        items: [
+          { icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.measure, color: "111111" }, heading: "Organic Growth", values: ["Moderate", "Low", "Slow", "High", "High"] },
+          { icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.define, color: "111111" }, heading: "Product Innovation", values: ["High", "Low", "Fast", "Low", "High"] },
+          { icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.discover, color: "111111" }, heading: "Strategic Partnership", values: ["Low", "Low", "Slow", "Fast", "High"] },
+          { icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.execute, color: "111111" }, heading: "Acquisition", values: ["Moderate", "Low", "Slow", "High", "High"] },
+          { icon: { url: INFOGRAPHIC_EXAMPLE_ICON_URLS.plan, color: "111111" }, heading: "Market Expansion", values: ["Moderate", "Low", "Slow", "High", "High"] },
+        ],
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "D6D6D6"],
+      text_color: null,
+      decorative: false,
+      name: "comparison_matrix",
+    };
+  }
+
+  if (infographicType === "org_chart") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 360 },
+      data: {
+        type: "org_chart",
+        items: [
+          { id: "ceo", parent_id: null, heading: "Aarav Sharma", description: "Chief Executive Officer" },
+          { id: "coo", parent_id: "ceo", heading: "Nisha Kapoor", description: "Chief Operating Officer" },
+          { id: "cfo", parent_id: "ceo", heading: "Rohan Mehta", description: "Chief Financial Officer" },
+          { id: "cmo", parent_id: "ceo", heading: "Priya Malhotra", description: "Chief Marketing Officer" },
+          { id: "operations", parent_id: "coo", heading: "Rohan Thapa", description: "Operations Manager" },
+          { id: "product", parent_id: "cmo", heading: "Vikram Joshi", description: "Product Manager" },
+          { id: "finance", parent_id: "cmo", heading: "Rahul Nair", description: "Finance Manager" },
+          { id: "ops-executive", parent_id: "operations", heading: "Sneha Gurung", description: "Operations Executive" },
+          { id: "analyst", parent_id: "operations", heading: "Amit Shrestha", description: "Process Analyst" },
+          { id: "finance-executive", parent_id: "finance", heading: "Aditya Rao", description: "Finance Executive" },
+          { id: "accountant", parent_id: "finance", heading: "Dev Sharma", description: "Accountant" },
+        ],
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "D6D6D6"],
+      text_color: null,
+      decorative: false,
+      name: "org_chart",
+    };
+  }
+
+  if (infographicType === "decision_tree") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 360 },
+      data: {
+        type: "decision_tree",
+        items: [
+          { id: "decision", parent_id: null, heading: "Market Expansion Decision" },
+          { id: "demand", parent_id: "decision", heading: "Market Demand" },
+          { id: "competitive", parent_id: "decision", heading: "Competitive Position" },
+          { id: "feasibility", parent_id: "decision", heading: "Investment Feasibility" },
+          { id: "readiness", parent_id: "decision", heading: "Operational Readiness" },
+          { id: "market-demand", parent_id: "demand", heading: "Market Demand" },
+          { id: "growth", parent_id: "demand", heading: "Growth Potential" },
+          { id: "competition", parent_id: "competitive", heading: "Competition Level" },
+          { id: "saturation", parent_id: "competitive", heading: "Market Saturation" },
+          { id: "capacity", parent_id: "feasibility", heading: "Limited capacity" },
+          { id: "funding", parent_id: "feasibility", heading: "Funding required" },
+          { id: "ready", parent_id: "readiness", heading: "Fully ready" },
+          { id: "partial", parent_id: "readiness", heading: "Partially ready" },
+        ],
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "385EAA", "4D73BE", "6388D0", "D6D6D6"],
+      text_color: null,
+      decorative: false,
+      name: "decision_tree",
+    };
+  }
+
+  if (infographicType === "mind_map") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 380 },
+      data: {
+        type: "mind_map",
+        items: [
+          {
+            icon: {
+              url: INFOGRAPHIC_EXAMPLE_ICON_URLS.discover,
+              color: "FFFFFF",
+            },
+            heading: "Discover",
+            description: "Research the challenge and identify key needs.",
+            items: [],
+          },
+          {
+            icon: {
+              url: INFOGRAPHIC_EXAMPLE_ICON_URLS.define,
+              color: "FFFFFF",
+            },
+            heading: "Define",
+            description: "Set clear goals, priorities, and direction.",
+            items: [],
+          },
+          {
+            icon: {
+              url: INFOGRAPHIC_EXAMPLE_ICON_URLS.plan,
+              color: "FFFFFF",
+            },
+            heading: "Plan",
+            description: "Build the strategy, timeline, and action plan.",
+            items: [],
+          },
+          {
+            icon: {
+              url: INFOGRAPHIC_EXAMPLE_ICON_URLS.execute,
+              color: "FFFFFF",
+            },
+            heading: "Execute",
+            description: "Put the plan into action and track progress.",
+            items: [],
+          },
+          {
+            icon: {
+              url: INFOGRAPHIC_EXAMPLE_ICON_URLS.measure,
+              color: "FFFFFF",
+            },
+            heading: "Measure",
+            description:
+              "Review results against key performance indicators.",
+            items: [],
+          },
+        ],
+      },
+      colors: ["FFFFFF", "536AA2", "647DB8", "7894CF", "8AA8E4", "9DC2ED"],
+      text_color: "111111",
+      decorative: false,
+      name: "mind_map",
     };
   }
 
@@ -639,6 +1524,7 @@ function makeInfographicElement(infographicType: InfographicType): SlideElement 
       value: 76,
     },
     colors: ["E5E7EB", "2563EB"],
+    text_color: "111111",
     decorative: false,
     name: "gauge_chart",
   };
@@ -646,7 +1532,9 @@ function makeInfographicElement(infographicType: InfographicType): SlideElement 
 
 export function createInfographicInsertElements(kind?: string): SlideElement[] {
   const infographicType = infographicTypeFromPaletteId(kind);
-  return infographicType ? [makeInfographicElement(infographicType)] : [];
+  return infographicType
+    ? [fitInfographicElementToData(makeInfographicElement(infographicType))]
+    : [];
 }
 
 function makeSimpleTableElement(): SlideElement {
