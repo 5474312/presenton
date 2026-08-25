@@ -21,6 +21,7 @@ test.before(async () => {
     [
       `export { createInfographicInsertElements } from ${JSON.stringify(path.resolve("components/slide-editor/insert/insert-elements.ts"))};`,
       `export { normalizeTemplateTheme, resolveTemplateTheme } from ${JSON.stringify(path.resolve("lib/template-theme.ts"))};`,
+      `export { default as TemplateService } from ${JSON.stringify(path.resolve("app/(presentation-generator)/services/api/template.ts"))};`,
     ].join("\n"),
   );
   await build({
@@ -113,4 +114,39 @@ test("normalizes nested API themes and derives a template fallback", () => {
   assert.equal(derived.background, "#fefefe");
   assert.ok(["#7c3aed", "#0891b2"].includes(derived.primary));
   assert.equal(derived.background_text, "#111827");
+});
+
+test("loads and caches normalized template themes from the theme endpoint", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(String(url));
+    return new Response(
+      JSON.stringify({
+        template_id: "theme-service-test",
+        theme: { colors: theme },
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  };
+
+  try {
+    const first = await themedInserts.TemplateService.getTemplateTheme(
+      "template-v2-theme-service-test",
+    );
+    const second = await themedInserts.TemplateService.getTemplateTheme(
+      "theme-service-test",
+    );
+
+    assert.equal(first.primary, theme.primary);
+    assert.equal(second.background, theme.background);
+    assert.deepEqual(requests, [
+      "/api/v1/ppt/template/theme-service-test/theme",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

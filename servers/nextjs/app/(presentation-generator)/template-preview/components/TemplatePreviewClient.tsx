@@ -26,7 +26,10 @@ import {
 import { COMMIT_TEMPLATE_V2_INLINE_TEXT_EVENT } from "@/components/slide-editor/text/TiptapInlineTextEditor";
 import { normalizeBackendAssetUrls } from "@/utils/api";
 import { ensureTailwindBrowserScript } from "@/lib/tailwind-browser";
-import { resolveTemplateTheme } from "@/lib/template-theme";
+import {
+  resolveTemplateTheme,
+  type TemplateTheme,
+} from "@/lib/template-theme";
 import TemplateService from "../../services/api/template";
 import { useTemplateDetails } from "../../hooks/useTemplateDetails";
 import {
@@ -151,10 +154,18 @@ const GroupLayoutPreview = ({
 
   const { template, layouts, fonts, loading, error } =
     useTemplateDetails(templateId);
-  const templateTheme = useMemo(
+  const fallbackTemplateTheme = useMemo(
     () => resolveTemplateTheme(template),
     [template],
   );
+  const [loadedTemplateTheme, setLoadedTemplateTheme] = useState<{
+    templateId: string;
+    theme: TemplateTheme;
+  } | null>(null);
+  const templateTheme =
+    loadedTemplateTheme?.templateId === templateId
+      ? loadedTemplateTheme.theme
+      : fallbackTemplateTheme;
   const [editableLayouts, setEditableLayouts] = useState<TemplateV2Layout[]>([]);
   const editableLayoutsRef = useRef<TemplateV2Layout[]>([]);
   const [activeLayoutIndex, setActiveLayoutIndex] = useState(0);
@@ -216,6 +227,23 @@ const GroupLayoutPreview = ({
   useEffect(() => {
     ensureTailwindBrowserScript();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!templateId) return () => undefined;
+
+    void TemplateService.getTemplateTheme(templateId).then((theme) => {
+      if (cancelled) return;
+      setLoadedTemplateTheme({
+        templateId,
+        theme: theme ?? fallbackTemplateTheme,
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fallbackTemplateTheme, templateId]);
 
   useEffect(() => {
     if (!fonts || typeof fonts !== "object") return;
