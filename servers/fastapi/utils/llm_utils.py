@@ -41,6 +41,7 @@ class TextGenerationMetrics:
     thinking_tokens: Optional[int] = None
     thinking_tokens_estimated: bool = False
     supports_thinking: bool = False
+    finish_reason: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -233,6 +234,15 @@ def build_text_generation_metrics(
         thinking_tokens = 0
         thinking_tokens_estimated = True
 
+    # Provider-reported output usage normally already includes reasoning
+    # tokens. When usage is unavailable, however, ``output_tokens`` is only an
+    # estimate of visible content. Include the separately streamed thinking
+    # estimate so live throughput does not incorrectly read 0 t/s while a
+    # reasoning model is actively working.
+    generated_tokens = output_tokens
+    if exact_output_tokens is None and thinking_tokens is not None:
+        generated_tokens += thinking_tokens
+
     duration_seconds = (
         getattr(completion, "duration_seconds", None)
         if completion is not None
@@ -242,14 +252,14 @@ def build_text_generation_metrics(
         duration_seconds = max(time.perf_counter() - started_at, 1e-9)
     total_tokens = _usage_token_value(usage, "total_tokens")
     if total_tokens is None:
-        total_tokens = input_tokens + output_tokens
+        total_tokens = input_tokens + generated_tokens
 
     return TextGenerationMetrics(
         model=model,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=total_tokens,
-        tokens_per_second=output_tokens / duration_seconds,
+        tokens_per_second=generated_tokens / duration_seconds,
         duration_seconds=duration_seconds,
         estimated=exact_input_tokens is None or exact_output_tokens is None,
         thinking_tokens=thinking_tokens,
