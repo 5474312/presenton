@@ -56,10 +56,12 @@ export default function OnboardingPresentonAccount({
   onContinue,
   variant = "onboarding",
   onStatusChange,
+  onDisconnect,
 }: {
   onContinue?: () => void | Promise<void>;
   variant?: "onboarding" | "settings";
   onStatusChange?: (status: PresentonStatus) => void;
+  onDisconnect?: () => void | Promise<void>;
 }) {
   const [status, setStatus] = useState<PresentonStatus>(initialStatus);
   const [isLoading, setIsLoading] = useState(true);
@@ -211,9 +213,12 @@ export default function OnboardingPresentonAccount({
       approvalWindowRef.current?.close();
       approvalWindowRef.current = null;
       await loadStatus();
+      await onDisconnect?.();
       notify.success(
         "Presenton Cloud disconnected",
-        "The global provider has been disconnected from this workspace.",
+        variant === "settings"
+          ? "Choose a text provider and save the configuration to continue."
+          : "The global provider has been disconnected from this workspace.",
       );
     } catch (error) {
       notify.error(

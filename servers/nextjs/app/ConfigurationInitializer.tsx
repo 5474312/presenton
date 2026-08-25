@@ -75,8 +75,8 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
     }
 
     let cancelled = false;
-    let presentonSelected = false;
-    const revalidatePresentonConnection = async () => {
+    let selectedProvider: string | undefined;
+    const revalidateProviderConfiguration = async () => {
       try {
         const configResponse = await fetch('/api/user-config', {
           cache: 'no-store',
@@ -84,8 +84,22 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
         if (!configResponse.ok) return;
 
         const config = normalizeLLMConfig(await configResponse.json());
-        presentonSelected = config.LLM === 'presenton';
-        if (!presentonSelected) return;
+        selectedProvider = config.LLM;
+        dispatch(setLLMConfig(config));
+
+        if (!hasValidLLMConfig(config)) {
+          if (!cancelled) {
+            notify.warning(
+              "Provider setup required",
+              "Choose and configure a text provider before opening other pages.",
+              { id: "provider-setup-required" }
+            );
+            router.replace('/');
+          }
+          return;
+        }
+
+        if (selectedProvider !== 'presenton') return;
 
         const statusResponse = await fetch(
           getApiUrl('/api/v1/auth/presenton/status'),
@@ -96,21 +110,27 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
           : null;
 
         if (!cancelled && !status?.linked) {
-          router.push('/');
+          dispatch(setLLMConfig({ ...config, LLM: '' }));
+          notify.warning(
+            "Provider setup required",
+            "Presenton Cloud is disconnected. Choose a text provider to continue.",
+            { id: "provider-setup-required" }
+          );
+          router.replace('/');
         }
       } catch (error) {
-        console.error('Failed to revalidate Presenton connection:', error);
-        if (!cancelled && presentonSelected) {
-          router.push('/');
+        console.error('Failed to revalidate provider configuration:', error);
+        if (!cancelled && selectedProvider === 'presenton') {
+          router.replace('/');
         }
       }
     };
 
-    void revalidatePresentonConnection();
+    void revalidateProviderConfiguration();
     return () => {
       cancelled = true;
     };
-  }, [isSettingsRoute, route, router]);
+  }, [dispatch, isSettingsRoute, route, router]);
 
   useEffect(() => {
     if (!shouldShowStartupSplash) {
@@ -169,9 +189,6 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
         console.error('Failed to fetch user config:', e);
         llmConfig = {};
       }
-      if (!llmConfig.LLM) {
-        llmConfig.LLM = 'openai';
-      }
       llmConfig = normalizeLLMConfig(llmConfig);
 
       dispatch(setLLMConfig(llmConfig));
@@ -210,22 +227,6 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
               error instanceof Error ? error.message : "Check the Ollama URL and try again."
             );
           }
-          if (!isAvailable) {
-            router.push('/');
-            setLoadingToFalseAfterNavigatingTo('/');
-            return;
-          }
-        }
-        if (llmConfig.LLM === 'custom') {
-          const isAvailable = await checkIfSelectedCustomModelIsAvailable(llmConfig);
-          if (!isAvailable) {
-            router.push('/');
-            setLoadingToFalseAfterNavigatingTo('/');
-            return;
-          }
-        }
-        if (llmConfig.LLM === 'deepseek') {
-          const isAvailable = await checkIfSelectedDeepSeekModelIsAvailable(llmConfig);
           if (!isAvailable) {
             router.push('/');
             setLoadingToFalseAfterNavigatingTo('/');
@@ -281,48 +282,6 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
       }
     }
   }
-
-
-  const checkIfSelectedCustomModelIsAvailable = async (llmConfig: LLMConfig) => {
-    try {
-      const response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: llmConfig.CUSTOM_LLM_URL,
-          api_key: llmConfig.CUSTOM_LLM_API_KEY,
-        }),
-      });
-      const data = await response.json();
-      return data.includes(llmConfig.CUSTOM_MODEL);
-    } catch (error) {
-      console.error('Error fetching custom models:', error);
-      return false;
-    }
-  }
-
-  const checkIfSelectedDeepSeekModelIsAvailable = async (llmConfig: LLMConfig) => {
-    try {
-      const response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: llmConfig.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
-          api_key: llmConfig.DEEPSEEK_API_KEY,
-        }),
-      });
-      const data = await response.json();
-      return data.includes(llmConfig.DEEPSEEK_MODEL);
-    } catch (error) {
-      console.error('Error fetching DeepSeek models:', error);
-      return false;
-    }
-  }
-
 
   if (isLoading || !hasMetSplashDuration) {
     return <ConfigurationLoadingScreen />;
