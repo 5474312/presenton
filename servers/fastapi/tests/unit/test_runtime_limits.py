@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import sys
 from types import SimpleNamespace
@@ -125,6 +126,45 @@ def test_export_output_path_accepts_file_path_key(monkeypatch, tmp_path):
     assert ExportTaskService._resolve_output_path({"file_path": str(output_path)}) == str(
         output_path
     )
+
+
+def test_convert_pptx_to_html_resolves_relative_asset_directories(
+    monkeypatch,
+    tmp_path,
+):
+    app_data = tmp_path / "app-data"
+    artifact_dir = app_data / "pptx-to-html" / "session"
+    manifest_path = artifact_dir / "presentation.json"
+    (artifact_dir / "images").mkdir(parents=True)
+    (artifact_dir / "fonts").mkdir()
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "slides": ['<img src="images/asset.png">'],
+                "font_css": "",
+                "width": 1280,
+                "height": 720,
+                "images_dir": "images",
+                "fonts_dir": "fonts",
+            }
+        ),
+        encoding="utf-8",
+    )
+    pptx_path = tmp_path / "deck.pptx"
+    pptx_path.write_bytes(b"pptx")
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+    monkeypatch.setenv("TEMP_DIRECTORY", str(tmp_path))
+    service = ExportTaskService(timeout_seconds=10)
+
+    async def fake_run_task(_task_payload, _response_error_detail):
+        return {"file_path": str(manifest_path)}
+
+    service._run_task = fake_run_task
+
+    result = asyncio.run(service.convert_pptx_to_html(str(pptx_path)))
+
+    assert result.images_dir == str(artifact_dir / "images")
+    assert result.fonts_dir == str(artifact_dir / "fonts")
 
 
 def test_render_html_to_image_sends_html_task_payload(monkeypatch, tmp_path):

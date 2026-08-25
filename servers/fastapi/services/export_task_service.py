@@ -471,6 +471,38 @@ class ExportTaskService:
             output_path = self._resolve_output_path(response_data)
             with open(output_path, "r", encoding="utf-8") as output_file:
                 output_data = json.load(output_file)
+
+            # export-core intentionally writes slide asset references relative to
+            # presentation.json (for example, images/slide.png). Preserve that
+            # relationship after the conversion directory is owner-scoped by
+            # resolving the manifest's asset directories before it is moved.
+            artifact_dir = os.path.realpath(os.path.dirname(output_path))
+            for directory_key in ("images_dir", "fonts_dir"):
+                directory = output_data.get(directory_key)
+                if not isinstance(directory, str) or not directory:
+                    continue
+                resolved_directory = os.path.realpath(
+                    directory
+                    if os.path.isabs(directory)
+                    else os.path.join(artifact_dir, directory)
+                )
+                try:
+                    is_artifact_directory = (
+                        os.path.commonpath([resolved_directory, artifact_dir])
+                        == artifact_dir
+                    )
+                except ValueError:
+                    is_artifact_directory = False
+                if not is_artifact_directory:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=(
+                            "PPTX-to-HTML export returned an asset directory "
+                            "outside its conversion directory"
+                        ),
+                    )
+                output_data[directory_key] = resolved_directory
+
             output_data = self._scope_conversion_artifacts(
                 output_path,
                 output_data,
