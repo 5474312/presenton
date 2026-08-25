@@ -17,6 +17,11 @@ import type {
 } from "@/components/slide-editor/types";
 import { INFOGRAPHIC_EXAMPLE_ICON_URLS } from "@/components/slide-editor/infographics/infographic-icons";
 import { fitInfographicElementToData } from "@/components/slide-editor/infographics/infographic-sizing";
+import {
+  DEFAULT_TEMPLATE_THEME,
+  templateThemeGraphColors,
+  type TemplateTheme,
+} from "@/lib/template-theme";
 
 const DEFAULT_CHART_INSERT_POSITION = { x: 128, y: 115 };
 const DEFAULT_CHART_INSERT_SIZE = { width: 717, height: 410 };
@@ -246,7 +251,7 @@ function makeBulletListElement(marker: Marker): SlideElement {
   };
 }
 
-export function createTextInsertElements(kind?: string): SlideElement[] {
+function createDefaultTextInsertElements(kind?: string): SlideElement[] {
   const mathPreset = kind ? MATH_INSERT_PRESETS[kind] : undefined;
   if (mathPreset) return [makeLatexTextElement(mathPreset)];
 
@@ -594,7 +599,7 @@ function makeChartElement(chartType: ChartType): SlideElement {
   };
 }
 
-export function createChartInsertElements(kind?: string): SlideElement[] {
+function createDefaultChartInsertElements(kind?: string): SlideElement[] {
   const chartType = chartTypeFromPaletteId(kind);
   return chartType ? [makeChartElement(chartType)] : [];
 }
@@ -1530,7 +1535,7 @@ function makeInfographicElement(infographicType: InfographicType): SlideElement 
   };
 }
 
-export function createInfographicInsertElements(kind?: string): SlideElement[] {
+function createDefaultInfographicInsertElements(kind?: string): SlideElement[] {
   const infographicType = infographicTypeFromPaletteId(kind);
   return infographicType
     ? [fitInfographicElementToData(makeInfographicElement(infographicType))]
@@ -1582,7 +1587,7 @@ function makeSimpleTableElement(): SlideElement {
   };
 }
 
-export function createTableInsertElements(kind?: string): SlideElement[] {
+function createDefaultTableInsertElements(kind?: string): SlideElement[] {
   return kind === "simple-table" ? [makeSimpleTableElement()] : [];
 }
 
@@ -1612,7 +1617,7 @@ function makeImageElement({
   };
 }
 
-export function createImageInsertContent(kind?: string): EditorInsertContent {
+function createDefaultImageInsertContent(kind?: string): EditorInsertContent {
   switch (kind) {
     case "image":
       return {
@@ -1813,7 +1818,7 @@ function makeVector({
   };
 }
 
-export function createElementInsertElements(kind?: string): SlideElement[] {
+function createDefaultElementInsertElements(kind?: string): SlideElement[] {
   switch (kind) {
     case "vector-rectangle":
       return [
@@ -2514,4 +2519,231 @@ function regularPolygonVectorPoints(
       y: centerY + radius * Math.sin(angle),
     };
   });
+}
+
+function themeFont(
+  font: Font | null | undefined,
+  color: string,
+  family?: string,
+): Font {
+  return { ...(font ?? {}), color, ...(family ? { family } : {}) };
+}
+
+function themeRuns<T extends { font?: Font | null }>(
+  runs: T[],
+  color: string,
+  family?: string,
+) {
+  return runs.map((run) => ({
+    ...run,
+    ...(run.font ? { font: themeFont(run.font, color, family) } : {}),
+  }));
+}
+
+function themeTableCell(
+  cell: TableCell,
+  theme: TemplateTheme,
+  isHeader: boolean,
+): TableCell {
+  const family = theme.fonts?.textFont?.name;
+  return {
+    ...cell,
+    color: {
+      ...(cell.color ?? {}),
+      color: isHeader ? theme.primary : theme.background,
+    },
+    font: themeFont(
+      cell.font,
+      isHeader ? theme.primary_text : theme.background_text,
+      family,
+    ),
+    runs: themeRuns(
+      cell.runs,
+      isHeader ? theme.primary_text : theme.background_text,
+      family,
+    ),
+  };
+}
+
+function themeInfographicIcons(value: unknown, color: string): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => themeInfographicIcons(item, color));
+  }
+  if (!value || typeof value !== "object") return value;
+
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.entries(record).map(([key, entry]) => {
+      if (key === "icon" && entry && typeof entry === "object") {
+        return [key, { ...(entry as Record<string, unknown>), color }];
+      }
+      return [key, themeInfographicIcons(entry, color)];
+    }),
+  );
+}
+
+function applyTemplateThemeToElement(
+  element: SlideElement,
+  theme: TemplateTheme,
+): SlideElement {
+  const graphColors = templateThemeGraphColors(theme);
+  const family = theme.fonts?.textFont?.name;
+
+  switch (element.type) {
+    case "text":
+      return {
+        ...element,
+        font: themeFont(element.font, theme.background_text, family),
+        runs: themeRuns(element.runs, theme.background_text, family),
+      };
+    case "text-list":
+      return {
+        ...element,
+        font: themeFont(element.font, theme.background_text, family),
+        items: element.items.map((item) =>
+          themeRuns(item, theme.background_text, family),
+        ),
+      };
+    case "table":
+      return {
+        ...element,
+        font: themeFont(element.font, theme.background_text, family),
+        columns: element.columns.map((cell) =>
+          themeTableCell(cell, theme, true),
+        ),
+        rows: element.rows.map((row) =>
+          row.map((cell) => themeTableCell(cell, theme, false)),
+        ),
+      };
+    case "chart":
+      return {
+        ...element,
+        color: graphColors[0],
+        colors: graphColors,
+        axis_color: theme.stroke,
+        grid_color: theme.stroke,
+        title_color: theme.background_text,
+        legend_color: theme.background_text,
+        data: element.data.map((datum, index) => ({
+          ...datum,
+          color: graphColors[index % graphColors.length],
+        })),
+      };
+    case "infographic": {
+      const meter =
+        element.data.type === "progress_bar" || element.data.type === "gauge";
+      const themedData = themeInfographicIcons(
+        element.data,
+        theme.primary_text,
+      ) as typeof element.data;
+      const data = {
+        ...themedData,
+        card_color: theme.card,
+        background_text_color: theme.background_text,
+      };
+      return {
+        ...element,
+        data:
+          data.type === "customer_journey"
+            ? { ...data, start_color: graphColors[0] }
+            : data,
+        colors: meter
+          ? [theme.card, theme.primary]
+          : [theme.background, ...graphColors, theme.card, theme.stroke],
+        text_color: theme.background_text,
+      };
+    }
+    case "vector":
+      return {
+        ...element,
+        ...(element.fill
+          ? { fill: { ...element.fill, color: theme.primary } }
+          : {}),
+        ...(element.stroke
+          ? { stroke: { ...element.stroke, color: theme.stroke } }
+          : {}),
+      };
+    case "image":
+      return element.is_icon ? { ...element, color: theme.primary } : element;
+    case "container":
+      return {
+        ...element,
+        ...(element.fill
+          ? { fill: { ...element.fill, color: theme.card } }
+          : {}),
+        ...(element.stroke
+          ? { stroke: { ...element.stroke, color: theme.stroke } }
+          : {}),
+        child: element.child
+          ? applyTemplateThemeToElement(element.child, theme)
+          : element.child,
+      };
+    case "flex":
+    case "grid":
+    case "group":
+      return {
+        ...element,
+        children: element.children.map((child) =>
+          applyTemplateThemeToElement(child, theme),
+        ),
+      };
+    default:
+      return element;
+  }
+}
+
+function themeElements(elements: SlideElement[], theme: TemplateTheme) {
+  return elements.map((element) => applyTemplateThemeToElement(element, theme));
+}
+
+export function createTextInsertElements(
+  kind?: string,
+  theme: TemplateTheme = DEFAULT_TEMPLATE_THEME,
+): SlideElement[] {
+  return themeElements(createDefaultTextInsertElements(kind), theme);
+}
+
+export function createChartInsertElements(
+  kind?: string,
+  theme: TemplateTheme = DEFAULT_TEMPLATE_THEME,
+): SlideElement[] {
+  return themeElements(createDefaultChartInsertElements(kind), theme);
+}
+
+export function createInfographicInsertElements(
+  kind?: string,
+  theme: TemplateTheme = DEFAULT_TEMPLATE_THEME,
+): SlideElement[] {
+  return themeElements(createDefaultInfographicInsertElements(kind), theme);
+}
+
+export function createTableInsertElements(
+  kind?: string,
+  theme: TemplateTheme = DEFAULT_TEMPLATE_THEME,
+): SlideElement[] {
+  return themeElements(createDefaultTableInsertElements(kind), theme);
+}
+
+export function createImageInsertContent(
+  kind?: string,
+  theme: TemplateTheme = DEFAULT_TEMPLATE_THEME,
+): EditorInsertContent {
+  const content = createDefaultImageInsertContent(kind);
+  return {
+    ...content,
+    elements: content.elements
+      ? themeElements(content.elements, theme)
+      : content.elements,
+    components: content.components?.map((component) => ({
+      ...component,
+      elements: themeElements(component.elements, theme),
+    })),
+  };
+}
+
+export function createElementInsertElements(
+  kind?: string,
+  theme: TemplateTheme = DEFAULT_TEMPLATE_THEME,
+): SlideElement[] {
+  return themeElements(createDefaultElementInsertElements(kind), theme);
 }
