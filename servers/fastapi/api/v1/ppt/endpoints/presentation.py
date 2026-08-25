@@ -101,6 +101,7 @@ from api.v1.auth.context import get_current_owner_id
 from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from templates.v2.schema import get_template_schema
 from templates.v2.content import hydrate_repeated_top_level_groups
+from templates.v2.theme import template_theme_for_presentation
 from templates.default_templates import resolve_default_template_id
 from services.community_presentations import (
     build_community_design_context,
@@ -246,7 +247,12 @@ def _template_icon_type(
 async def _resolve_generation_layout(
     template_name: str,
     sql_session: AsyncSession,
-) -> tuple[dict[str, Any], PresentationLayoutModel, Optional[dict[str, str]]]:
+) -> tuple[
+    dict[str, Any],
+    PresentationLayoutModel,
+    Optional[dict[str, str]],
+    Optional[dict[str, Any]],
+]:
     template = await _resolve_requested_template(template_name, sql_session)
     if template is None:
         bundled_template_id = resolve_default_template_id(template_name)
@@ -276,6 +282,12 @@ async def _resolve_generation_layout(
         layout_payload,
         _build_template_structure_layout(template, layout_payload),
         _extract_template_fonts_from_assets(template.assets),
+        template_theme_for_presentation(
+            template_id=template.id,
+            template_name=template.name,
+            template_description=template.description,
+            theme=template.theme,
+        ),
     )
 
 
@@ -2673,6 +2685,7 @@ async def generate_presentation_handler(
             layout_payload,
             layout_model,
             template_fonts,
+            template_theme,
         ) = await _resolve_generation_layout(request.template, sql_session)
         logger.info(
             "[presentation.generate] layout ready template=%r slides=%d ordered=%s icon_weight=%s",
@@ -2751,6 +2764,7 @@ async def generate_presentation_handler(
             verbosity=request.verbosity.value,
             instructions=request.instructions,
             fonts=template_fonts,
+            theme=template_theme,
         )
 
         # Updating async status
