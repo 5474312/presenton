@@ -356,6 +356,32 @@ def _layout_count(layout_payload: Any) -> int:
     return 0
 
 
+def _normalize_presentation_structure(
+    structure: PresentationStructureModel,
+    *,
+    outline_count: int,
+    layout_count: int,
+) -> PresentationStructureModel:
+    """Keep prepared structure indexes safe for the streaming endpoint.
+
+    Structured LLM responses can still contain too few indexes or indexes
+    outside the available layout range. Fill or replace those selections
+    before persisting the prepared presentation so streaming cannot reject
+    data that ``/prepare`` accepted.
+    """
+    normalized = list(structure.slides[:outline_count])
+    while len(normalized) < outline_count:
+        normalized.append(random.randrange(layout_count))
+
+    structure.slides = [
+        layout_index
+        if 0 <= layout_index < layout_count
+        else random.randrange(layout_count)
+        for layout_index in normalized
+    ]
+    return structure
+
+
 def _build_template_layout_model(
     layout_payload: dict[str, Any],
     *,
@@ -1688,14 +1714,11 @@ async def prepare_presentation(
             )
         )
 
-    presentation_structure.slides = presentation_structure.slides[: len(outlines)]
-    for index in range(total_outlines):
-        random_slide_index = random.randint(0, total_slide_layouts - 1)
-        if index >= total_outlines:
-            presentation_structure.slides.append(random_slide_index)
-            continue
-        if presentation_structure.slides[index] >= total_slide_layouts:
-            presentation_structure.slides[index] = random_slide_index
+    presentation_structure = _normalize_presentation_structure(
+        presentation_structure,
+        outline_count=total_outlines,
+        layout_count=total_slide_layouts,
+    )
 
     if presentation.include_table_of_contents:
         n_toc_slides = get_no_of_toc_required_for_n_outlines(
@@ -2119,24 +2142,23 @@ async def stream_presentation(
 
     if not layout.slides:
         raise HTTPException(status_code=400, detail="Presentation layout has no slides")
-    if len(structure.slides) > len(outline.slides):
-        raise HTTPException(
-            status_code=400,
-            detail="Presentation structure has more slides than outlines",
-        )
-    invalid_layout_index = next(
-        (
-            slide_layout_index
-            for slide_layout_index in structure.slides
-            if slide_layout_index < 0 or slide_layout_index >= len(layout.slides)
-        ),
-        None,
+    original_structure = list(structure.slides)
+    structure = _normalize_presentation_structure(
+        structure,
+        outline_count=len(outline.slides),
+        layout_count=len(layout.slides),
     )
-    if invalid_layout_index is not None:
-        raise HTTPException(
-            status_code=400,
-            detail="Presentation structure contains an invalid slide layout",
+    if structure.slides != original_structure:
+        logger.warning(
+            "Repairing invalid prepared presentation structure: "
+            "presentation_id=%s old=%s new=%s",
+            id,
+            original_structure,
+            structure.slides,
         )
+        presentation.set_structure(structure)
+        sql_session.add(presentation)
+        await sql_session.commit()
 
     image_generation_service = ImageGenerationService(get_images_directory())
 

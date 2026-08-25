@@ -137,6 +137,10 @@ def _infer_revision_from_schema(
         for table in owned_tables
     )
     if "provider_settings" in tables and "user" in tables and ownership_ready:
+        if "template_v2" in tables and _has_column(
+            inspector, "template_v2", "theme"
+        ):
+            return REVISION_TEMPLATE_V2_THEME
         if "presenton_cloud_provider" in tables:
             return REVISION_PRESENTON_CLOUD_PROVIDER
         if "presentations" in tables and _has_column(
