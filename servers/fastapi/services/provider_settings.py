@@ -23,6 +23,11 @@ CODEX_MANAGED_FIELDS = {
     "CODEX_EMAIL",
     "CODEX_IS_PRO",
 }
+PRESENTON_STATUS_FIELDS = {
+    "PRESENTON_CONNECTED",
+    "PRESENTON_EMAIL",
+}
+OAUTH_MANAGED_FIELDS = CODEX_MANAGED_FIELDS | PRESENTON_STATUS_FIELDS
 EMPTY_VALUE_PRESERVED_FIELDS = {
     "OPEN_WEBUI_IMAGE_URL",
     "OPEN_WEBUI_IMAGE_API_KEY",
@@ -46,7 +51,7 @@ def merge_provider_settings(
     sanitized = sanitize_provider_settings(incoming)
     merged = {**sanitize_provider_settings(existing), **sanitized}
 
-    for key in CODEX_MANAGED_FIELDS:
+    for key in OAUTH_MANAGED_FIELDS:
         if key in existing:
             merged[key] = existing[key]
         else:

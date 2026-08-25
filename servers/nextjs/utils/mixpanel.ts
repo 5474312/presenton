@@ -24,6 +24,11 @@ export enum MixpanelEvent {
   Onboarding_Web_Search_Toggled = 'Onboarding Web Search Toggled',
   Onboarding_Web_Search_Provider_Selected = 'Onboarding Web Search Provider Selected',
 
+  Provider_Login_Clicked = 'Provider Login Clicked',
+  Provider_Connection_Completed = 'Provider Connection Completed',
+  Provider_Logout_Clicked = 'Provider Logout Clicked',
+  Provider_Connection_Deleted = 'Provider Connection Deleted',
+
   Codex_SignIn_API_Call = 'Codex Sign In API Call',
   Codex_SignIn_Completed = 'Codex Sign In Completed',
   Codex_SignIn_Failed = 'Codex Sign In Failed',
@@ -98,7 +103,9 @@ export enum MixpanelEvent {
   Presentation_Slide_Deleted = 'Presentation Slide Deleted',
   Presentation_Theme_Changed = 'Presentation Theme Changed',
   Presentation_Theme_Reset = 'Presentation Theme Reset',
+  Presentation_Export_Started = 'Presentation Export Started',
   Presentation_Export_Completed = 'Presentation Export Completed',
+  Presentation_Export_Failed = 'Presentation Export Failed',
   Presentation_Regenerated = 'Presentation Regenerated',
 
   Presentation_Stream_API_Call = 'Presentation Stream API Call',
@@ -112,6 +119,7 @@ export enum MixpanelEvent {
   Settings_Tab_Switched = 'Settings Tab Switched',
   Settings_Provider_Selected = 'Settings Provider Selected',
   Settings_Model_Selected = 'Settings Model Selected',
+  Usage_Analytics_Disabled = 'Usage Analytics Disabled',
   PresentationPage_Refresh_Page_Button_Clicked = 'Presentation Page Refresh Page Button Clicked',
   ImageEditor_GetPreviousGeneratedImages_API_Call = 'Image Editor Get Previous Generated Images API Call',
   ImageEditor_GenerateImage_API_Call = 'Image Editor Generate Image API Call',

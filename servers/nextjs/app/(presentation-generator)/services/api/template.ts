@@ -128,11 +128,17 @@ class TemplateService {
         }
     }
 
-    static async getTemplateSummaries(isDefault?: boolean): Promise<TemplateListResponse> {
+    static async getTemplateSummaries(
+        isDefault?: boolean,
+        options: { presentonCloudOnly?: boolean } = {},
+    ): Promise<TemplateListResponse> {
         try {
             const params = new URLSearchParams({ page_size: "100" });
             if (typeof isDefault === "boolean") {
                 params.set("default", String(isDefault));
+            }
+            if (options.presentonCloudOnly) {
+                params.set("presenton_cloud_only", "true");
             }
             const response = await fetch(getApiUrl(`/api/v1/ppt/template/all?${params.toString()}`));
             return await ApiResponseHandler.handleResponse(response, "Failed to get Templates summaries");

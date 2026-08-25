@@ -66,14 +66,19 @@ export type ChatDocumentAttachment = {
 };
 
 export type ChatApiAdapter = {
-  listConversations: (resourceId: string) => Promise<ChatConversationSummary[]>;
+  listConversations: (
+    resourceId: string,
+    presentationType?: "standard" | "smart",
+  ) => Promise<ChatConversationSummary[]>;
   getHistory: (
     resourceId: string,
     conversationId: string,
+    presentationType?: "standard" | "smart",
   ) => Promise<{ messages: ChatHistoryMessage[] }>;
   deleteConversation: (
     resourceId: string,
     conversationId: string,
+    presentationType?: "standard" | "smart",
   ) => Promise<void>;
   streamMessage: (
     payload: {

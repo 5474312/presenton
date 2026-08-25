@@ -570,15 +570,17 @@ function rawElementFrame(
   const width = readNumber(size ?? {}, "width");
   const height = readNumber(size ?? {}, "height");
   const hasPosition = x != null && y != null;
+  const vectorFrame = rawVectorFrame(element, offsetX, offsetY);
   const frame =
-    hasPosition && width != null && height != null
+    vectorFrame ??
+    (hasPosition && width != null && height != null
       ? {
         x: offsetX + x,
         y: offsetY + y,
         width: Math.max(1, width),
         height: Math.max(1, height),
       }
-      : null;
+      : null);
   const childOffsetX = hasPosition ? offsetX + x : offsetX;
   const childOffsetY = hasPosition ? offsetY + y : offsetY;
   const childFrames = rawElementChildren(element)
@@ -586,6 +588,33 @@ function rawElementFrame(
     .filter((childFrame): childFrame is RawFrame => Boolean(childFrame));
 
   return mergeRawElementFrames(frame ? [frame, ...childFrames] : childFrames);
+}
+
+function rawVectorFrame(
+  element: UnknownRecord,
+  offsetX: number,
+  offsetY: number,
+): RawFrame | null {
+  if (readString(element.type) !== "vector") return null;
+  const points = readArray(element, "points")
+    .map(asRecord)
+    .filter((point): point is UnknownRecord => point != null);
+  const xs = points
+    .map((point) => readNumber(point, "x"))
+    .filter((value): value is number => value != null);
+  const ys = points
+    .map((point) => readNumber(point, "y"))
+    .filter((value): value is number => value != null);
+  if (xs.length === 0 || ys.length === 0) return null;
+
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  return {
+    x: offsetX + minX,
+    y: offsetY + minY,
+    width: Math.max(1, Math.max(...xs) - minX),
+    height: Math.max(1, Math.max(...ys) - minY),
+  };
 }
 
 function rawElementChildren(element: UnknownRecord): UnknownRecord[] {
@@ -614,28 +643,17 @@ function mergeRawElementFrames(frames: RawFrame[]): RawFrame | null {
 
 function rawComponentFrame(component: UnknownRecord) {
   const position = readRecord(component, "position");
-  const size = readRecord(component, "size");
   const x = readNumber(position ?? {}, "x");
   const y = readNumber(position ?? {}, "y");
-  const width = readNumber(size ?? {}, "width");
-  const height = readNumber(size ?? {}, "height");
   if (x == null || y == null) return null;
-  if (width == null || height == null) {
-    const elements = readArray(component, "elements").filter(isRecord);
-    const content = rawElementsContentSize(elements);
-    return {
-      x,
-      y,
-      width: content.width,
-      height: content.height,
-    };
-  }
+  const elements = readArray(component, "elements").filter(isRecord);
+  const content = rawElementsContentSize(elements);
 
   return {
     x,
     y,
-    width: Math.max(1, width),
-    height: Math.max(1, height),
+    width: content.width,
+    height: content.height,
   };
 }
 

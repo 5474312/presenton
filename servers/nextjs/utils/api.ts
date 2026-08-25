@@ -140,6 +140,34 @@ function hasBackendAssetPrefix(path: string): boolean {
   return path.startsWith("/static/") || path.startsWith("/app_data/");
 }
 
+function getHttpOrigin(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.origin
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function isLocalBackendOrigin(origin: string): boolean {
+  const localOrigins = new Set<string>();
+  const configuredOrigin = getHttpOrigin(getConfiguredFastApiUrl());
+  const queryOrigin = getHttpOrigin(getFastApiUrlFromQuery());
+  const runtimeOrigin = getHttpOrigin(getFastAPIUrl());
+
+  if (configuredOrigin) localOrigins.add(configuredOrigin);
+  if (queryOrigin) localOrigins.add(queryOrigin);
+  if (runtimeOrigin) localOrigins.add(runtimeOrigin);
+  if (typeof window !== "undefined" && window.location?.origin) {
+    localOrigins.add(window.location.origin);
+  }
+
+  return localOrigins.has(origin);
+}
+
 function toBackendServedPath(rawPath: string): string {
   const normalized = rawPath.replace(/\\/g, "/");
 
@@ -223,6 +251,12 @@ export function resolveBackendAssetUrl(path?: string): string {
   if (isAbsoluteHttpUrl(trimmedPath)) {
     try {
       const parsed = new URL(trimmedPath);
+      // Assets returned by Presenton cloud (or any other remote origin) must
+      // retain their complete URL. Only URLs that point at this deployment's
+      // own backend are normalized to the runtime's local/reverse-proxy path.
+      if (!isLocalBackendOrigin(parsed.origin)) {
+        return trimmedPath;
+      }
       const servedPath = toBackendServedPath(parsed.pathname);
       if (hasBackendAssetPrefix(servedPath)) {
         return resolveBackendPathForRuntime(

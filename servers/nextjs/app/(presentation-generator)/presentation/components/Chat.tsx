@@ -284,7 +284,7 @@ const Chat = ({
 
         try {
           const listedConversations =
-            await chatAdapter.listConversations(activeResourceId);
+            await chatAdapter.listConversations(activeResourceId, presentationType);
           conversations = Array.isArray(listedConversations)
             ? listedConversations
             : [];
@@ -316,7 +316,8 @@ const Chat = ({
           try {
             const data = await chatAdapter.getHistory(
               activeResourceId,
-              candidateId
+              candidateId,
+              presentationType,
             );
             if (cancelled) {
               return;
@@ -742,7 +743,7 @@ const Chat = ({
 
       try {
         const savedConversations =
-          await chatAdapter.listConversations(activeResourceId);
+          await chatAdapter.listConversations(activeResourceId, presentationType);
         savedConversations.forEach((savedConversation) => {
           conversationIdsToDelete.add(savedConversation.conversation_id);
         });
@@ -750,7 +751,8 @@ const Chat = ({
           Array.from(conversationIdsToDelete, (savedConversationId) =>
             chatAdapter.deleteConversation(
               activeResourceId,
-              savedConversationId
+              savedConversationId,
+              presentationType,
             )
           )
         );

@@ -52,6 +52,8 @@ import {
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { cn } from "@/lib/utils";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
+import { sanitizeAnalyticsError } from "@/utils/analytics";
+import { v4 as uuidv4 } from "uuid";
 
 const MAX_EXPORT_TITLE_LENGTH = 40;
 
@@ -217,6 +219,11 @@ const PresentationHeader = ({
   const handleExportPptx = async () => {
     if (isStreaming) return;
 
+    const exportId = uuidv4();
+    const exportStartedAt = Date.now();
+    const exportRuntime = window.electron?.exportPresentation
+      ? "electron"
+      : "browser_api";
     let exportToastId: string | number | undefined;
     try {
       exportToastId = notify.loading(
@@ -224,13 +231,19 @@ const PresentationHeader = ({
         "Your presentation is being exported. This may take a moment."
       );
       setIsExporting(true);
+      await trackExportLifecycle(
+        MixpanelEvent.Presentation_Export_Started,
+        "pptx",
+        exportRuntime,
+        exportId,
+        exportStartedAt
+      );
       const safePptxFileName = buildSafeExportFileName(
         presentationData?.title,
         "pptx"
       );
       const safePptxTitle = safePptxFileName.replace(/\.pptx$/i, "");
-      if (window.electron?.exportPresentation) {
-        await trackExportCompleted("pptx", "electron");
+      if (exportRuntime === "electron") {
         await exportViaIpc("pptx", safePptxTitle);
       } else {
         const response = await fetch("/api/export-presentation", {
@@ -251,9 +264,15 @@ const PresentationHeader = ({
           throw new Error("No path returned from export");
         }
 
-        await trackExportCompleted("pptx", "browser_api");
         downloadLink(pptxPath, safePptxFileName);
       }
+      await trackExportLifecycle(
+        MixpanelEvent.Presentation_Export_Completed,
+        "pptx",
+        exportRuntime,
+        exportId,
+        exportStartedAt
+      );
       notify.success(
         "Export complete",
         "Your PPTX file has been downloaded.",
@@ -261,6 +280,14 @@ const PresentationHeader = ({
       );
     } catch (error) {
       console.error("Export failed:", error);
+      await trackExportLifecycle(
+        MixpanelEvent.Presentation_Export_Failed,
+        "pptx",
+        exportRuntime,
+        exportId,
+        exportStartedAt,
+        error
+      );
       notify.error(
         "Export failed",
         "We are having trouble exporting your presentation. Please try again.",
@@ -274,6 +301,11 @@ const PresentationHeader = ({
   const handleExportPdf = async () => {
     if (isStreaming) return;
 
+    const exportId = uuidv4();
+    const exportStartedAt = Date.now();
+    const exportRuntime = window.electron?.exportPresentation
+      ? "electron"
+      : "browser_api";
     let exportToastId: string | number | undefined;
     try {
       exportToastId = notify.loading(
@@ -281,13 +313,19 @@ const PresentationHeader = ({
         "Your presentation is being exported. This may take a moment."
       );
       setIsExporting(true);
+      await trackExportLifecycle(
+        MixpanelEvent.Presentation_Export_Started,
+        "pdf",
+        exportRuntime,
+        exportId,
+        exportStartedAt
+      );
       const safePdfFileName = buildSafeExportFileName(
         presentationData?.title,
         "pdf"
       );
       const safePdfTitle = safePdfFileName.replace(/\.pdf$/i, "");
-      if (window.electron?.exportPresentation) {
-        await trackExportCompleted("pdf", "electron");
+      if (exportRuntime === "electron") {
         await exportViaIpc("pdf", safePdfTitle);
       } else {
         const response = await fetch("/api/export-presentation", {
@@ -304,19 +342,33 @@ const PresentationHeader = ({
           if (!pdfPath) {
             throw new Error("No path returned from export");
           }
-          await trackExportCompleted("pdf", "browser_api");
           downloadLink(pdfPath, safePdfFileName);
         } else {
           throw new Error("Failed to export PDF");
         }
       }
+      await trackExportLifecycle(
+        MixpanelEvent.Presentation_Export_Completed,
+        "pdf",
+        exportRuntime,
+        exportId,
+        exportStartedAt
+      );
       notify.success(
         "Export complete",
         "Your PDF file has been downloaded.",
         { id: exportToastId }
       );
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
+      await trackExportLifecycle(
+        MixpanelEvent.Presentation_Export_Failed,
+        "pdf",
+        exportRuntime,
+        exportId,
+        exportStartedAt,
+        error
+      );
       notify.error(
         "Export failed",
         "We are having trouble exporting your presentation. Please try again.",
@@ -360,18 +412,37 @@ const PresentationHeader = ({
     document.body.removeChild(link);
   };
 
-  const trackExportCompleted = async (
+  const trackExportLifecycle = async (
+    event:
+      | MixpanelEvent.Presentation_Export_Started
+      | MixpanelEvent.Presentation_Export_Completed
+      | MixpanelEvent.Presentation_Export_Failed,
     format: "pptx" | "pdf",
-    exportRuntime: "electron" | "browser_api"
+    exportRuntime: "electron" | "browser_api",
+    exportId: string,
+    exportStartedAt: number,
+    error?: unknown
   ) => {
-    await trackEventImmediately(MixpanelEvent.Presentation_Export_Completed, {
-      pathname,
-      presentation_id,
-      format,
-      slide_count: presentationData?.slides?.length || 0,
-      export_runtime: exportRuntime,
-      generation_mode: generationMode,
-    });
+    try {
+      await trackEventImmediately(event, {
+        pathname,
+        presentation_id,
+        export_id: exportId,
+        format,
+        slide_count: presentationData?.slides?.length || 0,
+        export_runtime: exportRuntime,
+        generation_mode: generationMode,
+        ...(event !== MixpanelEvent.Presentation_Export_Started
+          ? { duration_ms: Date.now() - exportStartedAt }
+          : {}),
+        ...(error !== undefined
+          ? { error_message: sanitizeAnalyticsError(error, "Export failed") }
+          : {}),
+      });
+    } catch (analyticsError) {
+      // Analytics must never prevent or change the result of an export.
+      console.warn("Failed to track export lifecycle:", analyticsError);
+    }
   };
 
   const ExportOptions = ({ mobile }: { mobile: boolean }) => (

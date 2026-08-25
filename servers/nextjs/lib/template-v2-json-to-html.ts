@@ -426,7 +426,12 @@ function fontFamilyAliases(family: string, weight?: string): string[] {
 
 function renderItem(item: JsonRecord, mode: RenderMode): string {
   if (isComponent(item)) {
-    return renderGroup({ ...item, type: "group", children: item.elements }, mode);
+    const { size, ...component } = item;
+    void size;
+    return renderGroup(
+      { ...component, type: "group", children: item.elements },
+      mode
+    );
   }
 
   switch (readString(item.type)) {

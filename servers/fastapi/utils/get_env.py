@@ -1,5 +1,8 @@
 import os
 
+DEFAULT_PRESENTON_OAUTH_ISSUER = "https://api.presenton.ai"
+DEFAULT_PRESENTON_OAUTH_CLIENT_ID = "ptc_presenton_open_source"
+
 
 def _is_truthy(value: str | None) -> bool:
     if value is None:
@@ -40,6 +43,14 @@ def get_user_config_path_env():
 
 def get_disable_auth_env():
     return os.getenv("DISABLE_AUTH")
+
+
+def get_presenton_oauth_issuer() -> str:
+    return DEFAULT_PRESENTON_OAUTH_ISSUER
+
+
+def get_presenton_oauth_client_id() -> str:
+    return DEFAULT_PRESENTON_OAUTH_CLIENT_ID
 
 
 def is_disable_auth_enabled():

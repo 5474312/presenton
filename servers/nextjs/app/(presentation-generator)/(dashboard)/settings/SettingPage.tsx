@@ -101,7 +101,7 @@ const SettingsPage = () => {
   }, [selectedProvider, llmConfig.DISABLE_IMAGE_GENERATION, llmConfig.WEB_GROUNDING]);
 
   const ensureSelectedStockProviderReady = async (): Promise<boolean> => {
-    if (llmConfig.DISABLE_IMAGE_GENERATION) {
+    if (llmConfig.LLM === "presenton" || llmConfig.DISABLE_IMAGE_GENERATION) {
       return true;
     }
 
@@ -147,6 +147,22 @@ const SettingsPage = () => {
       return false;
     }
   };
+  const checkPresentonAuthStatus = async () => {
+    try {
+      const response = await fetch(
+        getApiUrl("/api/v1/auth/presenton/status"),
+        {
+          credentials: "include",
+          cache: "no-store",
+        }
+      );
+      if (!response.ok) return false;
+      const data = (await response.json()) as { linked?: boolean };
+      return data.linked === true;
+    } catch {
+      return false;
+    }
+  };
   const handleSaveConfig = async () => {
 
     if (llmConfig.LLM === 'codex') {
@@ -156,6 +172,17 @@ const SettingsPage = () => {
           message: "Please sign in to ChatGPT again from Settings.",
           source: "settings-save",
         });
+        return;
+      }
+    }
+    if (llmConfig.LLM === "presenton") {
+      const isConnected = await checkPresentonAuthStatus();
+      if (!isConnected) {
+        notify.warning(
+          "Connect Presenton first",
+          "Sign in to Presenton Cloud before selecting it as the text provider."
+        );
+        setSelectedProvider("text-provider");
         return;
       }
     }
@@ -240,7 +267,9 @@ const SettingsPage = () => {
   const textProviderLabel =
     LLM_PROVIDERS[textProviderKey]?.label || textProviderKey;
   const selectedTextModel =
-    textProviderKey === "openai"
+    textProviderKey === "presenton"
+      ? ""
+      : textProviderKey === "openai"
       ? llmConfig.OPENAI_MODEL
       : textProviderKey === "deepseek"
         ? llmConfig.DEEPSEEK_MODEL
@@ -277,16 +306,29 @@ const SettingsPage = () => {
     ? `${textProviderLabel} (${selectedTextModel})`
     : textProviderLabel;
 
-  const imageSummary = llmConfig.DISABLE_IMAGE_GENERATION
-    ? "Image generation disabled"
-    : llmConfig.IMAGE_PROVIDER
-      ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]?.label ||
-      llmConfig.IMAGE_PROVIDER
-      : "No image provider";
+  const imageSummary = textProviderKey === "presenton"
+    ? "Cloud images"
+    : llmConfig.DISABLE_IMAGE_GENERATION
+      ? "Image generation disabled"
+      : llmConfig.IMAGE_PROVIDER
+        ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]?.label ||
+        llmConfig.IMAGE_PROVIDER
+        : "No image provider";
   const webSearchProviderKey = (llmConfig.WEB_SEARCH_PROVIDER || "").toLowerCase();
-  const webSearchSummary = llmConfig.WEB_GROUNDING
-    ? `Web: ${WEB_SEARCH_PROVIDERS[webSearchProviderKey]?.label || "No provider"}`
-    : "Web search disabled";
+  const webSearchSummary = textProviderKey === "presenton"
+    ? "Cloud web search"
+    : llmConfig.WEB_GROUNDING
+      ? `Web: ${WEB_SEARCH_PROVIDERS[webSearchProviderKey]?.label || "No provider"}`
+      : "Web search disabled";
+
+  useEffect(() => {
+    if (
+      llmConfig.LLM === "presenton" &&
+      (selectedProvider === "image-provider" || selectedProvider === "web-search-provider")
+    ) {
+      setSelectedProvider("text-provider");
+    }
+  }, [llmConfig.LLM, selectedProvider]);
 
 
   useEffect(() => {
@@ -371,6 +413,7 @@ const SettingsPage = () => {
         <SettingSideBar
           selectedProvider={selectedProvider}
           setSelectedProvider={selectSettingsSection}
+          presentonSelected={llmConfig.LLM === "presenton"}
         />
         <div className="w-full">
           <div className="sticky top-0 right-0 z-50 py-[28px]   backdrop-blur mb-4 ">
@@ -388,8 +431,8 @@ const SettingsPage = () => {
             onInputChange={handleTextProviderInputChange}
             llmConfig={llmConfig}
           />}
-          {selectedProvider === 'image-provider' && <ImageProvider llmConfig={llmConfig} setLlmConfig={setLlmConfig} />}
-          {selectedProvider === 'web-search-provider' && <WebSearchProvider llmConfig={llmConfig} setLlmConfig={setLlmConfig} />}
+          {selectedProvider === 'image-provider' && llmConfig.LLM !== "presenton" && <ImageProvider llmConfig={llmConfig} setLlmConfig={setLlmConfig} />}
+          {selectedProvider === 'web-search-provider' && llmConfig.LLM !== "presenton" && <WebSearchProvider llmConfig={llmConfig} setLlmConfig={setLlmConfig} />}
           {selectedProvider === 'privacy' && <PrivacySettings />}
           {selectedProvider === "admin" && <AdminPanel embedded />}
           {selectedProvider === "session" && (

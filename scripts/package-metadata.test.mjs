@@ -14,12 +14,19 @@ async function readJson(relativePath) {
 }
 
 test("application versions stay aligned", async () => {
-  const [rootPackage, rootLock, electronPackage, electronLock] =
+  const [
+    rootPackage,
+    rootLock,
+    electronPackage,
+    electronLock,
+    electronVersion,
+  ] =
     await Promise.all([
       readJson("package.json"),
       readJson("package-lock.json"),
       readJson("electron/package.json"),
       readJson("electron/package-lock.json"),
+      readJson("electron/version.json"),
     ]);
 
   assert.equal(electronPackage.version, rootPackage.version);
@@ -27,6 +34,11 @@ test("application versions stay aligned", async () => {
   assert.equal(rootLock.packages[""].version, rootPackage.version);
   assert.equal(electronLock.version, electronPackage.version);
   assert.equal(electronLock.packages[""].version, electronPackage.version);
+  assert.equal(electronVersion.version, electronPackage.version);
+  for (const downloadUrl of Object.values(electronVersion.downloads)) {
+    assert.match(downloadUrl, new RegExp(`electron-v${electronPackage.version}/`));
+    assert.match(downloadUrl, new RegExp(`Presenton-${electronPackage.version}\\.`));
+  }
 });
 
 test("Docker and Electron use the same pinned presentation export", async () => {

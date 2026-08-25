@@ -180,6 +180,12 @@ export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
 };
 
 export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
+  presenton: {
+    value: "presenton",
+    label: "Presenton",
+    description: "Generate with your connected Presenton Cloud account",
+    icon: "/providers/presenton.png",
+  },
   codex: {
     value: "codex",
     label: "ChatGPT",

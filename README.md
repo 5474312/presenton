@@ -507,6 +507,27 @@ Usernames must contain at least 3 characters, and new passwords must contain at 
 | **AUTH_OVERRIDE_FROM_ENV**=[true/false] | Replace the primary administrator's credentials from the environment on the next startup. Use this for a deployment-managed credential rotation. |
 | **RESET_AUTH**=[true/false] | Recover access to the existing primary administrator without replacing the account or its data. |
 
+##### Presenton Cloud provider
+
+Presenton Cloud is an optional, installation-wide generation provider. It is not an
+authentication method for the self-hosted instance. Create or sign in to the local
+administrator account first, then connect Presenton from provider onboarding.
+
+Only the local administrator can connect, replace, or disconnect the provider. The
+browser displays a short device code and opens the hosted Presenton approval page.
+After approval, the delegated access and rotating refresh tokens are encrypted at rest
+and stored as one global provider credential; they are never returned to the browser or
+stored per local user.
+
+Selecting Presenton as the text provider saves `LLM=presenton`. Presentation generation
+and document uploads then use the Presenton Cloud API and its token. Connecting the
+provider alone does not change generation: when another provider is selected, the
+existing local generation pipeline remains unchanged. Disconnecting revokes and removes
+the global credentials and deselects Presenton.
+
+No OAuth client registration, client secret, or environment configuration is required.
+Official builds contain the cloud URL and first-party public device-flow client ID.
+
 To rotate credentials from the environment:
 
 ```bash

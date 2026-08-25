@@ -60,11 +60,14 @@ export const getLLMConfigValidationError = (
     return "Select a text provider.";
   }
 
+  const llm = llmConfig.LLM;
+  if (llm === "presenton") {
+    return null;
+  }
+
   if (!llmConfig.DISABLE_IMAGE_GENERATION && !llmConfig.IMAGE_PROVIDER) {
     return "Select an image provider, or turn off image generation.";
   }
-
-  const llm = llmConfig.LLM;
 
   if (llm === "openai") {
     if (!isProvided(llmConfig.OPENAI_API_KEY)) {

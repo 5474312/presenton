@@ -21,4 +21,5 @@ class PresentationWithSlides(BaseModel):
     slides: List[SlideModel]
     fonts: Optional[Any] = None
     generation_mode: Literal["standard", "smart"] = "standard"
+    type: Literal["standard", "smart"] = "standard"
     community_design_ids: Optional[List[int]] = None
