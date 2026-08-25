@@ -260,7 +260,6 @@ function InlineNumberInput({
   useEffect(() => {
     if (focused) return;
     // Keep the unfocused input draft synchronized with external canvas updates.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft(formatNumber(value));
   }, [focused, value]);
 
