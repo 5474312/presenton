@@ -23,6 +23,7 @@ from api.v1.ppt.endpoints.template import (
     generate_template_layout_from_prompt,
     generate_template_blocks,
     get_template,
+    get_template_theme,
     init_template,
     list_templates,
     patch_template_slide_layout,
@@ -1503,6 +1504,72 @@ def test_delete_template_deletes_template(fake_async_session):
 def test_get_template_returns_404_for_missing_template(fake_async_session):
     with pytest.raises(HTTPException) as exc:
         asyncio.run(get_template("missing-template", sql_session=fake_async_session))
+
+    assert exc.value.status_code == 404
+    assert exc.value.detail == "Template not found"
+
+
+def test_get_template_theme_derives_semantic_roles(fake_async_session):
+    template_id = str(uuid.uuid4())
+    template = TemplateV2(
+        id=template_id,
+        name="Themed",
+        layouts={
+            "layouts": [
+                {
+                    "id": "themed-layout",
+                    "description": "A layout with semantic colors and font.",
+                    "components": [
+                        {
+                            "id": "content",
+                            "description": "The themed content region.",
+                            "position": {"x": 0, "y": 0},
+                            "elements": [
+                                {
+                                    "type": "container",
+                                    "fill": {"color": "#FEFEFE"},
+                                },
+                                {
+                                    "type": "chart",
+                                    "colors": ["#7C3AED", "#0891B2"],
+                                },
+                                {
+                                    "type": "text",
+                                    "font": {
+                                        "color": "#111827",
+                                        "family": "Inter",
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ]
+        },
+        assets={"fonts": {"Inter": "https://example.com/inter.woff2"}},
+    )
+    fake_async_session._get_results[template_id] = template
+
+    response = asyncio.run(
+        get_template_theme(template_id, sql_session=fake_async_session)
+    )
+
+    assert response.template_id == template_id
+    assert response.theme is not None
+    assert response.theme["colors"]["background"] == "#fefefe"
+    assert response.theme["colors"]["primary"] in {"#7c3aed", "#0891b2"}
+    assert response.theme["colors"]["background_text"] == "#111827"
+    assert response.theme["fonts"]["textFont"] == {
+        "name": "Inter",
+        "url": "https://example.com/inter.woff2",
+    }
+
+
+def test_get_template_theme_returns_404_for_missing_template(fake_async_session):
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            get_template_theme("missing-template", sql_session=fake_async_session)
+        )
 
     assert exc.value.status_code == 404
     assert exc.value.detail == "Template not found"
