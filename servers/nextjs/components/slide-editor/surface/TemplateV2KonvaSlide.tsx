@@ -51,6 +51,8 @@ import {
 } from "@/components/slide-editor/state/state";
 import { ElementToolbar } from "@/components/slide-editor/toolbar/ElementToolbar";
 import { ChartDataEditorPopover } from "@/components/slide-editor/charts/ChartEditorContent";
+import { InfographicDataEditorPopover } from "@/components/slide-editor/infographics/InfographicEditorContent";
+import type { TemplateV2InfographicToolbarElement } from "@/components/slide-editor/layout/InfographicToolbarControls";
 import { TableInlineEditor } from "@/components/slide-editor/tables/TableInlineEditor";
 import { TemplateV2InlineEditor } from "@/components/slide-editor/text/TemplateV2InlineEditor";
 import {
@@ -447,6 +449,8 @@ function TemplateV2KonvaSlideComponent({
     useState<ElementSelection | null>(null);
   const [chartEditorSelection, setChartEditorSelection] =
     useState<ElementSelection | null>(null);
+  const [infographicEditorSelection, setInfographicEditorSelection] =
+    useState<ElementSelection | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageCropActive, setImageCropActive] = useState(false);
   const [, setHistoryAvailability] = useState({
@@ -672,6 +676,7 @@ function TemplateV2KonvaSlideComponent({
     inlineEdit ||
     iconEditorSelection ||
     chartEditorSelection ||
+    infographicEditorSelection ||
     selectedTableCell ||
     editingTableCell,
   );
@@ -708,6 +713,9 @@ function TemplateV2KonvaSlideComponent({
     : null;
   const chartEditorElement = chartEditorSelection
     ? getElementAtSelection(uiDraft, chartEditorSelection)
+    : null;
+  const infographicEditorElement = infographicEditorSelection
+    ? getElementAtSelection(uiDraft, infographicEditorSelection)
     : null;
   const chartEditorBox = chartEditorSelection
     ? absoluteBoxForSelection(uiDraft, chartEditorSelection)
@@ -814,6 +822,7 @@ function TemplateV2KonvaSlideComponent({
     setVectorEditSelection(null);
     setIconEditorSelection(null);
     setChartEditorSelection(null);
+    setInfographicEditorSelection(null);
     undoStackRef.current = [];
     redoStackRef.current = [];
     publishHistoryAvailability();
@@ -966,6 +975,7 @@ function TemplateV2KonvaSlideComponent({
       setVectorEditSelection(null);
       setIconEditorSelection(null);
       setChartEditorSelection(null);
+      setInfographicEditorSelection(null);
       if (options?.clearActiveSurface) {
         clearSurface();
       }
@@ -1528,6 +1538,10 @@ function TemplateV2KonvaSlideComponent({
     setChartEditorSelection(null);
   }, []);
 
+  const closeInfographicEditor = useCallback(() => {
+    setInfographicEditorSelection(null);
+  }, []);
+
   const deleteComponentAtIndex = useCallback(
     (componentIndex: number) => {
       const components = [...readArray(currentUiRef.current.components)];
@@ -1864,6 +1878,13 @@ function TemplateV2KonvaSlideComponent({
           change_source: "layout_toolbar",
         }),
       });
+      if (readString(layoutToolbarTarget.element.type) === "infographic") {
+        updateElement(layoutToolbarTarget.selection, (current) => ({
+          ...current,
+          ...changes,
+        }));
+        return;
+      }
       if (
         layoutToolbarTarget.selection.componentIndex ===
         ROOT_ELEMENTS_COMPONENT_INDEX
@@ -1903,7 +1924,13 @@ function TemplateV2KonvaSlideComponent({
         ),
       );
     },
-    [commitUi, editorAnalyticsProps, layoutToolbarTarget, updateComponent],
+    [
+      commitUi,
+      editorAnalyticsProps,
+      layoutToolbarTarget,
+      updateComponent,
+      updateElement,
+    ],
   );
 
   const applyChartToolbarElementChange = useCallback(
@@ -2253,7 +2280,26 @@ function TemplateV2KonvaSlideComponent({
       clearInlineEdit();
       setVectorEditSelection(null);
       setIconEditorSelection(null);
+      setInfographicEditorSelection(null);
       setChartEditorSelection(elementSelection);
+    },
+    [activateSurface, clearInlineEdit],
+  );
+
+  const openInfographicEditor = useCallback(
+    (elementSelection: ElementSelection) => {
+      const element = getElementAtSelection(
+        currentUiRef.current,
+        elementSelection,
+      );
+      if (!element || readString(element.type) !== "infographic") return;
+      activateSurface(elementSelection);
+      setSelection(elementSelection);
+      clearInlineEdit();
+      setVectorEditSelection(null);
+      setIconEditorSelection(null);
+      setChartEditorSelection(null);
+      setInfographicEditorSelection(elementSelection);
     },
     [activateSurface, clearInlineEdit],
   );
@@ -2729,6 +2775,14 @@ function TemplateV2KonvaSlideComponent({
             openChartEditor(chartToolbarTarget.selection);
           }
         }}
+        onInfographicEdit={() => {
+          if (
+            layoutToolbarTarget &&
+            readString(layoutToolbarTarget.element.type) === "infographic"
+          ) {
+            openInfographicEditor(layoutToolbarTarget.selection);
+          }
+        }}
         onDeleteSelection={deleteSelection}
         onDuplicateSelection={duplicateSelection}
         onEditorChange={applyEditorToolbarTargetElementChange}
@@ -2832,6 +2886,24 @@ function TemplateV2KonvaSlideComponent({
             )
           }
           onClose={closeChartEditor}
+        />
+      ) : null}
+      {isEditMode &&
+        infographicEditorSelection &&
+        infographicEditorElement &&
+        readString(infographicEditorElement.type) === "infographic" ? (
+        <InfographicDataEditorPopover
+          key={keyForSelection(infographicEditorSelection)}
+          element={
+            infographicEditorElement as TemplateV2InfographicToolbarElement
+          }
+          onChange={(nextElement) =>
+            updateElement(
+              infographicEditorSelection,
+              () => nextElement as RawElement,
+            )
+          }
+          onClose={closeInfographicEditor}
         />
       ) : null}
       {isEditMode &&
