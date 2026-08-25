@@ -154,15 +154,11 @@ INVALID_PPTX_UPLOAD_ERROR = (
     "The uploaded PowerPoint file is corrupted or unsupported."
 )
 PPT_NS = {
-    "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
-    "asvg": "http://schemas.microsoft.com/office/drawing/2016/SVG/main",
     "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
     "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
 }
 REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 
-ET.register_namespace("a", PPT_NS["a"])
-ET.register_namespace("asvg", PPT_NS["asvg"])
 ET.register_namespace("p", PPT_NS["p"])
 ET.register_namespace("r", PPT_NS["r"])
 
@@ -749,21 +745,9 @@ async def render_pptx_slides_to_images(
         )
         logger.info("Prepared custom font CSS for HTML preview rendering")
 
-    if os.path.isfile(modified_pptx_path):
-        preview_pptx_path, remove_preview_pptx = await asyncio.to_thread(
-            _prepare_svg_images_for_pptx_to_html,
-            modified_pptx_path,
-        )
-    else:
-        preview_pptx_path, remove_preview_pptx = modified_pptx_path, False
-    try:
-        pptx_document = await EXPORT_TASK_SERVICE.convert_pptx_to_html(
-            preview_pptx_path, get_fonts=True
-        )
-    finally:
-        if remove_preview_pptx:
-            with contextlib.suppress(OSError):
-                os.unlink(preview_pptx_path)
+    pptx_document = await EXPORT_TASK_SERVICE.convert_pptx_to_html(
+        modified_pptx_path, get_fonts=True
+    )
     if not pptx_document.slides:
         raise HTTPException(status_code=500, detail="PPTX-to-HTML returned no slides")
 
@@ -1090,69 +1074,6 @@ def _validate_pptx_package(pptx_path: str) -> None:
         or not has_slide
     ):
         raise HTTPException(status_code=400, detail=INVALID_PPTX_UPLOAD_ERROR)
-
-
-def _prepare_svg_images_for_pptx_to_html(pptx_path: str) -> Tuple[str, bool]:
-    """Give SVG-only pictures a primary relationship for the HTML converter."""
-    xml_replacements: Dict[str, bytes] = {}
-    relationship_embed = f"{{{PPT_NS['r']}}}embed"
-    blip_tag = f"{{{PPT_NS['a']}}}blip"
-    svg_blip_tag = f"{{{PPT_NS['asvg']}}}svgBlip"
-
-    with zipfile.ZipFile(pptx_path, "r") as archive:
-        for member in archive.infolist():
-            if not (
-                member.filename.startswith("ppt/")
-                and member.filename.endswith(".xml")
-            ):
-                continue
-            slide_xml = ET.fromstring(archive.read(member.filename))
-            changed = False
-            for blip in slide_xml.iter(blip_tag):
-                if blip.get(relationship_embed):
-                    continue
-                svg_blip = next(blip.iter(svg_blip_tag), None)
-                svg_relationship = (
-                    svg_blip.get(relationship_embed)
-                    if svg_blip is not None
-                    else None
-                )
-                if not svg_relationship:
-                    continue
-                blip.set(relationship_embed, svg_relationship)
-                changed = True
-            if changed:
-                xml_replacements[member.filename] = ET.tostring(
-                    slide_xml,
-                    encoding="utf-8",
-                    xml_declaration=True,
-                )
-
-        if not xml_replacements:
-            return pptx_path, False
-
-        file_descriptor, preview_pptx_path = tempfile.mkstemp(
-            prefix="pptx-html-svg-",
-            suffix=".pptx",
-            dir=os.path.dirname(os.path.abspath(pptx_path)),
-        )
-        os.close(file_descriptor)
-        try:
-            with zipfile.ZipFile(preview_pptx_path, "w") as output_archive:
-                for member in archive.infolist():
-                    output_archive.writestr(
-                        member,
-                        xml_replacements.get(
-                            member.filename,
-                            archive.read(member.filename),
-                        ),
-                    )
-        except Exception:
-            with contextlib.suppress(OSError):
-                os.unlink(preview_pptx_path)
-            raise
-
-    return preview_pptx_path, True
 
 
 def _resolve_template_preview_slide_cap(max_slides: Optional[int]) -> int:

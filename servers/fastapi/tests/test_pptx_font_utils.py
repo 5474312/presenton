@@ -1000,47 +1000,6 @@ def test_localize_preview_asset_urls_rejects_relative_path_traversal(tmp_path):
     assert localized == html
 
 
-def test_prepare_svg_images_for_pptx_to_html_promotes_svg_relationship(tmp_path):
-    source_path = tmp_path / "source.pptx"
-    slide_xml = b"""<?xml version="1.0" encoding="UTF-8"?>
-<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
-       xmlns:asvg="http://schemas.microsoft.com/office/drawing/2016/SVG/main"
-       xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
-       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <p:cSld><p:spTree><p:pic><p:blipFill><a:blip>
-    <a:extLst><a:ext><asvg:svgBlip r:embed="rId7" /></a:ext></a:extLst>
-  </a:blip></p:blipFill></p:pic></p:spTree></p:cSld>
-</p:sld>"""
-    with zipfile.ZipFile(source_path, "w") as archive:
-        archive.writestr("ppt/slides/slide1.xml", slide_xml)
-        archive.writestr("ppt/media/icon.svg", b"<svg></svg>")
-
-    preview_path, should_remove = (
-        fonts_and_slides_preview._prepare_svg_images_for_pptx_to_html(
-            str(source_path)
-        )
-    )
-
-    try:
-        assert should_remove is True
-        assert preview_path != str(source_path)
-        with zipfile.ZipFile(preview_path, "r") as archive:
-            rewritten_slide = ET.fromstring(
-                archive.read("ppt/slides/slide1.xml")
-            )
-            blip = next(
-                rewritten_slide.iter(
-                    "{http://schemas.openxmlformats.org/drawingml/2006/main}blip"
-                )
-            )
-            assert blip.get(
-                "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
-            ) == "rId7"
-            assert archive.read("ppt/media/icon.svg") == b"<svg></svg>"
-    finally:
-        os.unlink(preview_path)
-
-
 @pytest.mark.anyio
 async def test_create_slide_previews_from_html_uses_converter_dimensions_and_fonts(
     monkeypatch,
