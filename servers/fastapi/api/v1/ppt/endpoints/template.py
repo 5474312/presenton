@@ -59,7 +59,12 @@ from templates.v2.models.layouts import (
     SlideLayout,
     SlideLayouts,
 )
-from templates.v2.theme import generate_template_theme
+from templates.v2.theme import (
+    build_theme_profile,
+    generate_template_theme,
+    materialize_theme,
+    select_theme_roles_deterministically,
+)
 from utils.asset_directory_utils import resolve_app_path_to_filesystem
 from utils.file_utils import get_original_file_name
 from utils.icon_weights import (
@@ -250,6 +255,11 @@ class TemplateResponse(TemplateListItem):
     layouts: Optional[dict[str, Any]] = None
     theme: Optional[PresentationThemeData] = None
     fonts: dict[str, str] = Field(default_factory=dict)
+
+
+class TemplateThemeResponse(BaseModel):
+    template_id: str
+    theme: Optional[PresentationThemeData] = None
 
 
 def _template_task_progress_data(
@@ -685,6 +695,22 @@ def _get_template_fonts(template: TemplateV2) -> dict[str, str]:
     if not isinstance(template.assets, dict):
         return {}
     return _coerce_font_map(template.assets.get("fonts"))
+
+
+def _derive_template_theme(template: TemplateV2) -> PresentationThemeData | None:
+    if not isinstance(template.layouts, dict):
+        return None
+    try:
+        layouts = SlideLayouts.model_validate(template.layouts)
+        profile = build_theme_profile(layouts, _get_template_fonts(template))
+        selection = select_theme_roles_deterministically(profile)
+        return materialize_theme(profile, selection)
+    except (ValidationError, KeyError, ValueError):
+        LOGGER.exception(
+            "[template.theme] failed to derive semantic theme template_id=%s",
+            template.id,
+        )
+        return None
 
 
 def _get_template_thumbnail_from_assets(assets: Any) -> str | None:
@@ -1685,6 +1711,40 @@ async def update_template_metadata(
     await sql_session.commit()
     await sql_session.refresh(template)
     return template
+
+
+@TEMPLATE_ROUTER.get(
+    "/{template_id}/theme",
+    response_model=TemplateThemeResponse,
+    operation_id="template_theme_get",
+)
+async def get_template_theme(
+    template_id: str = Path(...),
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    template = await sql_session.get(TemplateV2, template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    theme: PresentationThemeData | None = None
+    if template.theme is not None:
+        try:
+            theme = PresentationThemeData.model_validate(template.theme)
+        except ValidationError:
+            LOGGER.warning(
+                "[template.theme] replacing invalid stored theme template_id=%s",
+                template.id,
+                exc_info=True,
+            )
+
+    if theme is None:
+        theme = _derive_template_theme(template)
+        if theme is not None:
+            template.theme = theme.model_dump(mode="json", exclude_none=True)
+            sql_session.add(template)
+            await sql_session.commit()
+
+    return TemplateThemeResponse(template_id=template.id, theme=theme)
 
 
 @TEMPLATE_ROUTER.get(
