@@ -8,6 +8,7 @@ import pytest
 from fastapi import BackgroundTasks, HTTPException
 
 from api.v1.ppt.endpoints.template import (
+    TEMPLATE_ROUTER,
     CreateTemplateLayoutsRequest,
     CreateTemplateRequest,
     GenerateTemplateLayoutRequest,
@@ -23,6 +24,7 @@ from api.v1.ppt.endpoints.template import (
     generate_template_layout_from_prompt,
     generate_template_blocks,
     get_template,
+    get_template_theme,
     init_template,
     list_templates,
     patch_template_slide_layout,
@@ -782,6 +784,80 @@ def test_get_template_returns_layouts_components_and_fonts(fake_async_session):
     assert not hasattr(response, "components")
     assert not hasattr(response, "assets")
     assert not hasattr(response, "layout_schema")
+
+
+def test_get_template_theme_returns_stored_theme_without_rewriting(
+    fake_async_session,
+):
+    template_id = str(uuid.uuid4())
+    template = TemplateV2(
+        id=template_id,
+        name="Customer Brand",
+        layouts=TEMPLATE_LAYOUTS,
+        theme=GENERATED_THEME_DATA,
+    )
+    fake_async_session._get_results[template_id] = template
+
+    response = asyncio.run(
+        get_template_theme(template_id, sql_session=fake_async_session)
+    )
+
+    assert response.template_id == template_id
+    assert response.theme is not None
+    assert response.theme.model_dump(mode="json") == GENERATED_THEME_DATA
+    assert fake_async_session.added == []
+    assert fake_async_session.commit_count == 0
+
+
+def test_get_template_theme_route_is_registered_before_template_detail_get():
+    route_paths = [
+        route.path
+        for route in TEMPLATE_ROUTER.routes
+        if "GET" in getattr(route, "methods", set())
+    ]
+
+    assert "/template/{template_id}/theme" in route_paths
+    assert route_paths.index("/template/{template_id}/theme") < route_paths.index(
+        "/template/{template_id}"
+    )
+
+
+def test_get_template_theme_derives_and_persists_missing_theme(
+    fake_async_session,
+):
+    template_id = str(uuid.uuid4())
+    template = TemplateV2(
+        id=template_id,
+        name="Customer Brand",
+        layouts=TEMPLATE_LAYOUTS,
+        theme=None,
+    )
+    fake_async_session._get_results[template_id] = template
+
+    with patch(
+        "api.v1.ppt.endpoints.template._derive_template_theme",
+        return_value=GENERATED_THEME,
+    ) as derive_theme:
+        response = asyncio.run(
+            get_template_theme(template_id, sql_session=fake_async_session)
+        )
+
+    derive_theme.assert_called_once_with(template)
+    assert response.theme is not None
+    assert response.theme.model_dump(mode="json") == GENERATED_THEME_DATA
+    assert template.theme == GENERATED_THEME_DATA
+    assert fake_async_session.added == [template]
+    assert fake_async_session.commit_count == 1
+
+
+def test_get_template_theme_returns_404_for_missing_template(fake_async_session):
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            get_template_theme("missing-template", sql_session=fake_async_session)
+        )
+
+    assert exc.value.status_code == 404
+    assert exc.value.detail == "Template not found"
 
 
 def test_create_template_slide_layouts_returns_generated_layout(
