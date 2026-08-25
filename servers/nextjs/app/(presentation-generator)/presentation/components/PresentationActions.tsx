@@ -1224,7 +1224,7 @@ function ActionsSidebar({
   return (
     <aside
       aria-label="Editor tools"
-      className="ml-auto flex h-full w-[78px] shrink-0 flex-col items-center gap-5 bg-white px-[10px] py-2"
+      className="ml-auto flex h-full w-[90px] font-syne shrink-0 flex-col items-center gap-5 bg-white px-[10px] py-2"
     >
       <div
         className="flex w-full shrink-0 flex-col items-center gap-5 rounded-[10px] py-7"

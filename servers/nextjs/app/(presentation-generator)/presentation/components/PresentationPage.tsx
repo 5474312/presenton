@@ -968,7 +968,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
             aria-modal={isMobileAssistantOpen ? true : undefined}
             className={cn(
               "h-screen w-[calc(100vw-16px)] max-w-[375px] shrink-0 flex-col bg-white shadow-[-12px_0_32px_rgba(16,24,40,0.18)] transition-[width] duration-200 xl:relative xl:z-auto xl:h-full xl:max-w-none xl:self-start xl:border-l xl:border-[#EDEEEF] xl:shadow-none",
-              isRightPanelOpen ? "xl:w-[383px]" : "xl:w-[78px]",
+              isRightPanelOpen ? "xl:w-[383px]" : "xl:w-[90px]",
               isMobileAssistantOpen
                 ? "fixed inset-y-0 right-0 z-[70] flex"
                 : "hidden xl:flex"
