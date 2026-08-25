@@ -953,6 +953,139 @@ def test_generate_presentation_handler_rejects_invalid_llm_json(fake_async_sessi
     assert "Failed to generate presentation outlines" in exc.value.detail
 
 
+def test_generate_presentation_handler_rejects_too_few_outlines(fake_async_session):
+    """Undershooting cannot be satisfied -- there is nothing to pad with."""
+    request = GeneratePresentationRequest(
+        content="Generate a deck",
+        n_slides=4,
+        language="English",
+        export_as="pptx",
+        template="general",
+    )
+
+    async def fake_outline_stream(*_args, **_kwargs):
+        yield '{"slides":[{"content":"## One"},{"content":"## Two"}]}'
+
+    with patch.object(
+        presentation_endpoint.MEM0_PRESENTATION_MEMORY_SERVICE,
+        "store_generation_context",
+        new=AsyncMock(),
+    ), patch.object(
+        presentation_endpoint.MEM0_PRESENTATION_MEMORY_SERVICE,
+        "store_generated_outlines",
+        new=AsyncMock(),
+    ), patch.object(
+        presentation_endpoint,
+        "generate_ppt_outline",
+        side_effect=fake_outline_stream,
+    ), patch.object(
+        presentation_endpoint.CONCURRENT_SERVICE,
+        "run_task",
+        new=Mock(),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            _run(
+                presentation_endpoint.generate_presentation_handler(
+                    request=request,
+                    presentation_id=uuid.uuid4(),
+                    async_status=None,
+                    sql_session=fake_async_session,
+                )
+            )
+
+    assert exc.value.status_code == 400
+    assert "requested" in exc.value.detail
+
+
+def test_generate_presentation_handler_trims_extra_outlines():
+    """Overshooting is trimmed rather than failed: the deck still gets n."""
+    request = GeneratePresentationRequest(
+        content="Generate a deck",
+        n_slides=2,
+        language="English",
+        export_as="pptx",
+        template="general",
+    )
+    presentation_id = uuid.uuid4()
+    template = TemplateV2(
+        id="general",
+        name="General",
+        layouts=_template_layout_payload(),
+        is_default=True,
+    )
+    session = FakeAsyncSession(get_results={"general": template})
+
+    async def fake_outline_stream(*_args, **_kwargs):
+        # Four outlines for a two-slide request.
+        yield (
+            '{"slides":[{"content":"## One"},{"content":"## Two"},'
+            '{"content":"## Three"},{"content":"## Four"}]}'
+        )
+
+    with patch.object(
+        presentation_endpoint.MEM0_PRESENTATION_MEMORY_SERVICE,
+        "store_generation_context",
+        new=AsyncMock(),
+    ), patch.object(
+        presentation_endpoint.MEM0_PRESENTATION_MEMORY_SERVICE,
+        "store_generated_outlines",
+        new=AsyncMock(),
+    ), patch.object(
+        presentation_endpoint,
+        "generate_ppt_outline",
+        side_effect=fake_outline_stream,
+    ), patch.object(
+        presentation_endpoint,
+        "generate_presentation_structure",
+        new=AsyncMock(return_value=PresentationStructureModel(slides=[0, 1])),
+    ), patch.object(
+        presentation_endpoint,
+        "get_slide_content_from_type_and_outline",
+        new=AsyncMock(return_value={"title": "T", "points": ["A"]}),
+    ), patch.object(
+        presentation_endpoint,
+        "process_slide_and_fetch_assets",
+        new=AsyncMock(return_value=[]),
+    ), patch.object(
+        presentation_endpoint,
+        "get_images_directory",
+        return_value="/tmp",
+    ), patch.object(
+        presentation_endpoint,
+        "ImageGenerationService",
+        return_value=Mock(),
+    ), patch.object(
+        presentation_endpoint,
+        "export_presentation",
+        new=AsyncMock(
+            return_value=PresentationAndPath(
+                presentation_id=presentation_id,
+                path="/tmp/generated/deck.pptx",
+            )
+        ),
+    ), patch.object(
+        presentation_endpoint.CONCURRENT_SERVICE,
+        "run_task",
+        new=Mock(),
+    ), patch.object(
+        presentation_endpoint,
+        "random",
+        new=Mock(randint=Mock(return_value=0)),
+    ):
+        response = _run(
+            presentation_endpoint.generate_presentation_handler(
+                request=request,
+                presentation_id=presentation_id,
+                async_status=None,
+                sql_session=session,
+            )
+        )
+
+    assert response.path.endswith(".pptx")
+    # Exactly the requested count reached the deck, not the four generated.
+    assert len(session.added_all) == 2
+
+
 class _SlidesAsyncSession(FakeAsyncSession):
     def __init__(self, *args, slides: list[SlideModel], **kwargs):
         super().__init__(*args, **kwargs)
