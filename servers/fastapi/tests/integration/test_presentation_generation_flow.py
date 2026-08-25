@@ -807,6 +807,71 @@ def test_prepare_presentation_accepts_template_layout_id():
     assert structure_layout.slides[0].id == "template-layout-1"
 
 
+def test_prepare_presentation_normalizes_incomplete_and_invalid_layout_indexes():
+    presentation_id = uuid.uuid4()
+    template_id = "strategy-template"
+    presentation = PresentationModel(
+        id=presentation_id,
+        version=PresentationVersion.V2_STANDARD,
+        content="deck",
+        n_slides=3,
+        language="English",
+        tone="default",
+        verbosity="standard",
+        instructions=None,
+    )
+    template = TemplateV2(
+        id=template_id,
+        name="Custom V2",
+        layouts={
+            "layouts": [
+                {
+                    "id": "layout-1",
+                    "description": "First layout",
+                    "components": [],
+                },
+                {
+                    "id": "layout-2",
+                    "description": "Second layout",
+                    "components": [],
+                },
+            ]
+        },
+    )
+    session = FakeAsyncSession(
+        get_results={presentation_id: presentation, template_id: template}
+    )
+
+    with patch.object(
+        presentation_endpoint,
+        "generate_presentation_structure",
+        new=AsyncMock(return_value=PresentationStructureModel(slides=[-1])),
+    ), patch.object(
+        presentation_endpoint.random,
+        "randrange",
+        side_effect=[1, 0, 1],
+    ), patch.object(
+        presentation_endpoint.MEM0_PRESENTATION_MEMORY_SERVICE,
+        "store_generated_outlines",
+        new=AsyncMock(),
+    ):
+        response = _run(
+            presentation_endpoint.prepare_presentation(
+                presentation_id=presentation_id,
+                outlines=[
+                    SlideOutlineModel(content="## First"),
+                    SlideOutlineModel(content="## Second"),
+                    SlideOutlineModel(content="## Third"),
+                ],
+                layout=template_id,
+                sql_session=session,
+            )
+        )
+
+    assert response.presentation_id == presentation_id
+    assert presentation.structure == {"slides": [1, 1, 0]}
+
+
 def test_get_presentation_preserves_template_detail_payload():
     presentation_id = uuid.uuid4()
     now = datetime.now()
@@ -952,7 +1017,7 @@ def test_stream_presentation_uses_template_schema_for_content_generation():
         title="Deck",
         outlines={"slides": [{"content": "## Causes"}]},
         layout=template_layouts,
-        structure={"slides": [0]},
+        structure={"slides": [-1]},
         tone="default",
         verbosity="standard",
         instructions=None,
@@ -997,10 +1062,15 @@ def test_stream_presentation_uses_template_schema_for_content_generation():
         presentation_endpoint,
         "ImageGenerationService",
         return_value=Mock(),
+    ), patch.object(
+        presentation_endpoint.random,
+        "randrange",
+        return_value=0,
     ):
         chunks = _run(consume_stream())
 
     assert chunks
+    assert presentation.structure == {"slides": [0]}
     assert len(generated_layouts) == 1
     assert generated_slide_numbers == [1]
     generated_layout = generated_layouts[0]
