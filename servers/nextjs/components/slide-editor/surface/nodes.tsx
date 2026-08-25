@@ -177,6 +177,94 @@ const VECTOR_ADD_HANDLE_RADIUS = 6;
 const VECTOR_DELETE_HANDLE_RADIUS = 5;
 const VECTOR_DELETE_HANDLE_OFFSET = 11;
 const VECTOR_DELETE_HANDLE_COLOR = "#EF4444";
+const VECTOR_MARKERS = new Set([
+  "arrow",
+  "stealth",
+  "triangle",
+  "circle",
+  "square",
+  "diamond",
+]);
+
+type VectorMarkerStyle =
+  | "arrow"
+  | "stealth"
+  | "triangle"
+  | "circle"
+  | "square"
+  | "diamond";
+
+function vectorMarkerStyle(value: unknown): VectorMarkerStyle | null {
+  const marker = readString(value);
+  return marker && VECTOR_MARKERS.has(marker)
+    ? (marker as VectorMarkerStyle)
+    : null;
+}
+
+function VectorEndpointMarker({
+  adjacent,
+  color,
+  endpoint,
+  marker,
+  strokeWidth: markerStrokeWidth,
+}: {
+  adjacent: Point;
+  color: string;
+  endpoint: Point;
+  marker: VectorMarkerStyle;
+  strokeWidth: number;
+}) {
+  const dx = endpoint.x - adjacent.x;
+  const dy = endpoint.y - adjacent.y;
+  if (Math.hypot(dx, dy) < 0.01) return null;
+
+  const length = Math.max(11, Math.min(28, 8 + markerStrokeWidth * 2.5));
+  const halfWidth = length * 0.42;
+  const rotation = Math.atan2(dy, dx) * (180 / Math.PI);
+  const shared = {
+    fill: color,
+    listening: false,
+    stroke: color,
+    strokeWidth: Math.max(1, markerStrokeWidth),
+  };
+
+  return (
+    <Group x={endpoint.x} y={endpoint.y} rotation={rotation} listening={false}>
+      {marker === "arrow" ? (
+        <Line
+          points={[-length, -halfWidth, 0, 0, -length, halfWidth]}
+          fillEnabled={false}
+          lineCap="round"
+          lineJoin="round"
+          {...shared}
+        />
+      ) : marker === "circle" ? (
+        <Circle x={-length * 0.42} radius={halfWidth * 0.72} {...shared} />
+      ) : marker === "square" ? (
+        <Rect
+          x={-length * 0.84}
+          y={-halfWidth * 0.72}
+          width={halfWidth * 1.44}
+          height={halfWidth * 1.44}
+          {...shared}
+        />
+      ) : (
+        <Line
+          closed
+          lineJoin="round"
+          points={
+            marker === "diamond"
+              ? [0, 0, -length * 0.5, -halfWidth, -length, 0, -length * 0.5, halfWidth]
+              : marker === "stealth"
+                ? [0, 0, -length, -halfWidth, -length * 0.63, 0, -length, halfWidth]
+                : [0, 0, -length, -halfWidth, -length, halfWidth]
+          }
+          {...shared}
+        />
+      )}
+    </Group>
+  );
+}
 
 function isComponentSideResizeAnchor(
   anchor: ComponentTransformAnchor | null,
@@ -1738,20 +1826,56 @@ function RawElementVisual({
       strokeColor(element.stroke) ?? (!closed ? "#000000" : undefined),
       strokeOpacity(element.stroke),
     );
+    const startMarker = !closed
+      ? vectorMarkerStyle(element.start_marker ?? element.startMarker)
+      : null;
+    const endMarker = !closed
+      ? vectorMarkerStyle(element.end_marker ?? element.endMarker)
+      : null;
     if (points.length < 4) return null;
     if (!fill && !(polygonStroke && lineWidth > 0)) return null;
+    const localPoints = Array.from(
+      { length: points.length / 2 },
+      (_, index) => ({ x: points[index * 2], y: points[index * 2 + 1] }),
+    );
+    const firstPoint = localPoints[0];
+    const secondPoint = localPoints[1];
+    const lastPoint = localPoints[localPoints.length - 1];
+    const penultimatePoint = localPoints[localPoints.length - 2];
     return (
-      <Line
-        points={points}
-        closed={closed}
-        fill={fill}
-        stroke={polygonStroke}
-        strokeWidth={polygonStroke ? lineWidth : 0}
-        dash={lineDash.length ? lineDash : undefined}
-        hitStrokeWidth={Math.max(20, lineWidth)}
-        {...shadowProps(element)}
-        listening={interactive}
-      />
+      <Group listening={interactive}>
+        <Line
+          points={points}
+          closed={closed}
+          fill={fill}
+          stroke={polygonStroke}
+          strokeWidth={polygonStroke ? lineWidth : 0}
+          dash={lineDash.length ? lineDash : undefined}
+          hitStrokeWidth={Math.max(20, lineWidth)}
+          lineCap="round"
+          lineJoin="round"
+          {...shadowProps(element)}
+          listening={interactive}
+        />
+        {polygonStroke && startMarker && firstPoint && secondPoint ? (
+          <VectorEndpointMarker
+            adjacent={secondPoint}
+            color={polygonStroke}
+            endpoint={firstPoint}
+            marker={startMarker}
+            strokeWidth={lineWidth}
+          />
+        ) : null}
+        {polygonStroke && endMarker && lastPoint && penultimatePoint ? (
+          <VectorEndpointMarker
+            adjacent={penultimatePoint}
+            color={polygonStroke}
+            endpoint={lastPoint}
+            marker={endMarker}
+            strokeWidth={lineWidth}
+          />
+        ) : null}
+      </Group>
     );
   }
   if (type === "text") {

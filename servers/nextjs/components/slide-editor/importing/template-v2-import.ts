@@ -871,6 +871,18 @@ function adaptVector(raw: UnknownRecord): SlideElement | null {
     closed: adaptVectorClosed(raw, points),
     corner_radii: adaptCornerRadii(raw, points.length),
     curve: adaptVectorCurve(raw) ?? adaptImplicitVectorCurve(raw),
+    start_marker:
+      readEnum(
+        raw,
+        ["none", "arrow", "stealth", "triangle", "circle", "square", "diamond"],
+        "start_marker",
+      ) ?? undefined,
+    end_marker:
+      readEnum(
+        raw,
+        ["none", "arrow", "stealth", "triangle", "circle", "square", "diamond"],
+        "end_marker",
+      ) ?? undefined,
     fill,
     stroke,
     shadow: adaptShadow(readRecord(raw, "shadow")),

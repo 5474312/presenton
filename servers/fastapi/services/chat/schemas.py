@@ -584,6 +584,12 @@ class SlideElementVectorInput(OpenAIStrictSchemaModel):
         min_length=2,
         max_length=200,
     )
+    start_marker: Literal[
+        "none", "arrow", "stealth", "triangle", "circle", "square", "diamond"
+    ] | None = Field(..., alias="startMarker")
+    end_marker: Literal[
+        "none", "arrow", "stealth", "triangle", "circle", "square", "diamond"
+    ] | None = Field(..., alias="endMarker")
 
     model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
 
@@ -687,7 +693,8 @@ class UpdateSlideElementInput(OpenAIStrictSchemaModel):
     vector: SlideElementVectorInput | None = Field(
         ...,
         description=(
-            "Vector update using shape, points, closed, smooth curve, and cornerRadii. "
+            "Vector update using shape, points, closed, smooth curve, cornerRadii, "
+            "and optional startMarker/endMarker line endpoints. "
             "Use position/size for ordinary vector move and resize requests."
         ),
     )

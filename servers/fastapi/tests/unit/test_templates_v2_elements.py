@@ -319,6 +319,33 @@ def test_vector_accepts_polygon_and_ellipse_shapes_only():
         )
 
 
+def test_vector_accepts_editable_line_endpoint_markers():
+    line = Vector.model_validate(
+        {
+            "type": "vector",
+            "points": [{"x": 0, "y": 0}, {"x": 100, "y": 0}],
+            "closed": False,
+            "stroke": {"color": "#111111", "width": 2},
+            "start_marker": "circle",
+            "end_marker": "triangle",
+        }
+    )
+
+    assert line.start_marker.value == "circle"
+    assert line.end_marker.value == "triangle"
+
+    with pytest.raises(ValidationError):
+        Vector.model_validate(
+            {
+                "type": "vector",
+                "points": [{"x": 0, "y": 0}, {"x": 100, "y": 0}],
+                "closed": False,
+                "stroke": {"color": "#111111", "width": 2},
+                "end_marker": "unsupported",
+            }
+        )
+
+
 def test_element_models_match_export_schema_changes():
     assert "decorative" not in Container.model_fields
     assert not {

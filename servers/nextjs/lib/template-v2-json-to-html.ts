@@ -890,6 +890,29 @@ function renderPolygon(item: JsonRecord, mode: RenderMode): string {
     .map(readNumber)
     .filter((value): value is number => value != null)
     .join(" ");
+  const startMarker = !closed
+    ? vectorMarker(readString(item.start_marker))
+    : null;
+  const endMarker = !closed ? vectorMarker(readString(item.end_marker)) : null;
+  const markerPrefix = `vector-marker-${vectorMarkerHash(
+    `${pointString}|${strokeColor}|${strokeWidth}|${startMarker}|${endMarker}`,
+  )}`;
+  const startMarkerId = `${markerPrefix}-start`;
+  const endMarkerId = `${markerPrefix}-end`;
+  const markerDefs = strokeColor && strokeWidth > 0
+    ? [
+        startMarker
+          ? vectorMarkerDefinition(startMarkerId, startMarker, strokeColor, strokeWidth)
+          : "",
+        endMarker
+          ? vectorMarkerDefinition(endMarkerId, endMarker, strokeColor, strokeWidth)
+          : "",
+      ].join("")
+    : "";
+  const markerAttributes =
+    strokeColor && strokeWidth > 0
+      ? `${startMarker ? ` marker-start="url(#${startMarkerId})"` : ""}${endMarker ? ` marker-end="url(#${endMarkerId})"` : ""}`
+      : "";
   const shape = closed
     ? `<polygon points="${escapeAttribute(pointString)}"${fillColor ? ` fill="${escapeAttribute(fillColor)}"` : ` fill="none"`}${strokeColor && strokeWidth > 0
       ? ` stroke="${escapeAttribute(strokeColor)}" stroke-width="${cssNumber(strokeWidth)}"`
@@ -898,14 +921,69 @@ function renderPolygon(item: JsonRecord, mode: RenderMode): string {
     : `<polyline points="${escapeAttribute(pointString)}" fill="none"${strokeColor && strokeWidth > 0
       ? ` stroke="${escapeAttribute(strokeColor)}" stroke-width="${cssNumber(strokeWidth)}"`
       : ""
-    }${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
+    }${dash ? ` stroke-dasharray="${dash}"` : ""}${markerAttributes}/>`;
   return `<div style="${frameStyleFromBox(box, mode)}${transformStyle(
     item
   )}overflow:visible"><svg width="100%" height="100%" viewBox="0 0 ${cssNumber(
     box.width ?? 1
   )} ${cssNumber(
     box.height ?? 1
-  )}" preserveAspectRatio="none" style="display:block;overflow:visible">${shape}</svg></div>`;
+  )}" preserveAspectRatio="none" style="display:block;overflow:visible">${markerDefs ? `<defs>${markerDefs}</defs>` : ""}${shape}</svg></div>`;
+}
+
+type VectorMarkerStyle =
+  | "arrow"
+  | "stealth"
+  | "triangle"
+  | "circle"
+  | "square"
+  | "diamond";
+
+function vectorMarker(value: string | null): VectorMarkerStyle | null {
+  return value === "arrow" ||
+    value === "stealth" ||
+    value === "triangle" ||
+    value === "circle" ||
+    value === "square" ||
+    value === "diamond"
+    ? value
+    : null;
+}
+
+function vectorMarkerHash(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function vectorMarkerDefinition(
+  id: string,
+  marker: VectorMarkerStyle,
+  color: string,
+  strokeWidth: number,
+) {
+  const size = Math.max(11, Math.min(28, 8 + strokeWidth * 2.5));
+  const escapedColor = escapeAttribute(color);
+  const content =
+    marker === "arrow"
+      ? `<path d="M1 -5 L11 0 L1 5" fill="none" stroke="${escapedColor}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`
+      : marker === "stealth"
+        ? `<path d="M11 0 L1 -5 L4.5 0 L1 5 Z" fill="${escapedColor}" stroke="${escapedColor}" stroke-width="1"/>`
+        : marker === "triangle"
+          ? `<path d="M11 0 L1 -5 L1 5 Z" fill="${escapedColor}" stroke="${escapedColor}" stroke-width="1"/>`
+          : marker === "circle"
+            ? `<circle cx="6" cy="0" r="4" fill="${escapedColor}" stroke="${escapedColor}" stroke-width="1"/>`
+            : marker === "square"
+              ? `<rect x="2" y="-4" width="8" height="8" fill="${escapedColor}" stroke="${escapedColor}" stroke-width="1"/>`
+              : `<path d="M11 0 L6 -5 L1 0 L6 5 Z" fill="${escapedColor}" stroke="${escapedColor}" stroke-width="1"/>`;
+  const refX =
+    marker === "circle" || marker === "square" || marker === "diamond"
+      ? 6
+      : 11;
+  return `<marker id="${id}" viewBox="0 -6 12 12" refX="${refX}" refY="0" markerWidth="${cssNumber(size)}" markerHeight="${cssNumber(size)}" markerUnits="userSpaceOnUse" orient="auto-start-reverse" overflow="visible">${content}</marker>`;
 }
 
 function renderEllipseVector(item: JsonRecord, mode: RenderMode): string {
