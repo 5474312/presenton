@@ -845,7 +845,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           generationMode={isSmartPresentation ? "smart" : "standard"}
         />
         <div className="flex flex-1 min-h-0 gap-3 overflow-hidden xl:gap-5 2xl:gap-6">
-          <div className="sticky top-0 hidden h-full w-[150px] shrink-0 self-start md:block">
+          <div className="sticky top-0 hidden h-full w-[165px] shrink-0 self-start md:block">
             <SidePanel
               selectedSlide={selectedSlide}
               onSlideClick={handleEditorSlideNavigation}
