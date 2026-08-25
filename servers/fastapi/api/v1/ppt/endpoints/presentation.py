@@ -1683,8 +1683,11 @@ async def _stream_smart_presentation(
     sql_session: AsyncSession,
 ) -> StreamingResponse:
     presentation_id = presentation.id
+    requested_slide_count = resolve_smart_slide_count(presentation.n_slides)
 
     async def inner():
+        slide_count = requested_slide_count
+        presentation.n_slides = slide_count
         existing_slides = list(
             await sql_session.scalars(
                 select(SlideModel)
@@ -1693,6 +1696,13 @@ async def _stream_smart_presentation(
             )
         )
         if existing_slides:
+            if presentation.fonts:
+                yield SSEResponse(
+                    event="response",
+                    data=json.dumps(
+                        {"type": "fonts", "fonts": presentation.fonts}
+                    ),
+                ).to_string()
             for slide in existing_slides:
                 yield SSEResponse(
                     event="response",
@@ -1706,17 +1716,31 @@ async def _stream_smart_presentation(
                         }
                     ),
                 ).to_string()
-            response = PresentationWithSlides(
-                **_presentation_response_data(presentation),
-                slides=existing_slides,
-            )
-            yield SSECompleteResponse(
-                key="presentation",
-                value=response.model_dump(mode="json"),
-            ).to_string()
-            return
+            if len(existing_slides) >= slide_count:
+                presentation.title = (
+                    presentation.title
+                    or str(existing_slides[0].content.get("title") or "").strip()
+                    or "Presentation"
+                )
+                sql_session.add(presentation)
+                await sql_session.commit()
+                response = PresentationWithSlides(
+                    **_presentation_response_data(presentation),
+                    slides=existing_slides[:slide_count],
+                )
+                yield SSECompleteResponse(
+                    key="presentation",
+                    value=response.model_dump(mode="json"),
+                ).to_string()
+                return
 
-        yield SSEStatusResponse(status="Preparing Smart presentation").to_string()
+        yield SSEStatusResponse(
+            status=(
+                f"Resuming Smart presentation from slide {len(existing_slides) + 1}"
+                if existing_slides
+                else "Preparing Smart presentation"
+            )
+        ).to_string()
         references = await load_community_references(
             presentation.community_design_ids
         )
@@ -1750,23 +1774,32 @@ async def _stream_smart_presentation(
         if len(source_context) > 90_000:
             source_context = source_context[:90_000]
 
-        slide_count = resolve_smart_slide_count(presentation.n_slides)
-        presentation.n_slides = slide_count
-        presentation.fonts = reference_fonts or {
+        presentation.fonts = presentation.fonts or reference_fonts or {
             "Inter": "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
         }
+        # Release the request session's read transaction before independent
+        # checkpoint sessions begin writing (important for SQLite), while also
+        # persisting the resolved slide count and fonts for reconnects.
+        sql_session.add(presentation)
+        await sql_session.commit()
         yield SSEResponse(
             event="response",
             data=json.dumps({"type": "fonts", "fonts": presentation.fonts}),
         ).to_string()
         yield SSEStatusResponse(
             status=(
-                "Applying community design reference"
-                if references
-                else "Designing the complete presentation"
+                f"Continuing from slide {len(existing_slides) + 1}"
+                if existing_slides
+                else (
+                    "Applying community design reference"
+                    if references
+                    else "Designing the complete presentation"
+                )
             )
         ).to_string()
-        streamed_slides: dict[int, SlideModel] = {}
+        streamed_slides: dict[int, SlideModel] = {
+            slide.index: slide for slide in existing_slides
+        }
         generation_events: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
 
         async def emit_slide(index: int, slide: dict[str, str]) -> None:
@@ -1788,10 +1821,59 @@ async def _stream_smart_presentation(
                 streamed_slide.content = {"title": slide["title"]}
                 streamed_slide.html_content = slide["html"]
                 streamed_slide.speaker_note = ""
+
+            # Checkpoint before emitting. If the model later runs out of tokens
+            # or the SSE client reconnects, generation resumes after this slide
+            # instead of throwing away the accepted prefix.
+            async with async_session_maker() as checkpoint_session:
+                checkpoint = (
+                    await checkpoint_session.scalars(
+                        select(SlideModel).where(
+                            SlideModel.presentation == presentation_id,
+                            SlideModel.index == index,
+                        )
+                    )
+                ).first()
+                if checkpoint is None:
+                    checkpoint = SlideModel(
+                        id=streamed_slide.id,
+                        owner_id=get_current_owner_id(),
+                        presentation=presentation_id,
+                        layout_group="smart-html",
+                        layout="smart-html",
+                        index=index,
+                        content={"title": slide["title"]},
+                        html_content=slide["html"],
+                        speaker_note="",
+                    )
+                else:
+                    streamed_slide.id = checkpoint.id
+                    checkpoint.layout_group = "smart-html"
+                    checkpoint.layout = "smart-html"
+                    checkpoint.content = {"title": slide["title"]}
+                    checkpoint.html_content = slide["html"]
+                    checkpoint.speaker_note = ""
+                checkpoint_session.add(checkpoint)
+                checkpoint_presentation = await checkpoint_session.get(
+                    PresentationModel, presentation_id
+                )
+                if checkpoint_presentation is not None:
+                    checkpoint_presentation.n_slides = slide_count
+                    checkpoint_presentation.fonts = presentation.fonts
+                    checkpoint_session.add(checkpoint_presentation)
+                await checkpoint_session.commit()
             await generation_events.put(("slide", streamed_slide))
 
         async def emit_metrics(metrics: TextGenerationMetrics) -> None:
             await generation_events.put(("metrics", metrics))
+
+        async def emit_retry(next_slide_index: int, _error: str) -> None:
+            await generation_events.put(
+                (
+                    "status",
+                    f"Retrying from slide {next_slide_index + 1} with saved progress",
+                )
+            )
 
         generation_task = asyncio.create_task(
             generate_smart_presentation(
@@ -1806,8 +1888,13 @@ async def _stream_smart_presentation(
                 source_context=source_context,
                 community_design_context=community_context,
                 fonts=presentation.fonts,
+                existing_slides=[
+                    {"html": slide.html_content or ""} for slide in existing_slides
+                ],
+                existing_title=presentation.title,
                 on_slide=emit_slide,
                 on_metrics=emit_metrics,
+                on_retry=emit_retry,
             )
         )
 
@@ -1818,6 +1905,9 @@ async def _stream_smart_presentation(
                         generation_events.get(), timeout=0.1
                     )
                 except asyncio.TimeoutError:
+                    continue
+                if event_type == "status":
+                    yield SSEStatusResponse(status=str(event_value)).to_string()
                     continue
                 if event_type == "metrics":
                     metrics = event_value
@@ -1851,50 +1941,48 @@ async def _stream_smart_presentation(
                 generation_task.cancel()
                 await asyncio.gather(generation_task, return_exceptions=True)
 
-        presentation.title = deck["title"]
-        slides: list[SlideModel] = []
-        for index, slide in enumerate(deck["slides"]):
-            final_slide = streamed_slides.get(index)
-            if final_slide is None:
-                final_slide = SlideModel(
-                    presentation=presentation_id,
-                    layout_group="smart-html",
-                    layout="smart-html",
-                    index=index,
-                    content={"title": slide["title"]},
-                    html_content=slide["html"],
-                    speaker_note="",
-                )
-                yield SSEResponse(
-                    event="response",
-                    data=json.dumps(
-                        {
-                            "type": "slide_html",
-                            "index": index,
-                            "slide_id": str(final_slide.id),
-                            "html": final_slide.html_content,
-                            "slide": final_slide.model_dump(mode="json"),
-                        }
-                    ),
-                ).to_string()
-            else:
-                final_slide.content = {"title": slide["title"]}
-                final_slide.html_content = slide["html"]
-                final_slide.speaker_note = ""
-            slides.append(final_slide)
+        final_title = deck["title"]
+        final_fonts = dict(presentation.fonts or {})
 
-        await sql_session.execute(
-            delete(SlideModel).where(
-                SlideModel.presentation == presentation_id,
-                SlideModel.owner_id == get_current_owner_id(),
+        # Start a fresh transaction so this session sees slides committed by
+        # the checkpoint sessions. Do not delete/reinsert them: the editor may
+        # already have persisted asset or HTML updates while generation ran.
+        await sql_session.rollback()
+        final_presentation = await sql_session.get(PresentationModel, presentation_id)
+        if final_presentation is None:
+            raise HTTPException(status_code=404, detail="Presentation not found")
+        slides = list(
+            await sql_session.scalars(
+                select(SlideModel)
+                .where(SlideModel.presentation == presentation_id)
+                .order_by(SlideModel.index)
             )
         )
-        sql_session.add(presentation)
-        sql_session.add_all(slides)
+        slides_by_index = {slide.index: slide for slide in slides}
+        for index, slide in enumerate(deck["slides"]):
+            if index in slides_by_index:
+                continue
+            recovered_slide = SlideModel(
+                presentation=presentation_id,
+                layout_group="smart-html",
+                layout="smart-html",
+                index=index,
+                content={"title": slide["title"]},
+                html_content=slide["html"],
+                speaker_note="",
+            )
+            sql_session.add(recovered_slide)
+            slides_by_index[index] = recovered_slide
+        slides = [slides_by_index[index] for index in range(slide_count)]
+
+        final_presentation.title = final_title
+        final_presentation.n_slides = slide_count
+        final_presentation.fonts = final_fonts
+        sql_session.add(final_presentation)
         await sql_session.commit()
 
         response = PresentationWithSlides(
-            **_presentation_response_data(presentation),
+            **_presentation_response_data(final_presentation),
             slides=slides,
         )
         yield SSECompleteResponse(
@@ -1905,12 +1993,36 @@ async def _stream_smart_presentation(
     async def rollback_stream_session():
         await sql_session.rollback()
 
+    async def smart_error_metadata(exc: Exception) -> dict[str, object]:
+        async with async_session_maker() as progress_session:
+            completed_slides = len(
+                list(
+                    await progress_session.scalars(
+                        select(SlideModel).where(
+                            SlideModel.presentation == presentation_id
+                        )
+                    )
+                )
+            )
+        status_code = exc.status_code if isinstance(exc, HTTPException) else 500
+        return {
+            "source": "generation",
+            "status_code": status_code,
+            "error_type": exc.__class__.__name__,
+            "retryable": (
+                status_code in {408, 429} or status_code >= 500
+            ),
+            "completed_slides": completed_slides,
+            "total_slides": requested_slide_count,
+        }
+
     return StreamingResponse(
         safe_sse_stream(
             inner(),
             logger=logger,
             error_detail="Failed to generate the Smart presentation. Please try again.",
             on_error=rollback_stream_session,
+            error_metadata=smart_error_metadata,
         ),
         media_type="text/event-stream",
     )
