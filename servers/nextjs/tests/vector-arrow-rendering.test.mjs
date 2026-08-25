@@ -84,8 +84,28 @@ test("creates line arrows as one two-point editable vector", () => {
   assert.equal(arrow.type, "vector");
   assert.equal(arrow.closed, false);
   assert.equal(arrow.points.length, 2);
+  assert.equal(arrow.points[1].x - arrow.points[0].x, 300);
   assert.equal(arrow.end_marker, "arrow");
   assert.equal(arrow.fill, undefined);
+});
+
+test("offers arrowhead styles instead of redundant direction presets", () => {
+  const lineGroup = insertElements.ELEMENT_INSERT_GROUPS.find(
+    (group) => group.label === "Lines & Arrows",
+  );
+  const ids = lineGroup.items.map((item) => item.id);
+
+  assert.deepEqual(ids, [
+    "vector-line",
+    "vector-line-arrow",
+    "vector-line-arrow-both",
+    "vector-line-stealth",
+    "vector-line-filled",
+    "vector-line-filled-both",
+    "vector-line-circle-arrow",
+    "vector-line-square-arrow",
+    "vector-line-diamond-arrow",
+  ]);
 });
 
 test("renders editable vector line arrowheads as SVG endpoint markers", () => {
