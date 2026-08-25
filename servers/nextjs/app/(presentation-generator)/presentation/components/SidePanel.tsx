@@ -237,7 +237,7 @@ const SidePanel = ({
 
   return (
     <aside
-      className="relative h-full w-[150px] bg-white px-4 py-5"
+      className="relative h-full w-[165px] bg-white px-4 py-5"
       aria-label="Presentation slides"
     >
       <div

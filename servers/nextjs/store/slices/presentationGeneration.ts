@@ -1,5 +1,6 @@
 import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import { Slide } from "@/app/(presentation-generator)/types/slide";
+import type { TemplateTheme } from "@/lib/template-theme";
 import {
   limitOutlines,
   MAX_NUMBER_OF_SLIDES,
@@ -14,7 +15,9 @@ export interface PresentationData {
   n_slides: number;
   title: string;
   slides: any;
-  theme: Theme | null;
+  theme: Theme | TemplateTheme | null;
+  template_id?: string | null;
+  design_v2_id?: string | null;
   version?: string;
   generation_mode?: "standard" | "smart";
   type?: "standard" | "smart";

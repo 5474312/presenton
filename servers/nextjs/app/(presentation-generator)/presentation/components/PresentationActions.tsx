@@ -94,6 +94,14 @@ import Chat from "./Chat";
 import TemplateService from "../../services/api/template";
 import { TemplateV2HtmlSlidePreview } from "../../components/TemplateV2HtmlSlidePreview";
 import { isTemplateFreePresentation } from "../../_shared/blank-slide";
+import {
+  resolvePresentationTheme,
+  type TemplateTheme,
+} from "@/lib/template-theme";
+import {
+  InsertPalettePreview,
+  type InsertPalettePreviewKind,
+} from "./InsertPalettePreview";
 
 type PresentationActionsProps = React.ComponentProps<typeof Chat> & {
   editingDisabled?: boolean;
@@ -107,6 +115,7 @@ type ActionId =
   | "blocks"
   | "texts"
   | "charts"
+  | "infographics"
   | "tables"
   | "images"
   | "elements";
@@ -204,6 +213,7 @@ function presentationActionsUiReducer(
 const insertActions: ActionItem[] = [
   { id: "texts", label: "Texts", icon: Type },
   { id: "charts", label: "Charts", icon: BarChart3 },
+  { id: "infographics", label: "Infographics", icon: Shapes },
   { id: "tables", label: "Tables", icon: Rows3 },
   { id: "images", label: "Images", icon: Image },
   { id: "elements", label: "Elements", icon: Shapes },
@@ -214,6 +224,7 @@ const actionIconSrc: Record<ActionId, string> = {
   blocks: "/figma/presentation-actions/blocks.svg",
   texts: "/figma/presentation-actions/texts.svg",
   charts: "/figma/presentation-actions/charts.svg",
+  infographics: "/figma/presentation-actions/infographics.svg",
   tables: "/figma/presentation-actions/tables.svg",
   images: "/figma/presentation-actions/images.svg",
   elements: "/figma/presentation-actions/elements.svg",
@@ -255,6 +266,30 @@ export const chartTypeItems = [
 export const infographicItems = [
   { id: "progress_bar", label: "Progress Bar", icon: ChartNoAxesGantt },
   { id: "gauge", label: "Gauge Chart", icon: Gauge },
+  { id: "gantt", label: "Gantt Chart", icon: ChartNoAxesGantt },
+  { id: "timeline", label: "Timeline", icon: ArrowRight },
+  { id: "roadmap", label: "Roadmap", icon: Move },
+  { id: "milestone_timeline", label: "Milestones", icon: Flag },
+  { id: "staircase", label: "Staircase", icon: Rows3 },
+  { id: "supply_chain", label: "Supply Chain", icon: Move },
+  { id: "stair_step_blocks", label: "Step Blocks", icon: Rows3 },
+  { id: "maturity_model", label: "Maturity Model", icon: Rows3 },
+  { id: "pillar_framework", label: "Pillar Framework", icon: Columns2 },
+  { id: "transformation_hub", label: "Transformation Hub", icon: Shapes },
+  { id: "diagonal_circles", label: "Diagonal Circles", icon: Circle },
+  { id: "risk_matrix", label: "Risk Matrix", icon: Grid3X3 },
+  { id: "chevron_process", label: "Chevron Process", icon: ChevronsRight },
+  { id: "radial_cycle", label: "Radial Cycle", icon: Circle },
+  { id: "conversion_funnel", label: "Conversion Funnel", icon: AreaChart },
+  { id: "pyramid", label: "Pyramid", icon: Triangle },
+  { id: "segmented_wheel", label: "Segmented Wheel", icon: Circle },
+  { id: "customer_journey", label: "Customer Journey", icon: Move },
+  { id: "before_after", label: "Before & After", icon: Columns2 },
+  { id: "impact_effort_matrix", label: "Impact / Effort", icon: Grid3X3 },
+  { id: "comparison_matrix", label: "Comparison Matrix", icon: Table2 },
+  { id: "org_chart", label: "Organization Chart", icon: Rows3 },
+  { id: "decision_tree", label: "Decision Tree", icon: Shapes },
+  { id: "mind_map", label: "Mind Map", icon: Shapes },
 ] satisfies PaletteItem[];
 
 export const tableTypeItems = [
@@ -380,32 +415,34 @@ const SectionLabel = ({ children }: { children: React.ReactNode }) => (
 
 const PaletteCard = ({
   disabled = false,
-  label,
-  icon: Icon,
+  item,
   onClick,
+  previewKind,
+  theme,
 }: {
   disabled?: boolean;
-  label: string;
-  icon: ActionItem["icon"];
+  item: PaletteItem;
   onClick?: () => void;
+  previewKind: InsertPalettePreviewKind;
+  theme: TemplateTheme;
 }) => (
   <button
     type="button"
     disabled={disabled}
     onClick={onClick}
     className={cn(
-      "flex h-[clamp(50px,4vw,58px)] min-w-0 flex-col items-center justify-center gap-[clamp(6px,0.6vw,8px)] rounded-[8px] border border-[#EDEEF0] bg-white px-[clamp(6px,0.6vw,8px)] text-center transition-colors hover:border-[#DCD8EA] hover:bg-[#FBFAFF]",
-      disabled && "cursor-not-allowed opacity-50 hover:border-[#EDEEF0] hover:bg-white",
+      "group min-w-0 overflow-hidden rounded-[10px] border border-[#EDEEF0] bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[#B9A8FA] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8]/40",
+      disabled &&
+        "cursor-not-allowed opacity-50 hover:translate-y-0 hover:border-[#EDEEF0] hover:shadow-sm",
     )}
-    title={label}
+    aria-label={`Add ${item.label}`}
+    title={item.label}
   >
-    <Icon
-      className="h-[clamp(12px,0.9vw,14px)] w-[clamp(12px,0.9vw,14px)] shrink-0 text-[#1F2937]"
-      strokeWidth={1.8}
-      aria-hidden
-    />
-    <span className="w-full break-words text-[clamp(10px,0.72vw,11px)] font-normal leading-[clamp(12px,0.9vw,14px)] text-[#171725]">
-      {label}
+    <div className="aspect-video w-full overflow-hidden bg-white">
+      <InsertPalettePreview itemId={item.id} kind={previewKind} theme={theme} />
+    </div>
+    <span className="block truncate border-t border-[#F0F1F3] px-2.5 py-2 text-[11px] font-medium leading-4 text-[#344054]">
+      {item.label}
     </span>
   </button>
 );
@@ -414,19 +451,24 @@ const PaletteGrid = ({
   disabled = false,
   items,
   onSelect,
+  previewKind,
+  theme,
 }: {
   disabled?: boolean;
   items: PaletteItem[];
   onSelect?: (item: PaletteItem) => void;
+  previewKind: InsertPalettePreviewKind;
+  theme: TemplateTheme;
 }) => (
-  <div className="grid grid-cols-3  gap-[clamp(6px,0.65vw,8px)]">
+  <div className="grid grid-cols-2 gap-[clamp(8px,0.8vw,10px)]">
     {items.map((item) => (
       <PaletteCard
-        key={item.label}
-        label={item.label}
-        icon={item.icon}
+        key={item.id ?? item.label}
+        item={item}
         disabled={disabled}
         onClick={onSelect && !disabled ? () => onSelect(item) : undefined}
+        previewKind={previewKind}
+        theme={theme}
       />
     ))}
   </div>
@@ -437,6 +479,8 @@ export const InsertPanel = ({
   title,
   groups,
   onItemSelect,
+  previewKind,
+  theme,
 }: {
   disabled?: boolean;
   title: string;
@@ -445,6 +489,8 @@ export const InsertPanel = ({
     items: PaletteItem[];
   }>;
   onItemSelect?: (item: PaletteItem) => void;
+  previewKind: InsertPalettePreviewKind;
+  theme: TemplateTheme;
 }) => (
   <div className="h-full overflow-y-auto px-[clamp(14px,1.4vw,20px)] pb-[clamp(24px,2.2vw,32px)] pt-[clamp(24px,2.2vw,32px)] hide-scrollbar">
     <h3 className="mb-[clamp(24px,2.2vw,32px)] text-[clamp(13px,0.95vw,15px)] font-semibold leading-5 text-[#101323]">
@@ -458,6 +504,8 @@ export const InsertPanel = ({
             disabled={disabled}
             items={group.items}
             onSelect={onItemSelect}
+            previewKind={previewKind}
+            theme={theme}
           />
         </section>
       ))}
@@ -1228,12 +1276,14 @@ function ActionsPanel({
   editingDisabled = false,
   onBlockSelect,
   onChartItemSelect,
+  onInfographicItemSelect,
   onElementItemSelect,
   onImageItemSelect,
   onTableItemSelect,
   onTextItemSelect,
   presentationData,
   presentationId,
+  templateTheme,
 }: {
   activeAction: ActionId;
   aiOnly?: boolean;
@@ -1248,12 +1298,14 @@ function ActionsPanel({
   editingDisabled?: boolean;
   onBlockSelect: (block: TemplateBlock) => void;
   onChartItemSelect: (item: PaletteItem) => void;
+  onInfographicItemSelect: (item: PaletteItem) => void;
   onElementItemSelect: (item: PaletteItem) => void;
   onImageItemSelect: (item: PaletteItem) => void;
   onTableItemSelect: (item: PaletteItem) => void;
   onTextItemSelect: (item: PaletteItem) => void;
   presentationData?: unknown;
   presentationId: string;
+  templateTheme: TemplateTheme;
 }) {
   return (
     <div className="min-w-0 flex-1 bg-white">
@@ -1279,17 +1331,28 @@ function ActionsPanel({
           title="Texts"
           groups={[{ label: "Add", items: textItems }]}
           onItemSelect={onTextItemSelect}
+          previewKind="text"
+          theme={templateTheme}
         />
       )}
       {!aiOnly && activeAction === "charts" && (
         <InsertPanel
           disabled={editingDisabled}
           title="Charts"
-          groups={[
-            { label: "Chart Type", items: chartTypeItems },
-            { label: "Infographics", items: infographicItems },
-          ]}
+          groups={[{ label: "Chart Type", items: chartTypeItems }]}
           onItemSelect={onChartItemSelect}
+          previewKind="chart"
+          theme={templateTheme}
+        />
+      )}
+      {!aiOnly && activeAction === "infographics" && (
+        <InsertPanel
+          disabled={editingDisabled}
+          title="Infographics"
+          groups={[{ label: "Choose a layout", items: infographicItems }]}
+          onItemSelect={onInfographicItemSelect}
+          previewKind="infographic"
+          theme={templateTheme}
         />
       )}
       {!aiOnly && activeAction === "tables" && (
@@ -1298,6 +1361,8 @@ function ActionsPanel({
           title="Tables"
           groups={[{ label: "Table Type", items: tableTypeItems }]}
           onItemSelect={onTableItemSelect}
+          previewKind="table"
+          theme={templateTheme}
         />
       )}
       {!aiOnly && activeAction === "images" && (
@@ -1306,6 +1371,8 @@ function ActionsPanel({
           title="Images"
           groups={[{ label: "Add", items: imageItems }]}
           onItemSelect={onImageItemSelect}
+          previewKind="image"
+          theme={templateTheme}
         />
       )}
       {!aiOnly && activeAction === "elements" && (
@@ -1314,6 +1381,8 @@ function ActionsPanel({
           title="Elements"
           groups={elementItemGroups}
           onItemSelect={onElementItemSelect}
+          previewKind="element"
+          theme={templateTheme}
         />
       )}
     </div>
@@ -1352,6 +1421,10 @@ const PresentationActions = (props: PresentationActionsProps) => {
   } = props;
   const aiOnly = props.presentationType === "smart";
   const blocksUnavailable = isTemplateFreePresentation(presentationData);
+  const templateTheme = useMemo(
+    () => resolvePresentationTheme(presentationData),
+    [presentationData],
+  );
   const [{ activeAction }, dispatchUiState] = useReducer(
     presentationActionsUiReducer,
     initialPresentationActionsUiState,
@@ -1475,7 +1548,12 @@ const PresentationActions = (props: PresentationActionsProps) => {
   };
 
   const handleTextItemSelect = (item: PaletteItem) => {
-    if (insertEditorElements(createTextInsertElements(item.id), item.label)) {
+    if (
+      insertEditorElements(
+        createTextInsertElements(item.id, templateTheme),
+        item.label,
+      )
+    ) {
       trackEvent(MixpanelEvent.Editor_Insert_Palette_Item_Selected, {
         presentation_id: props.presentationId,
         category: "texts",
@@ -1487,21 +1565,23 @@ const PresentationActions = (props: PresentationActionsProps) => {
   };
 
   const handleChartItemSelect = (item: PaletteItem) => {
-    const chartElements = createChartInsertElements(item.id);
-    if (chartElements.length > 0) {
-      if (insertEditorElements(chartElements, item.label)) {
-        trackEvent(MixpanelEvent.Editor_Insert_Palette_Item_Selected, {
-          presentation_id: props.presentationId,
-          category: "charts",
-          item_id: item.id,
-          item_label: item.label,
-          slide_index: props.currentSlide,
-        });
-      }
-      return;
+    const chartElements = createChartInsertElements(item.id, templateTheme);
+    if (insertEditorElements(chartElements, item.label)) {
+      trackEvent(MixpanelEvent.Editor_Insert_Palette_Item_Selected, {
+        presentation_id: props.presentationId,
+        category: "charts",
+        item_id: item.id,
+        item_label: item.label,
+        slide_index: props.currentSlide,
+      });
     }
+  };
 
-    const infographicElements = createInfographicInsertElements(item.id);
+  const handleInfographicItemSelect = (item: PaletteItem) => {
+    const infographicElements = createInfographicInsertElements(
+      item.id,
+      templateTheme,
+    );
     if (insertEditorElements(infographicElements, item.label)) {
       trackEvent(MixpanelEvent.Editor_Insert_Palette_Item_Selected, {
         presentation_id: props.presentationId,
@@ -1514,7 +1594,12 @@ const PresentationActions = (props: PresentationActionsProps) => {
   };
 
   const handleTableItemSelect = (item: PaletteItem) => {
-    if (insertEditorElements(createTableInsertElements(item.id), item.label)) {
+    if (
+      insertEditorElements(
+        createTableInsertElements(item.id, templateTheme),
+        item.label,
+      )
+    ) {
       trackEvent(MixpanelEvent.Editor_Insert_Palette_Item_Selected, {
         presentation_id: props.presentationId,
         category: "tables",
@@ -1526,7 +1611,12 @@ const PresentationActions = (props: PresentationActionsProps) => {
   };
 
   const handleImageItemSelect = (item: PaletteItem) => {
-    if (insertEditorContent(createImageInsertContent(item.id), item.label)) {
+    if (
+      insertEditorContent(
+        createImageInsertContent(item.id, templateTheme),
+        item.label,
+      )
+    ) {
       trackEvent(MixpanelEvent.Editor_Insert_Palette_Item_Selected, {
         presentation_id: props.presentationId,
         category: "images",
@@ -1538,7 +1628,12 @@ const PresentationActions = (props: PresentationActionsProps) => {
   };
 
   const handleElementItemSelect = (item: PaletteItem) => {
-    if (insertEditorElements(createElementInsertElements(item.id), item.label)) {
+    if (
+      insertEditorElements(
+        createElementInsertElements(item.id, templateTheme),
+        item.label,
+      )
+    ) {
       trackEvent(MixpanelEvent.Editor_Insert_Palette_Item_Selected, {
         presentation_id: props.presentationId,
         category: "elements",
@@ -1640,12 +1735,14 @@ const PresentationActions = (props: PresentationActionsProps) => {
           editingDisabled={editingDisabled}
           onBlockSelect={handleBlockSelect}
           onChartItemSelect={handleChartItemSelect}
+          onInfographicItemSelect={handleInfographicItemSelect}
           onElementItemSelect={handleElementItemSelect}
           onImageItemSelect={handleImageItemSelect}
           onTableItemSelect={handleTableItemSelect}
           onTextItemSelect={handleTextItemSelect}
           presentationData={presentationData}
           presentationId={props.presentationId}
+          templateTheme={templateTheme}
         />
       ) : null}
       <ActionsSidebar
