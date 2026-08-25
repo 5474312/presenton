@@ -1741,15 +1741,9 @@ export const ELEMENT_INSERT_GROUPS = [
     items: [
       { id: "vector-line", label: "Line" },
       { id: "vector-line-arrow", label: "Arrow" },
-      { id: "vector-line-arrow-left", label: "Arrow Left" },
-      { id: "vector-line-arrow-up", label: "Arrow Up" },
-      { id: "vector-line-arrow-down", label: "Arrow Down" },
       { id: "vector-line-arrow-both", label: "Double Arrow" },
       { id: "vector-line-stealth", label: "Stealth Arrow" },
-      { id: "vector-arrowhead-filled-right", label: "Filled Arrow" },
-      { id: "vector-arrowhead-filled-left", label: "Filled Left" },
-      { id: "vector-arrowhead-filled-up", label: "Filled Up" },
-      { id: "vector-arrowhead-filled-down", label: "Filled Down" },
+      { id: "vector-line-filled", label: "Filled Arrow" },
       { id: "vector-line-filled-both", label: "Filled Double" },
       { id: "vector-line-circle-arrow", label: "Circle + Arrow" },
       { id: "vector-line-square-arrow", label: "Square + Arrow" },
@@ -2304,10 +2298,7 @@ function createDefaultElementInsertElements(kind?: string): SlideElement[] {
     case "vector-line":
       return [
         makeVector({
-          points: [
-            { x: 134, y: 218 },
-            { x: 569, y: 219 },
-          ],
+          points: horizontalLineVectorPoints(),
           closed: false,
           fill: null,
           stroke: DEFAULT_VECTOR_LINE_STROKE,
@@ -2317,36 +2308,6 @@ function createDefaultElementInsertElements(kind?: string): SlideElement[] {
       return [
         makeVector({
           points: horizontalLineVectorPoints(),
-          closed: false,
-          fill: null,
-          stroke: DEFAULT_VECTOR_LINE_STROKE,
-          endMarker: "arrow",
-        }),
-      ];
-    case "vector-line-arrow-left":
-      return [
-        makeVector({
-          points: horizontalLineVectorPoints(),
-          closed: false,
-          fill: null,
-          stroke: DEFAULT_VECTOR_LINE_STROKE,
-          startMarker: "arrow",
-        }),
-      ];
-    case "vector-line-arrow-up":
-      return [
-        makeVector({
-          points: verticalLineVectorPoints(true),
-          closed: false,
-          fill: null,
-          stroke: DEFAULT_VECTOR_LINE_STROKE,
-          endMarker: "arrow",
-        }),
-      ];
-    case "vector-line-arrow-down":
-      return [
-        makeVector({
-          points: verticalLineVectorPoints(false),
           closed: false,
           fill: null,
           stroke: DEFAULT_VECTOR_LINE_STROKE,
@@ -2374,40 +2335,10 @@ function createDefaultElementInsertElements(kind?: string): SlideElement[] {
           endMarker: "stealth",
         }),
       ];
-    case "vector-arrowhead-filled-right":
+    case "vector-line-filled":
       return [
         makeVector({
           points: horizontalLineVectorPoints(),
-          closed: false,
-          fill: null,
-          stroke: DEFAULT_VECTOR_LINE_STROKE,
-          endMarker: "triangle",
-        }),
-      ];
-    case "vector-arrowhead-filled-left":
-      return [
-        makeVector({
-          points: horizontalLineVectorPoints(),
-          closed: false,
-          fill: null,
-          stroke: DEFAULT_VECTOR_LINE_STROKE,
-          startMarker: "triangle",
-        }),
-      ];
-    case "vector-arrowhead-filled-up":
-      return [
-        makeVector({
-          points: verticalLineVectorPoints(true),
-          closed: false,
-          fill: null,
-          stroke: DEFAULT_VECTOR_LINE_STROKE,
-          endMarker: "triangle",
-        }),
-      ];
-    case "vector-arrowhead-filled-down":
-      return [
-        makeVector({
-          points: verticalLineVectorPoints(false),
           closed: false,
           fill: null,
           stroke: DEFAULT_VECTOR_LINE_STROKE,
@@ -2494,21 +2425,9 @@ function rightArrowVectorPoints() {
 
 function horizontalLineVectorPoints() {
   return [
-    { x: 134, y: 248 },
-    { x: 574, y: 248 },
+    { x: 204, y: 248 },
+    { x: 504, y: 248 },
   ];
-}
-
-function verticalLineVectorPoints(up: boolean) {
-  return up
-    ? [
-        { x: 354, y: 378 },
-        { x: 354, y: 118 },
-      ]
-    : [
-        { x: 354, y: 118 },
-        { x: 354, y: 378 },
-      ];
 }
 
 function mirrorVectorPoints(
