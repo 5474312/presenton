@@ -953,6 +953,94 @@ def test_localize_preview_asset_urls_leaves_external_urls(monkeypatch):
     assert calls == []
 
 
+def test_localize_preview_asset_urls_resolves_converter_relative_assets(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path))
+    monkeypatch.setenv("DISABLE_AUTH", "true")
+    artifact_dir = tmp_path / "pptx-to-html" / "session"
+    image_path = artifact_dir / "images" / "asset.png"
+    svg_with_png_extension_path = artifact_dir / "images" / "icon.png"
+    font_path = artifact_dir / "fonts" / "deck.woff2"
+    image_path.parent.mkdir(parents=True)
+    font_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"png")
+    svg_with_png_extension_path.write_bytes(b'<svg xmlns="http://www.w3.org/2000/svg"/>')
+    font_path.write_bytes(b"font")
+
+    html = (
+        '<img src="images/asset.png">'
+        '<img src="images/icon.png">'
+        "<style>@font-face { src: url('fonts/deck.woff2'); }</style>"
+    )
+
+    localized = fonts_and_slides_preview._localize_preview_asset_urls(
+        html,
+        relative_asset_root=str(artifact_dir),
+    )
+
+    assert 'src="data:image/png;base64,cG5n"' in localized
+    assert 'src="data:image/svg+xml;base64,' in localized
+    assert "url('data:font/woff2;base64,Zm9udA==')" in localized
+
+
+def test_localize_preview_asset_urls_rejects_relative_path_traversal(tmp_path):
+    artifact_dir = tmp_path / "pptx-to-html" / "session"
+    artifact_dir.mkdir(parents=True)
+    outside_path = tmp_path / "secret.png"
+    outside_path.write_bytes(b"secret")
+    html = '<img src="../../secret.png">'
+
+    localized = fonts_and_slides_preview._localize_preview_asset_urls(
+        html,
+        relative_asset_root=str(artifact_dir),
+    )
+
+    assert localized == html
+
+
+def test_prepare_svg_images_for_pptx_to_html_promotes_svg_relationship(tmp_path):
+    source_path = tmp_path / "source.pptx"
+    slide_xml = b"""<?xml version="1.0" encoding="UTF-8"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+       xmlns:asvg="http://schemas.microsoft.com/office/drawing/2016/SVG/main"
+       xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <p:cSld><p:spTree><p:pic><p:blipFill><a:blip>
+    <a:extLst><a:ext><asvg:svgBlip r:embed="rId7" /></a:ext></a:extLst>
+  </a:blip></p:blipFill></p:pic></p:spTree></p:cSld>
+</p:sld>"""
+    with zipfile.ZipFile(source_path, "w") as archive:
+        archive.writestr("ppt/slides/slide1.xml", slide_xml)
+        archive.writestr("ppt/media/icon.svg", b"<svg></svg>")
+
+    preview_path, should_remove = (
+        fonts_and_slides_preview._prepare_svg_images_for_pptx_to_html(
+            str(source_path)
+        )
+    )
+
+    try:
+        assert should_remove is True
+        assert preview_path != str(source_path)
+        with zipfile.ZipFile(preview_path, "r") as archive:
+            rewritten_slide = ET.fromstring(
+                archive.read("ppt/slides/slide1.xml")
+            )
+            blip = next(
+                rewritten_slide.iter(
+                    "{http://schemas.openxmlformats.org/drawingml/2006/main}blip"
+                )
+            )
+            assert blip.get(
+                "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
+            ) == "rId7"
+            assert archive.read("ppt/media/icon.svg") == b"<svg></svg>"
+    finally:
+        os.unlink(preview_path)
+
+
 @pytest.mark.anyio
 async def test_create_slide_previews_from_html_uses_converter_dimensions_and_fonts(
     monkeypatch,
@@ -1022,6 +1110,8 @@ async def test_create_slide_previews_from_html_uses_converter_dimensions_and_fon
     assert "cdn.jsdelivr.net/npm/chart.js" not in html
     assert ".deck-font { color: black; }" in html
     assert 'font-family: "Khand Bold";' in html
+    assert "data:font/ttf;base64,Zm9udA==" in html
+    assert font_path.resolve().as_uri() not in html
     assert "fonts.googleapis.com/css2?family=Montserrat" in html
 
 

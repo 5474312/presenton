@@ -154,11 +154,15 @@ INVALID_PPTX_UPLOAD_ERROR = (
     "The uploaded PowerPoint file is corrupted or unsupported."
 )
 PPT_NS = {
+    "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+    "asvg": "http://schemas.microsoft.com/office/drawing/2016/SVG/main",
     "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
     "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
 }
 REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 
+ET.register_namespace("a", PPT_NS["a"])
+ET.register_namespace("asvg", PPT_NS["asvg"])
 ET.register_namespace("p", PPT_NS["p"])
 ET.register_namespace("r", PPT_NS["r"])
 
@@ -241,7 +245,11 @@ def _font_face_css_for_local_fonts(font_paths: List[str]) -> str:
     return "\n".join(rules)
 
 
-def _preview_asset_url_to_data_uri(url: str) -> str:
+def _preview_asset_url_to_data_uri(
+    url: str,
+    relative_asset_root: Optional[str] = None,
+    trusted_local_files: Optional[Set[str]] = None,
+) -> str:
     if not url:
         return url
 
@@ -256,10 +264,33 @@ def _preview_asset_url_to_data_uri(url: str) -> str:
     elif url.startswith(("/app_data/", "/static/")):
         candidate = url
         fallback_url = absolute_fastapi_asset_url(candidate)
+    elif (
+        not parsed.scheme
+        and relative_asset_root
+        and parsed.path
+        and not url.startswith(("/", "//"))
+    ):
+        asset_root = os.path.realpath(relative_asset_root)
+        candidate = os.path.realpath(
+            os.path.join(asset_root, urllib.parse.unquote(parsed.path))
+        )
+        try:
+            if os.path.commonpath([candidate, asset_root]) != asset_root:
+                return url
+        except ValueError:
+            return url
     else:
         return url
 
-    resolved = resolve_app_path_to_filesystem(candidate)
+    resolved = None
+    if trusted_local_files and os.path.isabs(candidate):
+        trusted_candidate = os.path.realpath(candidate)
+        if trusted_candidate in trusted_local_files and os.path.isfile(
+            trusted_candidate
+        ):
+            resolved = trusted_candidate
+    if not resolved:
+        resolved = resolve_app_path_to_filesystem(candidate)
     if not resolved:
         return fallback_url
 
@@ -268,22 +299,46 @@ def _preview_asset_url_to_data_uri(url: str) -> str:
     except OSError:
         return fallback_url
 
-    mime_type = mimetypes.guess_type(resolved)[0] or "application/octet-stream"
+    leading_data = data.lstrip()[:512].lower()
+    if leading_data.startswith(b"<svg") or (
+        leading_data.startswith(b"<?xml") and b"<svg" in leading_data
+    ):
+        mime_type = "image/svg+xml"
+    else:
+        mime_type = mimetypes.guess_type(resolved)[0] or "application/octet-stream"
     encoded = base64.b64encode(data).decode("ascii")
     return f"data:{mime_type};base64,{encoded}"
 
 
-def _localize_preview_asset_urls(html: str) -> str:
+def _localize_preview_asset_urls(
+    html: str,
+    relative_asset_root: Optional[str] = None,
+    trusted_local_files: Optional[Set[str]] = None,
+) -> str:
     def replace_attr(match: re.Match[str]) -> str:
+        localized_url = _preview_asset_url_to_data_uri(
+            match.group("url"),
+            relative_asset_root,
+            trusted_local_files,
+        )
         return (
             f"{match.group('prefix')}"
-            f"{_preview_asset_url_to_data_uri(match.group('url'))}"
+            f"{localized_url}"
             f"{match.group('suffix')}"
         )
 
     def replace_css_url(match: re.Match[str]) -> str:
         quote = match.group("quote") or ""
-        return f"url({quote}{_preview_asset_url_to_data_uri(match.group('url'))}{quote})"
+        localized_url = _preview_asset_url_to_data_uri(
+            match.group("url"),
+            relative_asset_root,
+            trusted_local_files,
+        )
+        return (
+            f"url({quote}"
+            f"{localized_url}"
+            f"{quote})"
+        )
 
     html = re.sub(
         r"(?P<prefix>\b(?:src|href|xlink:href)=['\"])(?P<url>[^'\"]+)(?P<suffix>['\"])",
@@ -694,9 +749,21 @@ async def render_pptx_slides_to_images(
         )
         logger.info("Prepared custom font CSS for HTML preview rendering")
 
-    pptx_document = await EXPORT_TASK_SERVICE.convert_pptx_to_html(
-        modified_pptx_path, get_fonts=True
-    )
+    if os.path.isfile(modified_pptx_path):
+        preview_pptx_path, remove_preview_pptx = await asyncio.to_thread(
+            _prepare_svg_images_for_pptx_to_html,
+            modified_pptx_path,
+        )
+    else:
+        preview_pptx_path, remove_preview_pptx = modified_pptx_path, False
+    try:
+        pptx_document = await EXPORT_TASK_SERVICE.convert_pptx_to_html(
+            preview_pptx_path, get_fonts=True
+        )
+    finally:
+        if remove_preview_pptx:
+            with contextlib.suppress(OSError):
+                os.unlink(preview_pptx_path)
     if not pptx_document.slides:
         raise HTTPException(status_code=500, detail="PPTX-to-HTML returned no slides")
 
@@ -715,6 +782,24 @@ async def render_pptx_slides_to_images(
     )
 
     localized_slide_htmls = []
+    asset_directories = [
+        directory
+        for directory in (
+            getattr(pptx_document, "images_dir", None),
+            getattr(pptx_document, "fonts_dir", None),
+        )
+        if isinstance(directory, str) and os.path.isabs(directory)
+    ]
+    relative_asset_root = (
+        os.path.commonpath([os.path.dirname(path) for path in asset_directories])
+        if asset_directories
+        else None
+    )
+    trusted_local_font_files = {
+        os.path.realpath(path)
+        for path in font_paths_for_install
+        if os.path.isfile(path)
+    }
     font_css = "\n".join(
         css
         for css in (
@@ -724,7 +809,11 @@ async def render_pptx_slides_to_images(
         )
         if css
     )
-    localized_font_css = _localize_preview_asset_urls(font_css)
+    localized_font_css = _localize_preview_asset_urls(
+        font_css,
+        relative_asset_root=relative_asset_root,
+        trusted_local_files=trusted_local_font_files,
+    )
     localized_font_css = "\n".join(
         css
         for css in (
@@ -735,7 +824,11 @@ async def render_pptx_slides_to_images(
     )
     explicit_font_links = _font_stylesheet_links_for_urls(font_stylesheet_urls or [])
     for slide_html in slide_htmls:
-        localized_slide_html = _localize_preview_asset_urls(slide_html)
+        localized_slide_html = _localize_preview_asset_urls(
+            slide_html,
+            relative_asset_root=relative_asset_root,
+            trusted_local_files=trusted_local_font_files,
+        )
         inferred_font_links = _font_stylesheet_links_for_slide_html(
             localized_slide_html, localized_font_css
         )
@@ -997,6 +1090,69 @@ def _validate_pptx_package(pptx_path: str) -> None:
         or not has_slide
     ):
         raise HTTPException(status_code=400, detail=INVALID_PPTX_UPLOAD_ERROR)
+
+
+def _prepare_svg_images_for_pptx_to_html(pptx_path: str) -> Tuple[str, bool]:
+    """Give SVG-only pictures a primary relationship for the HTML converter."""
+    xml_replacements: Dict[str, bytes] = {}
+    relationship_embed = f"{{{PPT_NS['r']}}}embed"
+    blip_tag = f"{{{PPT_NS['a']}}}blip"
+    svg_blip_tag = f"{{{PPT_NS['asvg']}}}svgBlip"
+
+    with zipfile.ZipFile(pptx_path, "r") as archive:
+        for member in archive.infolist():
+            if not (
+                member.filename.startswith("ppt/")
+                and member.filename.endswith(".xml")
+            ):
+                continue
+            slide_xml = ET.fromstring(archive.read(member.filename))
+            changed = False
+            for blip in slide_xml.iter(blip_tag):
+                if blip.get(relationship_embed):
+                    continue
+                svg_blip = next(blip.iter(svg_blip_tag), None)
+                svg_relationship = (
+                    svg_blip.get(relationship_embed)
+                    if svg_blip is not None
+                    else None
+                )
+                if not svg_relationship:
+                    continue
+                blip.set(relationship_embed, svg_relationship)
+                changed = True
+            if changed:
+                xml_replacements[member.filename] = ET.tostring(
+                    slide_xml,
+                    encoding="utf-8",
+                    xml_declaration=True,
+                )
+
+        if not xml_replacements:
+            return pptx_path, False
+
+        file_descriptor, preview_pptx_path = tempfile.mkstemp(
+            prefix="pptx-html-svg-",
+            suffix=".pptx",
+            dir=os.path.dirname(os.path.abspath(pptx_path)),
+        )
+        os.close(file_descriptor)
+        try:
+            with zipfile.ZipFile(preview_pptx_path, "w") as output_archive:
+                for member in archive.infolist():
+                    output_archive.writestr(
+                        member,
+                        xml_replacements.get(
+                            member.filename,
+                            archive.read(member.filename),
+                        ),
+                    )
+        except Exception:
+            with contextlib.suppress(OSError):
+                os.unlink(preview_pptx_path)
+            raise
+
+    return preview_pptx_path, True
 
 
 def _resolve_template_preview_slide_cap(max_slides: Optional[int]) -> int:
