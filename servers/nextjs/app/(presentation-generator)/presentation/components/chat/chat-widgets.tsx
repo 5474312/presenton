@@ -124,7 +124,7 @@ export const EditComparisonPreview = ({
         ? (slide as Record<string, unknown>).html_content
         : null;
     const previewClassName =
-      "overflow-hidden rounded-[2px] border border-[#EDEEEF] bg-white";
+      "pointer-events-none overflow-hidden rounded-[2px] border border-[#EDEEEF] bg-white";
 
     if (typeof htmlContent === "string" && htmlContent.trim()) {
       return (
@@ -187,6 +187,7 @@ export const EditComparisonPreview = ({
             </span>
             <span className="flex flex-col gap-[3px]">
               {card.slides
+                .filter(Boolean)
                 .slice(0, 2)
                 .map((slide, index) =>
                   renderSlidePreview(slide, card.label, index),
