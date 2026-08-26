@@ -40,6 +40,11 @@ import {
   textVisualLocalBox,
   type RenderTextRun,
 } from "@/components/slide-editor/text/template-v2-text";
+import {
+  HTML_TEXT_HEIGHT_ATTR,
+  HTML_TEXT_WIDTH_ATTR,
+  shouldRenderTextElementAsHtml,
+} from "@/components/slide-editor/text/html-text-attrs";
 import type { TableCellSelection } from "@/components/slide-editor/state/state";
 import { loadKonvaImage } from "@/components/slide-editor/surface/exportAssets";
 import { constrainComponentTransformBounds } from "@/components/slide-editor/surface/componentFrameBounds";
@@ -517,6 +522,7 @@ export function RawComponentNode({
   onElementDragMove,
   onElementDragComplete,
   fontRevision,
+  renderTextAsHtml,
 }: {
   component: RawComponent;
   componentIndex: number;
@@ -563,6 +569,7 @@ export function RawComponentNode({
     node: Konva.Node,
   ) => void;
   fontRevision: number;
+  renderTextAsHtml: boolean;
 }) {
   const groupRef = useRef<Konva.Group | null>(null);
   const transformSourceRef = useRef<RawComponent | null>(null);
@@ -872,6 +879,7 @@ export function RawComponentNode({
             elementIndex === 0
           }
           fontRevision={fontRevision}
+          renderTextAsHtml={renderTextAsHtml}
         />
       ))}
     </Group>
@@ -920,7 +928,8 @@ export const MemoizedRawComponentNode = memo(
       previous.onElementDragComplete !== next.onElementDragComplete ||
       previous.selectedTableCell !== next.selectedTableCell ||
       previous.selectedKey !== next.selectedKey ||
-      previous.fontRevision !== next.fontRevision
+      previous.fontRevision !== next.fontRevision ||
+      previous.renderTextAsHtml !== next.renderTextAsHtml
     ) {
       return false;
     }
@@ -962,6 +971,7 @@ function RawElementNode({
   allowVectorPointEditing = true,
   allowDirectVectorSelection = true,
   fontRevision,
+  renderTextAsHtml,
 }: {
   element: RawElement;
   componentIndex: number;
@@ -1009,6 +1019,7 @@ function RawElementNode({
   allowVectorPointEditing?: boolean;
   allowDirectVectorSelection?: boolean;
   fontRevision: number;
+  renderTextAsHtml: boolean;
 }) {
   const groupRef = useRef<Konva.Group | null>(null);
   const transformSourceBoxRef = useRef<Box | null>(null);
@@ -1028,6 +1039,8 @@ function RawElementNode({
     selectedTableCell?.elementPath === key ? selectedTableCell : null;
   const editing = editingKey === key;
   const type = readString(element.type);
+  const usesHtmlText =
+    renderTextAsHtml && shouldRenderTextElementAsHtml(element);
   const isVector = isVectorType(type);
   const vectorPointEditing = vectorEditingKey === key;
   const [vectorDragPreview, setVectorDragPreview] =
@@ -1308,6 +1321,10 @@ function RawElementNode({
     <Group
       ref={(node) => {
         groupRef.current = node;
+        if (node) {
+          node.setAttr(HTML_TEXT_WIDTH_ATTR, visualBox.width);
+          node.setAttr(HTML_TEXT_HEIGHT_ATTR, visualBox.height);
+        }
         setNodeRef(key, node);
       }}
       x={centerOrigin ? box.x + box.width / 2 : box.x}
@@ -1402,7 +1419,18 @@ function RawElementNode({
       {isEditMode ? (
         <SelectionBoundsRect width={box.width} height={box.height} />
       ) : null}
-      {editing ? null : (
+      {editing ? null : usesHtmlText ? (
+        isEditMode ? (
+          <Rect
+            width={visualBox.width}
+            height={visualBox.height}
+            fill="rgba(0,0,0,0)"
+            listening
+            perfectDrawEnabled={false}
+            shadowForStrokeEnabled={false}
+          />
+        ) : null
+      ) : (
         <MemoizedRawElementVisual
           element={renderedElement}
           width={visualBox.width}
@@ -1460,6 +1488,7 @@ function RawElementNode({
           renderBox={childBox}
           layoutManaged={layoutManaged}
           fontRevision={fontRevision}
+          renderTextAsHtml={renderTextAsHtml}
         />
       ))}
     </Group>
@@ -1477,6 +1506,7 @@ export const MemoizedRawElementNode = memo(RawElementNode, (previous, next) => {
     previous.allowVectorPointEditing !== next.allowVectorPointEditing ||
     previous.allowDirectVectorSelection !== next.allowDirectVectorSelection ||
     previous.fontRevision !== next.fontRevision ||
+    previous.renderTextAsHtml !== next.renderTextAsHtml ||
     previous.vectorEditingKey !== next.vectorEditingKey ||
     previous.selectedTableCell !== next.selectedTableCell ||
     previous.selectedKey !== next.selectedKey ||

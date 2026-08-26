@@ -55,6 +55,7 @@ import { InfographicDataEditorPopover } from "@/components/slide-editor/infograp
 import type { TemplateV2InfographicToolbarElement } from "@/components/slide-editor/layout/InfographicToolbarControls";
 import { TableInlineEditor } from "@/components/slide-editor/tables/TableInlineEditor";
 import { TemplateV2InlineEditor } from "@/components/slide-editor/text/TemplateV2InlineEditor";
+import { StaticHtmlTextLayer } from "@/components/slide-editor/text/StaticHtmlTextLayer";
 import {
   measureWordWrappedTextRunsHeight,
   type TemplateV2InlineEditBox,
@@ -2632,6 +2633,7 @@ function TemplateV2KonvaSlideComponent({
               parentBox={STAGE_BOX}
               layoutManaged={false}
               fontRevision={fontLoadState.revision}
+              renderTextAsHtml
             />
           ))}
           {components.map((component, componentIndex) => (
@@ -2662,6 +2664,7 @@ function TemplateV2KonvaSlideComponent({
               onElementDragMove={handleElementAlignmentDragMove}
               onElementDragComplete={handleElementAlignmentDragComplete}
               fontRevision={fontLoadState.revision}
+              renderTextAsHtml
             />
           ))}
           {isEditMode ? (
@@ -2751,6 +2754,14 @@ function TemplateV2KonvaSlideComponent({
           </Layer>
         ) : null}
         </Stage>
+      ) : null}
+      {isRenderActive ? (
+        <StaticHtmlTextLayer
+          editingKey={editingKey}
+          nodeRefs={nodeRefs}
+          revision={fontLoadState.revision}
+          ui={uiDraft}
+        />
       ) : null}
       <TemplateV2SelectionToolbar
         anchorBox={floatingToolbarAnchorBox}
