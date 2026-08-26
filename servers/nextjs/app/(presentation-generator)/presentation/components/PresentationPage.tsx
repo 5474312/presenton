@@ -181,11 +181,12 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const navigationHintShownRef = useRef(false);
   const navigationHintSlideRef = useRef<number | null>(null);
   const navigationScrollIntentRef = useRef({ amount: 0, lastAt: 0 });
+  const lastAutoOpenedSelectionRef = useRef<number | null>(null);
   const router = useRouter();
   const shouldPreloadTemplateV2Presentation =
     searchParams.get("editor") === "v2" || searchParams.get("type") === "smart";
 
-  const { presentationData, isStreaming } = useSelector(
+  const { presentationData, isStreaming, chatHtmlSelection } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
   const presentationDataRef = useRef(presentationData);
@@ -203,6 +204,24 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   useEffect(() => {
     presentationDataRef.current = presentationData;
   }, [presentationData]);
+
+  useEffect(() => {
+    if (
+      !isSmartPresentation ||
+      isStreaming ||
+      !chatHtmlSelection ||
+      lastAutoOpenedSelectionRef.current === chatHtmlSelection.selectedAt
+    ) {
+      return;
+    }
+
+    lastAutoOpenedSelectionRef.current = chatHtmlSelection.selectedAt;
+    if (window.matchMedia("(min-width: 1280px)").matches) {
+      setIsRightPanelOpen(true);
+    } else {
+      setIsMobileAssistantOpen(true);
+    }
+  }, [chatHtmlSelection, isSmartPresentation, isStreaming]);
 
   const closeMobileAssistant = useCallback(() => {
     setIsMobileAssistantOpen(false);
