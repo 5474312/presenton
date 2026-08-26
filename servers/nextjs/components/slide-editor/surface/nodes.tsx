@@ -2008,12 +2008,31 @@ function RawRichTextElement({
           width: 0,
         };
         const startX = lineStartX(align, width, lineMetric.width, false);
+        const justifyGapCount =
+          align === "justify" && lineIndex < lines.length - 1
+            ? line.filter(
+                (segment, segmentIndex) =>
+                  segmentIndex < line.length - 1 &&
+                  segment.type !== "latex" &&
+                  /^\s+$/.test(segment.text),
+              ).length
+            : 0;
+        const justifyGapWidth =
+          justifyGapCount > 0
+            ? Math.max(0, width - lineMetric.width) / justifyGapCount
+            : 0;
         let x = startX;
         const lineY = y;
         y += lineMetric.height;
         return line.map((segment, segmentIndex) => {
           const segmentX = x;
-          x += segment.width;
+          x +=
+            segment.width +
+            (segmentIndex < line.length - 1 &&
+            segment.type !== "latex" &&
+            /^\s+$/.test(segment.text)
+              ? justifyGapWidth
+              : 0);
           if (segment.type === "latex" && segment.latex) {
             return (
               <LatexRunNode

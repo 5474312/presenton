@@ -1377,7 +1377,9 @@ function verticalAlign(value: string | null) {
 }
 
 function textAlign(value: string | null): React.CSSProperties["textAlign"] {
-  if (value === "center" || value === "right") return value;
+  if (value === "center" || value === "right" || value === "justify") {
+    return value;
+  }
   return "left";
 }
 

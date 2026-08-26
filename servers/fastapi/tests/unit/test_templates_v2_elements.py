@@ -94,6 +94,26 @@ def test_table_cell_accepts_latex_runs():
     assert cell.runs[0].display_mode is False
 
 
+def test_text_and_table_cells_accept_justified_alignment():
+    text = Text.model_validate(
+        {
+            "type": "text",
+            "decorative": False,
+            "name": "body",
+            "runs": [{"text": "Justified body copy"}],
+            "alignment": {"horizontal": "justify"},
+            "min_length": 1,
+            "max_length": 100,
+        }
+    )
+    cell = TableCell.model_validate(
+        {"alignment": "justify", "runs": [{"text": "Justified cell"}]}
+    )
+
+    assert text.model_dump(mode="json")["alignment"]["horizontal"] == "justify"
+    assert cell.model_dump(mode="json")["alignment"] == "justify"
+
+
 def test_chart_accepts_legacy_boolean_data_labels():
     chart = Chart.model_validate(
         {

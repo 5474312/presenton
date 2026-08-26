@@ -13,7 +13,7 @@ export type ThemeRole =
   | "text"
   | "muted";
 
-export type HorizontalAlignment = "left" | "center" | "right";
+export type HorizontalAlignment = "left" | "center" | "right" | "justify";
 export type VerticalAlignment = "top" | "middle" | "bottom";
 export type LayoutAlignment =
   | "flex-start"
