@@ -1720,7 +1720,11 @@ function adaptLayoutItem(value: UnknownRecord | null): LayoutItem | null {
 function adaptAlignment(value: UnknownRecord | null): Alignment | null {
   if (!value) return null;
   return stripNullish({
-    horizontal: readEnum(value, ["left", "center", "right"], "horizontal"),
+    horizontal: readEnum(
+      value,
+      ["left", "center", "right", "justify"],
+      "horizontal",
+    ),
     vertical: readEnum(value, ["top", "middle", "bottom"], "vertical"),
   });
 }
@@ -1911,7 +1915,11 @@ function adaptTableCells(value: unknown[]): TableCell[] {
           adaptFont(readRecord(record, "font")) ??
           adaptFont(readRecord(firstRun, "font")) ??
           adaptFont(readRecord(textRecord ?? {}, "font")),
-        alignment: readEnum(record, ["left", "center", "right"], "alignment"),
+        alignment: readEnum(
+          record,
+          ["left", "center", "right", "justify"],
+          "alignment",
+        ),
         runs,
       }) as TableCell;
     })

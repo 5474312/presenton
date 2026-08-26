@@ -638,7 +638,7 @@ class SlideElementFontInput(OpenAIStrictSchemaModel):
 
 
 class SlideElementAlignmentInput(OpenAIStrictSchemaModel):
-    horizontal: Literal["left", "center", "right"] | None = Field(...)
+    horizontal: Literal["left", "center", "right", "justify"] | None = Field(...)
     vertical: Literal["top", "middle", "bottom"] | None = Field(...)
 
 
