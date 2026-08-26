@@ -26,6 +26,7 @@ import {
   mergeAdjacentTextRuns,
   type TextSelectionRange,
 } from "@/components/slide-editor/text/text-runs";
+import { cssFontFamilyStack } from "@/components/slide-editor/text/css-text";
 import { normalizeMathLatex } from "@/lib/math";
 
 export const COMMIT_TEMPLATE_V2_INLINE_TEXT_EVENT =
@@ -999,15 +1000,6 @@ function rootLineHeightPx(baseFont: Font, runs: TextRun[]) {
 
 function cssColor(color: string) {
   return color.startsWith("#") ? color : `#${color}`;
-}
-
-export function cssFontFamilyStack(family: string) {
-  const escapedFamily = family
-    .trim()
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/[\r\n\f]/g, " ");
-  return `"${escapedFamily || "Arial"}", Helvetica, sans-serif`;
 }
 
 const TIPTAP_INLINE_EDITOR_CSS = `
