@@ -47,12 +47,35 @@ import {
   useTableCellSelection,
   useTemplateV2InlineEditing,
   type ChartSlideElement,
+  type ImageSlideElement,
   type TableSlideElement,
 } from "@/components/slide-editor/state/state";
 import { ElementToolbar } from "@/components/slide-editor/toolbar/ElementToolbar";
 import { ChartDataEditorPopover } from "@/components/slide-editor/charts/ChartEditorContent";
 import { InfographicDataEditorPopover } from "@/components/slide-editor/infographics/InfographicEditorContent";
+import { InfographicItemToolbar } from "@/components/slide-editor/infographics/InfographicItemToolbar";
+import { InfographicPlainTextEditor } from "@/components/slide-editor/infographics/InfographicPlainTextEditor";
+import type {
+  InfographicCanvasSelection,
+  InfographicCanvasTarget,
+} from "@/components/slide-editor/infographics/infographic-canvas-target";
+import {
+  infographicItemAtPath,
+  canRemoveInfographicItemAtPath,
+  isInfographicMainUngrouped,
+  isInfographicItemUngrouped,
+  normalizeInfographicIcon,
+  removeInfographicItemAtPath,
+  replaceInfographicImage,
+  replaceInfographicImageSettings,
+  replaceInfographicItemIcon,
+  replaceInfographicItemIconColor,
+  replaceInfographicItemText,
+  setInfographicItemUngrouped,
+  setInfographicMainUngrouped,
+} from "@/components/slide-editor/infographics/infographic-editing";
 import type { TemplateV2InfographicToolbarElement } from "@/components/slide-editor/layout/InfographicToolbarControls";
+import { resizedInfographicFrame } from "@/components/slide-editor/infographics/infographic-sizing";
 import { TableInlineEditor } from "@/components/slide-editor/tables/TableInlineEditor";
 import { TemplateV2InlineEditor } from "@/components/slide-editor/text/TemplateV2InlineEditor";
 import { StaticHtmlTextLayer } from "@/components/slide-editor/text/StaticHtmlTextLayer";
@@ -71,6 +94,8 @@ import { bucketFileSize, sanitizeAnalyticsError } from "@/utils/analytics";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 import { ImagesApi } from "@/app/(presentation-generator)/services/api/images";
 import IconsEditor from "@/components/slide-editor/images/IconsEditor";
+import { IconToolbar } from "@/components/slide-editor/images/IconToolbar";
+import { ImageToolbar } from "@/components/slide-editor/images/ImageToolbar";
 import {
   createTemplateV2ClipboardPayload,
   pasteTemplateV2ClipboardPayload,
@@ -213,6 +238,29 @@ function autoSizeInlineTextFrame(
     ...frame,
     height: Math.max(1, contentHeight),
   };
+}
+
+function infographicTargetValue(
+  data: unknown,
+  target: Pick<
+    InfographicCanvasTarget,
+    "collection" | "field" | "itemPath"
+  >,
+) {
+  if (!target.field) return "";
+  const record = target.itemPath.length
+    ? infographicItemAtPath(data, target.itemPath, target.collection)
+    : asRecord(data);
+  if (!record) return "";
+  const [field, indexValue] = target.field.split(".");
+  const index = Number(indexValue);
+  const value =
+    field && Number.isInteger(index)
+      ? readArray(record[field])[index]
+      : field
+        ? record[field]
+        : null;
+  return value == null ? "" : String(value);
 }
 
 function canEditVectorPointsForSelection(ui: RawUi, selection: ElementSelection) {
@@ -448,10 +496,38 @@ function TemplateV2KonvaSlideComponent({
     : null;
   const [iconEditorSelection, setIconEditorSelection] =
     useState<ElementSelection | null>(null);
+  const [infographicCanvasSelection, setInfographicCanvasSelection] =
+    useState<InfographicCanvasSelection | null>(null);
+  const infographicCanvasTextNodeRef = useRef<Konva.Node | null>(null);
+  const [isInfographicIconEditorOpen, setIsInfographicIconEditorOpen] =
+    useState(false);
   const [chartEditorSelection, setChartEditorSelection] =
     useState<ElementSelection | null>(null);
   const [infographicEditorSelection, setInfographicEditorSelection] =
     useState<ElementSelection | null>(null);
+
+  const restoreInfographicCanvasTextNode = useCallback(() => {
+    const node = infographicCanvasTextNodeRef.current;
+    if (!node) return;
+    node.visible(true);
+    node.getLayer()?.batchDraw();
+    infographicCanvasTextNodeRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (
+      infographicCanvasSelection?.target.kind === "text" &&
+      infographicCanvasSelection.target.editing !== false
+    ) {
+      return;
+    }
+    restoreInfographicCanvasTextNode();
+  }, [infographicCanvasSelection, restoreInfographicCanvasTextNode]);
+
+  useEffect(
+    () => () => restoreInfographicCanvasTextNode(),
+    [restoreInfographicCanvasTextNode],
+  );
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageCropActive, setImageCropActive] = useState(false);
   const [, setHistoryAvailability] = useState({
@@ -625,7 +701,10 @@ function TemplateV2KonvaSlideComponent({
     selectedCanEditVectorPoints &&
     vectorEditingKey === keyForSelection(selection);
   const shouldHideParentComponentBoundary =
-    inlineEdit || selectedIsVectorElement || imageCropActive;
+    inlineEdit ||
+    selectedIsVectorElement ||
+    imageCropActive ||
+    Boolean(infographicCanvasSelection);
   const transformerParentComponentKey = shouldHideParentComponentBoundary
     ? null
     : selectedParentComponentKey;
@@ -658,6 +737,14 @@ function TemplateV2KonvaSlideComponent({
     [selectedComponent, selection],
   );
   const canUngroupLayoutTargetComponent = useMemo(() => {
+    if (
+      layoutToolbarTarget &&
+      readString(layoutToolbarTarget.element.type) === "infographic"
+    ) {
+      return !isInfographicMainUngrouped(
+        asRecord(layoutToolbarTarget.element)?.data,
+      );
+    }
     const componentIndex = layoutToolbarTarget?.selection.componentIndex;
     if (
       componentIndex == null ||
@@ -676,6 +763,7 @@ function TemplateV2KonvaSlideComponent({
     selection ||
     inlineEdit ||
     iconEditorSelection ||
+    infographicCanvasSelection ||
     chartEditorSelection ||
     infographicEditorSelection ||
     selectedTableCell ||
@@ -718,6 +806,83 @@ function TemplateV2KonvaSlideComponent({
   const infographicEditorElement = infographicEditorSelection
     ? getElementAtSelection(uiDraft, infographicEditorSelection)
     : null;
+  const infographicCanvasElement = infographicCanvasSelection
+    ? getElementAtSelection(uiDraft, infographicCanvasSelection.selection)
+    : null;
+  const infographicCanvasItem = infographicCanvasSelection?.target.itemPath.length
+    ? infographicItemAtPath(
+        infographicCanvasElement?.data,
+        infographicCanvasSelection.target.itemPath,
+        infographicCanvasSelection.target.collection,
+      )
+    : asRecord(infographicCanvasElement?.data);
+  const infographicCanvasIcon = normalizeInfographicIcon(
+    infographicCanvasItem?.icon,
+    infographicCanvasItem?.color,
+  );
+  const infographicCanvasToolbarIcon =
+    infographicCanvasSelection?.target.kind === "icon" && infographicCanvasIcon
+      ? ({
+          type: "image",
+          data: infographicCanvasIcon.url,
+          is_icon: true,
+          color: infographicCanvasIcon.color,
+          position: {
+            x: infographicCanvasSelection.target.box.x,
+            y: infographicCanvasSelection.target.box.y,
+          },
+          size: {
+            width: infographicCanvasSelection.target.box.width,
+            height: infographicCanvasSelection.target.box.height,
+          },
+        } satisfies ImageSlideElement)
+      : null;
+  const infographicCanvasToolbarImage =
+    infographicCanvasSelection?.target.kind === "image"
+      ? (() => {
+          const field = infographicCanvasSelection.target.field ?? "image";
+          const settings = asRecord(
+            infographicCanvasItem?.[`${field}_settings`],
+          );
+          const fit = readString(settings?.fit);
+          return ({
+          type: "image",
+          data: infographicTargetValue(
+            infographicCanvasElement?.data,
+            infographicCanvasSelection.target,
+          ),
+          fit: fit === "contain" || fit === "fill" ? fit : "cover",
+          focus_x:
+            typeof settings?.focus_x === "number" ? settings.focus_x : 50,
+          focus_y:
+            typeof settings?.focus_y === "number" ? settings.focus_y : 50,
+          crop_scale:
+            typeof settings?.crop_scale === "number"
+              ? settings.crop_scale
+              : null,
+          flip_h: settings?.flip_h === true,
+          flip_v: settings?.flip_v === true,
+          opacity:
+            typeof settings?.opacity === "number" ? settings.opacity : 1,
+          border_radius: settings?.border_radius as ImageSlideElement["border_radius"],
+          position: {
+            x: infographicCanvasSelection.target.box.x,
+            y: infographicCanvasSelection.target.box.y,
+          },
+          size: {
+            width: infographicCanvasSelection.target.box.width,
+            height: infographicCanvasSelection.target.box.height,
+          },
+          } satisfies ImageSlideElement);
+        })()
+      : null;
+  const infographicCanvasItemCanDelete = infographicCanvasSelection
+    ? canRemoveInfographicItemAtPath(
+        infographicCanvasElement?.data,
+        infographicCanvasSelection.target.itemPath,
+        infographicCanvasSelection.target.collection,
+      )
+    : false;
   const chartEditorBox = chartEditorSelection
     ? absoluteBoxForSelection(uiDraft, chartEditorSelection)
     : null;
@@ -822,6 +987,8 @@ function TemplateV2KonvaSlideComponent({
     clearInlineEdit();
     setVectorEditSelection(null);
     setIconEditorSelection(null);
+    setInfographicCanvasSelection(null);
+    setIsInfographicIconEditorOpen(false);
     setChartEditorSelection(null);
     setInfographicEditorSelection(null);
     undoStackRef.current = [];
@@ -975,6 +1142,8 @@ function TemplateV2KonvaSlideComponent({
       clearInlineEdit();
       setVectorEditSelection(null);
       setIconEditorSelection(null);
+      setInfographicCanvasSelection(null);
+      setIsInfographicIconEditorOpen(false);
       setChartEditorSelection(null);
       setInfographicEditorSelection(null);
       if (options?.clearActiveSurface) {
@@ -1143,6 +1312,8 @@ function TemplateV2KonvaSlideComponent({
       );
       selectionRef.current = resolvedSelection;
       setSelection(resolvedSelection);
+      setInfographicCanvasSelection(null);
+      setIsInfographicIconEditorOpen(false);
       setVectorEditSelection((current) =>
         current &&
         resolvedSelection?.kind === "element" &&
@@ -1560,6 +1731,8 @@ function TemplateV2KonvaSlideComponent({
       clearInlineEdit();
       setVectorEditSelection(null);
       setIconEditorSelection(null);
+      setInfographicCanvasSelection(null);
+      setIsInfographicIconEditorOpen(false);
       closeChartEditor();
     },
     [
@@ -1592,6 +1765,8 @@ function TemplateV2KonvaSlideComponent({
     clearInlineEdit();
     setVectorEditSelection(null);
     setIconEditorSelection(null);
+    setInfographicCanvasSelection(null);
+    setIsInfographicIconEditorOpen(false);
     closeChartEditor();
   }, [
     clearInlineEdit,
@@ -2108,10 +2283,20 @@ function TemplateV2KonvaSlideComponent({
   }, [selection, ungroupComponentAtIndex]);
 
   const ungroupLayoutTargetComponent = useCallback(() => {
+    if (
+      layoutToolbarTarget &&
+      readString(layoutToolbarTarget.element.type) === "infographic"
+    ) {
+      updateElement(layoutToolbarTarget.selection, (element) => ({
+        ...element,
+        data: setInfographicMainUngrouped(element.data, true),
+      }));
+      return;
+    }
     const componentIndex = layoutToolbarTarget?.selection.componentIndex;
     if (componentIndex == null || componentIndex < 0) return;
     ungroupComponentAtIndex(componentIndex);
-  }, [layoutToolbarTarget, ungroupComponentAtIndex]);
+  }, [layoutToolbarTarget, ungroupComponentAtIndex, updateElement]);
 
   const reorderComponentLayerAtIndex = useCallback(
     (componentIndex: number, action: ComponentLayerAction) => {
@@ -2250,6 +2435,8 @@ function TemplateV2KonvaSlideComponent({
       setSelection(elementSelection);
       clearInlineEdit();
       setVectorEditSelection(null);
+      setInfographicCanvasSelection(null);
+      setIsInfographicIconEditorOpen(false);
       setIconEditorSelection(elementSelection);
     },
     [activateSurface, clearInlineEdit],
@@ -2281,6 +2468,8 @@ function TemplateV2KonvaSlideComponent({
       clearInlineEdit();
       setVectorEditSelection(null);
       setIconEditorSelection(null);
+      setInfographicCanvasSelection(null);
+      setIsInfographicIconEditorOpen(false);
       setInfographicEditorSelection(null);
       setChartEditorSelection(elementSelection);
     },
@@ -2299,11 +2488,165 @@ function TemplateV2KonvaSlideComponent({
       clearInlineEdit();
       setVectorEditSelection(null);
       setIconEditorSelection(null);
+      setInfographicCanvasSelection(null);
+      setIsInfographicIconEditorOpen(false);
       setChartEditorSelection(null);
       setInfographicEditorSelection(elementSelection);
     },
     [activateSurface, clearInlineEdit],
   );
+
+  const openInfographicCanvasTarget = useCallback(
+    (
+      elementSelection: ElementSelection,
+      target: InfographicCanvasTarget,
+      sourceNode?: Konva.Node | null,
+    ) => {
+      const element = getElementAtSelection(
+        currentUiRef.current,
+        elementSelection,
+      );
+      if (!element || readString(element.type) !== "infographic") return;
+      activateSurface(elementSelection);
+      setSelection(elementSelection);
+      clearInlineEdit();
+      setVectorEditSelection(null);
+      setIconEditorSelection(null);
+      setChartEditorSelection(null);
+      setInfographicEditorSelection(null);
+      setIsInfographicIconEditorOpen(false);
+      restoreInfographicCanvasTextNode();
+      if (
+        target.kind === "text" &&
+        target.editing !== false &&
+        sourceNode
+      ) {
+        infographicCanvasTextNodeRef.current = sourceNode;
+        sourceNode.visible(false);
+        sourceNode.getLayer()?.batchDraw();
+      }
+      setInfographicCanvasSelection({ selection: elementSelection, target });
+    },
+    [activateSurface, clearInlineEdit, restoreInfographicCanvasTextNode],
+  );
+
+  const handleInfographicCanvasIconChange = useCallback(
+    (newIconUrl: string) => {
+      const target = infographicCanvasSelection;
+      if (!target || target.target.kind !== "icon" || !newIconUrl) return;
+      updateElement(target.selection, (element) => ({
+        ...element,
+        data: replaceInfographicItemIcon(
+          element.data,
+          target.target.itemPath,
+          newIconUrl,
+          target.target.collection,
+        ),
+      }));
+    },
+    [infographicCanvasSelection, updateElement],
+  );
+
+  const handleInfographicCanvasIconToolbarChange = useCallback(
+    (nextIcon: ImageSlideElement) => {
+      const target = infographicCanvasSelection;
+      if (!target || target.target.kind !== "icon") return;
+      updateElement(target.selection, (element) => ({
+        ...element,
+        data: replaceInfographicItemIconColor(
+          element.data,
+          target.target.itemPath,
+          nextIcon.color ?? "FFFFFF",
+          target.target.collection,
+        ),
+      }));
+    },
+    [infographicCanvasSelection, updateElement],
+  );
+
+  const handleInfographicCanvasImageToolbarChange = useCallback(
+    (nextImage: ImageSlideElement) => {
+      const target = infographicCanvasSelection;
+      const field = target?.target.field;
+      if (!target || target.target.kind !== "image" || !field) return;
+      updateElement(target.selection, (element) => ({
+        ...element,
+        data: replaceInfographicImageSettings(
+          replaceInfographicImage(
+            element.data,
+            target.target.itemPath,
+            field,
+            nextImage.data ?? "",
+            target.target.collection,
+          ),
+          target.target.itemPath,
+          field,
+          {
+            fit: nextImage.fit ?? "cover",
+            focus_x: nextImage.focus_x ?? 50,
+            focus_y: nextImage.focus_y ?? 50,
+            crop_scale: nextImage.crop_scale ?? null,
+            flip_h: nextImage.flip_h ?? false,
+            flip_v: nextImage.flip_v ?? false,
+            opacity: nextImage.opacity ?? 1,
+            border_radius: nextImage.border_radius ?? null,
+          },
+          target.target.collection,
+        ),
+      }));
+    },
+    [infographicCanvasSelection, updateElement],
+  );
+
+  const commitInfographicCanvasText = useCallback((value: string) => {
+    const target = infographicCanvasSelection;
+    const field = target?.target.field;
+    if (!target || target.target.kind !== "text" || !field) return;
+    updateElement(target.selection, (element) => ({
+      ...element,
+      data: replaceInfographicItemText(
+        element.data,
+        target.target.itemPath,
+        field,
+        value,
+        target.target.collection,
+      ),
+    }));
+    setInfographicCanvasSelection(null);
+  }, [infographicCanvasSelection, updateElement]);
+
+  const deleteInfographicCanvasItem = useCallback(() => {
+    const target = infographicCanvasSelection;
+    if (!target) return;
+    updateElement(target.selection, (element) => {
+      const nextData = removeInfographicItemAtPath(
+        element.data,
+        target.target.itemPath,
+        target.target.collection,
+      );
+      return {
+        ...element,
+        data: nextData,
+        ...resizedInfographicFrame(element, nextData),
+      };
+    });
+    setInfographicCanvasSelection(null);
+  }, [infographicCanvasSelection, updateElement]);
+
+  const ungroupInfographicCanvasItem = useCallback(() => {
+    const target = infographicCanvasSelection;
+    if (!target) return;
+    updateElement(target.selection, (element) => ({
+      ...element,
+      data: setInfographicItemUngrouped(
+        element.data,
+        target.target.itemPath,
+        true,
+        target.target.collection,
+      ),
+    }));
+    setInfographicCanvasSelection(null);
+  }, [infographicCanvasSelection, updateElement]);
 
   const handleImageUploadChange = useCallback(
     async (event: ReactChangeEvent<HTMLInputElement>) => {
@@ -2430,11 +2773,26 @@ function TemplateV2KonvaSlideComponent({
       }
       if (!selection) return;
       event.preventDefault();
+      if (
+        infographicCanvasSelection?.target.kind === "item" &&
+        infographicCanvasItemCanDelete
+      ) {
+        deleteInfographicCanvasItem();
+        return;
+      }
       deleteSelection();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [deleteSelection, isEditMode, isRenderActive, selection]);
+  }, [
+    deleteInfographicCanvasItem,
+    deleteSelection,
+    infographicCanvasItemCanDelete,
+    infographicCanvasSelection,
+    isEditMode,
+    isRenderActive,
+    selection,
+  ]);
 
   useEffect(() => {
     if (!isEditMode || typeof window === "undefined") return;
@@ -2626,6 +2984,7 @@ function TemplateV2KonvaSlideComponent({
               onTableCellSelect={selectTableCell}
               onTableCellEdit={editTableCell}
               onOpenEditor={handleElementDoubleClick}
+              onInfographicTargetEdit={openInfographicCanvasTarget}
               onElementChange={updateElement}
               onElementDragStart={handleElementAlignmentDragStart}
               onElementDragMove={handleElementAlignmentDragMove}
@@ -2655,6 +3014,7 @@ function TemplateV2KonvaSlideComponent({
               onTableCellSelect={selectTableCell}
               onTableCellEdit={editTableCell}
               onOpenElementEditor={handleElementDoubleClick}
+              onInfographicTargetEdit={openInfographicCanvasTarget}
               onComponentChange={updateComponent}
               onComponentDragStart={handleComponentDragStart}
               onComponentDragMove={handleComponentDragMove}
@@ -2683,6 +3043,7 @@ function TemplateV2KonvaSlideComponent({
                 selectedTableCell ||
                   inlineEdit ||
                   imageCropActive ||
+                  infographicCanvasSelection ||
                   readString(selectedElement?.type) === "chart" ||
                   selectedIsVectorPointEditing,
               )}
@@ -2763,7 +3124,7 @@ function TemplateV2KonvaSlideComponent({
           ui={uiDraft}
         />
       ) : null}
-      <TemplateV2SelectionToolbar
+      {!infographicCanvasSelection ? <TemplateV2SelectionToolbar
         anchorBox={floatingToolbarAnchorBox}
         canUngroupComponent={canUngroupSelectedComponent}
         canUngroupLayoutTarget={canUngroupLayoutTargetComponent}
@@ -2809,7 +3170,84 @@ function TemplateV2KonvaSlideComponent({
         onTableChange={applyTableToolbarElementChange}
         onUngroupComponent={ungroupSelectedComponent}
         onUngroupLayoutTarget={ungroupLayoutTargetComponent}
-      />
+      /> : null}
+      {isEditMode &&
+      infographicCanvasSelection &&
+      infographicCanvasSelection.target.kind !== "item" &&
+      !(
+        infographicCanvasSelection.target.kind === "text" &&
+        infographicCanvasSelection.target.editing !== false
+      ) ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute z-20 border-2 border-[#7C51F8]"
+          style={{
+            left: infographicCanvasSelection.target.box.x,
+            top: infographicCanvasSelection.target.box.y,
+            width: infographicCanvasSelection.target.box.width,
+            height: infographicCanvasSelection.target.box.height,
+          }}
+        />
+      ) : null}
+      {isEditMode &&
+      infographicCanvasSelection?.target.kind === "item" &&
+      infographicCanvasItem ? (
+        <InfographicItemToolbar
+          anchorBox={infographicCanvasSelection.target.box}
+          canDelete={infographicCanvasItemCanDelete}
+          canUngroup={!isInfographicItemUngrouped(infographicCanvasItem)}
+          onDelete={deleteInfographicCanvasItem}
+          onUngroup={ungroupInfographicCanvasItem}
+        />
+      ) : null}
+      {isEditMode &&
+      infographicCanvasSelection?.target.kind === "icon" &&
+      infographicCanvasSelection.target.editing !== false &&
+      infographicCanvasToolbarIcon ? (
+        <IconToolbar
+          key={`${keyForSelection(infographicCanvasSelection.selection)}:${infographicCanvasSelection.target.itemPath.join(".")}:icon`}
+          anchorBox={infographicCanvasSelection.target.box}
+          element={infographicCanvasToolbarIcon}
+          index={infographicCanvasSelection.selection.componentIndex}
+          scale={1}
+          onChange={(_index, nextIcon) =>
+            handleInfographicCanvasIconToolbarChange(nextIcon)
+          }
+          onEditIcon={() => setIsInfographicIconEditorOpen(true)}
+        />
+      ) : null}
+      {isEditMode &&
+      infographicCanvasSelection?.target.kind === "image" &&
+      infographicCanvasSelection.target.editing !== false &&
+      infographicCanvasToolbarImage ? (
+        <ImageToolbar
+          key={`${keyForSelection(infographicCanvasSelection.selection)}:${infographicCanvasSelection.target.field ?? "image"}`}
+          anchorBox={infographicCanvasSelection.target.box}
+          element={infographicCanvasToolbarImage}
+          index={infographicCanvasSelection.selection.componentIndex}
+          scale={1}
+          onCropModeChange={setImageCropActive}
+          onChange={(_index, nextImage) =>
+            handleInfographicCanvasImageToolbarChange(nextImage)
+          }
+        />
+      ) : null}
+      {isEditMode &&
+      infographicCanvasSelection?.target.kind === "text" &&
+      infographicCanvasSelection.target.editing !== false &&
+      infographicCanvasSelection.target.field ? (
+        <InfographicPlainTextEditor
+          key={`${keyForSelection(infographicCanvasSelection.selection)}:${infographicCanvasSelection.target.itemPath.join(".")}:${infographicCanvasSelection.target.field}`}
+          box={infographicCanvasSelection.target.box}
+          value={infographicTargetValue(
+            infographicCanvasElement?.data,
+            infographicCanvasSelection.target,
+          )}
+          onCancel={() => setInfographicCanvasSelection(null)}
+          onCommit={commitInfographicCanvasText}
+          textStyle={infographicCanvasSelection.target.textStyle}
+        />
+      ) : null}
       {isEditMode &&
         selection?.kind === "element" &&
         selectedElement &&
@@ -2927,6 +3365,18 @@ function TemplateV2KonvaSlideComponent({
           currentIconUrl={readString(iconEditorElement.data) ?? ""}
           onClose={() => setIconEditorSelection(null)}
           onIconChange={handleIconChange}
+        />
+      ) : null}
+      {isEditMode &&
+        isInfographicIconEditorOpen &&
+        infographicCanvasSelection?.target.kind === "icon" &&
+        infographicCanvasElement ? (
+        <IconsEditor
+          key={`${keyForSelection(infographicCanvasSelection.selection)}:${infographicCanvasSelection.target.itemPath.join(".")}`}
+          icon_prompt={[readString(infographicCanvasItem?.heading) ?? ""]}
+          currentIconUrl={infographicCanvasIcon?.url ?? ""}
+          onClose={() => setIsInfographicIconEditorOpen(false)}
+          onIconChange={handleInfographicCanvasIconChange}
         />
       ) : null}
       {isUploadingImage ? (
