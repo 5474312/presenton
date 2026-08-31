@@ -22,6 +22,7 @@ export type InfographicCanvasTextStyle = {
 export type InfographicCanvasTarget = {
   box: Box;
   collection?: InfographicCanvasCollection;
+  displayText?: string;
   editing?: boolean;
   field?: string;
   itemPath: number[];
@@ -42,6 +43,7 @@ export function sameInfographicCanvasSelection(
   return (
     left.target.kind === right.target.kind &&
     left.target.field === right.target.field &&
+    left.target.displayText === right.target.displayText &&
     left.target.collection === right.target.collection &&
     left.selection.componentIndex === right.selection.componentIndex &&
     sameNumberPath(left.selection.elementPath, right.selection.elementPath) &&

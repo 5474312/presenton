@@ -155,6 +155,27 @@ test("preserves infographic item offsets and image edits in export HTML", () => 
   assert.match(editedImage, /border-radius:18px/);
 });
 
+test("preserves edited infographic number labels and restores blank defaults", () => {
+  const stair = renderInfographic("stair_step_blocks", {
+    items: [{ label: "Custom Step" }, { label: "" }],
+  });
+  const diagonal = renderInfographic("diagonal_circles", {
+    items: [{ label: "D7" }],
+  });
+  const chevron = renderInfographic("chevron_process", {
+    items: [{ label: "C7" }],
+  });
+  const impact = renderInfographic("impact_effort_matrix", {
+    items: [{ label: "I7" }],
+  });
+
+  assert.match(stair, /Custom Step/);
+  assert.match(stair, /Step 02/);
+  assert.match(diagonal, /D7/);
+  assert.match(chevron, /C7/);
+  assert.match(impact, /I7/);
+});
+
 test("keeps progress and gauge exports on their native meter renderers", () => {
   const progress = renderInfographic("progress_bar", {
     min_value: 0,

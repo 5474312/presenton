@@ -244,9 +244,14 @@ function infographicTargetValue(
   data: unknown,
   target: Pick<
     InfographicCanvasTarget,
-    "collection" | "field" | "itemPath"
+    "collection" | "displayText" | "field" | "itemPath"
   >,
 ) {
+  // Many infographic labels are rendered from an index-based fallback (for
+  // example, "Step 03" or "03") and do not exist in the stored item yet.
+  // Seed the editor from the Konva text node so opening it never turns that
+  // visible fallback into an empty value.
+  if (target.displayText != null) return target.displayText;
   if (!target.field) return "";
   const record = target.itemPath.length
     ? infographicItemAtPath(data, target.itemPath, target.collection)

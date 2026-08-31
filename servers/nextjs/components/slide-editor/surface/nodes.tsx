@@ -676,6 +676,9 @@ function infographicCanvasTargetFromNode(
       : null;
   return {
     ...selected.meta,
+    ...(selected.meta.kind === "text"
+      ? { displayText: String(selected.node.getAttr("text") ?? "") }
+      : {}),
     ...(textStyle ? { textStyle } : {}),
     box: {
       x: rawBox.x,
@@ -730,6 +733,16 @@ function infographicTextFieldForValue(
     return "description";
   }
   return null;
+}
+
+function infographicNumberLabel(
+  item: Record<string, unknown> | null,
+  index: number,
+  prefix = "",
+) {
+  const stored = readString(item?.label)?.trim();
+  const number = String(index + 1).padStart(2, "0");
+  return stored || (prefix ? `${prefix} ${number}` : number);
 }
 
 export function RawComponentNode({
@@ -3954,7 +3967,7 @@ function RawTimelineInfographic({
               y={Math.max(0, lineY - radius - height * 0.17)}
               width={itemWidth * 0.9}
               height={height * 0.13}
-              text={readString(item?.label) ?? String(index + 1).padStart(2, "0")}
+              text={infographicNumberLabel(item, index)}
               fontFamily="Arial, Helvetica, sans-serif"
               fontSize={Math.max(11, Math.min(16, height * 0.065))}
               fontStyle="bold"
@@ -4684,7 +4697,7 @@ function RawSupplyChainInfographic({ baseColor, data, height, interactive, palet
           strokeWidth={Math.max(1, height * .004)}
         />
         <InfographicUrlIcon icon={icon?.url ?? null} color={icon?.color ?? null} itemPath={[index]} x={x} y={cy} size={radius * .72} />
-        <Text {...infographicTargetAttrs({ kind: "text", itemPath: [index], field: "label" })} x={x-radius} y={top ? cy-radius-height*.08 : cy+radius+height*.025} width={radius*2} height={height*.06} text={readString(item?.label) ?? String(index+1).padStart(2,"0")} align="center" fontFamily="Arial" fontStyle="bold" fontSize={Math.max(10,height*.048)} fill={customTextColor ?? color} />
+        <Text {...infographicTargetAttrs({ kind: "text", itemPath: [index], field: "label" })} x={x-radius} y={top ? cy-radius-height*.08 : cy+radius+height*.025} width={radius*2} height={height*.06} text={infographicNumberLabel(item, index)} align="center" fontFamily="Arial" fontStyle="bold" fontSize={Math.max(10,height*.048)} fill={customTextColor ?? color} />
         <Text x={x-gap*.45} y={titleY} width={gap*.9 || radius*3} height={height*.055} text={readString(item?.heading) ?? "Stage"} align="center" fontFamily="Arial" fontStyle="bold" fontSize={Math.max(8,height*.029)} fill={customTextColor ?? color} />
         <Text x={x-gap*.45} y={titleY+height*.052} width={gap*.9 || radius*3} height={descriptionHeight} text={readString(item?.description) ?? ""} align="center" fontFamily="Arial" fontSize={Math.max(8,height*.027)} lineHeight={1.12} fill={body} />
       </InfographicItemGroup>;
@@ -4711,7 +4724,7 @@ function RawStairStepBlocksInfographic({ baseColor, data, height, interactive, p
       const icon = normalizeInfographicIcon(item?.icon,item?.color);
       return <InfographicItemGroup key={`block-step-${index}`} interactive={interactive} item={item} itemPath={[index]}>
         <Rect x={x} y={y} width={blockW+.5} height={blockH} fill={color} stroke={dark ? "#D6D6D6" : undefined} strokeWidth={dark ? 1 : 0} />
-        <Text {...infographicTargetAttrs({ kind: "text", itemPath: [index], field: "label" })} x={x+blockW*.06} y={y+blockH*.08} width={blockW*.88} height={blockH*.22} text={readString(item?.label) ?? `Step ${String(index+1).padStart(2,"0")}`} fontFamily="Arial" fontStyle="bold" fontSize={Math.max(11,height*.053)} fill={nodeTextColor} />
+        <Text {...infographicTargetAttrs({ kind: "text", itemPath: [index], field: "label" })} x={x+blockW*.06} y={y+blockH*.08} width={blockW*.88} height={blockH*.22} text={infographicNumberLabel(item, index, "Step")} fontFamily="Arial" fontStyle="bold" fontSize={Math.max(11,height*.053)} fill={nodeTextColor} />
         <InfographicUrlIcon icon={icon?.url ?? null} color={icon?.color ?? null} itemPath={[index]} x={x+blockW*.13} y={y+blockH*.58} size={Math.min(blockW,blockH)*.18} />
         <Text x={x+blockW*.06} y={y+blockH*.76} width={blockW*.86} height={blockH*.17} text={readString(item?.heading) ?? "Step"} fontFamily="Arial" fontStyle="bold" fontSize={Math.max(8,height*.026)} fill={nodeTextColor} />
         <Text x={x+blockW*.08} y={y+blockH+height*.018} width={blockW*.84} height={height*.13} text={readString(item?.description) ?? ""} fontFamily="Arial" fontSize={Math.max(8,height*.026)} lineHeight={1.12} fill={body} />
@@ -4833,7 +4846,7 @@ function RawDiagonalCirclesInfographic({ baseColor, data, height, interactive, p
   return <Group listening={interactive}>
     {layout.map(({anchorX,anchorY,arrowBaseX,arrowTipX,calloutLeft,color,elbowY,index,item,textX,x,y})=>{const nodeTextColor=blackOrWhiteTextColor(color),icon=normalizeInfographicIcon(item?.icon,item?.color),numberX=calloutLeft?x-r*.82:x-r*.05,numberY=calloutLeft?y-r*.78:y+r*.51,iconX=x+r*.62,iconY=y-r*.34;return <InfographicItemGroup key={`diag-content-${index}`} interactive={interactive} item={item} itemPath={[index]}>
       <Circle x={x} y={y} radius={r} fill={color} opacity={.88}/>
-      <Text {...infographicTargetAttrs({ kind: "text", itemPath: [index], field: "label" })} x={numberX} y={numberY} width={r*.7} height={r*.35} text={readString(item?.label) ?? String(index+1).padStart(2,"0")} align="center" fontFamily="Arial" fontStyle="bold" fontSize={Math.max(10,height*.045)} fill={nodeTextColor}/>
+      <Text {...infographicTargetAttrs({ kind: "text", itemPath: [index], field: "label" })} x={numberX} y={numberY} width={r*.7} height={r*.35} text={infographicNumberLabel(item, index)} align="center" fontFamily="Arial" fontStyle="bold" fontSize={Math.max(10,height*.045)} fill={nodeTextColor}/>
       <InfographicUrlIcon icon={icon?.url??null} color={icon?.color??null} itemPath={[index]} x={iconX} y={iconY} size={r*.34}/>
       <Line points={[anchorX,anchorY,anchorX,elbowY,arrowBaseX,elbowY]} stroke={lineColor} strokeWidth={1.5}/>
       <Line points={[arrowTipX,elbowY,arrowBaseX,elbowY-arrowSize*.65,arrowBaseX,elbowY+arrowSize*.65]} closed fill={lineColor}/>
@@ -4934,7 +4947,7 @@ function RawChevronProcessInfographic({
               y={middle - height * 0.035}
               width={shapeWidth * 0.45}
               height={height * 0.08}
-              text={readString(item?.label) ?? String(index + 1).padStart(2, "0")}
+              text={infographicNumberLabel(item, index)}
               fontFamily="Arial, Helvetica, sans-serif"
               fontSize={Math.max(14, Math.min(22, height * 0.055))}
               fontStyle="bold"
@@ -5054,7 +5067,7 @@ function RawRadialCycleInfographic({
               y={y - nodeRadius * 0.54}
               width={nodeRadius * 0.76}
               height={nodeRadius * 0.24}
-              text={readString(item?.label) ?? String(index + 1).padStart(2, "0")}
+              text={infographicNumberLabel(item, index)}
               fontFamily="Arial, Helvetica, sans-serif"
               fontSize={Math.max(11, nodeRadius * 0.21)}
               fontStyle="bold"
@@ -5968,7 +5981,7 @@ function RawImpactEffortInfographic({
             <Rect x={position.outerX} y={horizontalY} width={blockW} height={blockThickness} fill={color} />
             <Rect x={verticalX} y={position.outerY} width={blockThickness} height={blockH} fill={color} />
             <Circle x={circleX} y={circleY} radius={Math.max(15, Math.min(width, height) * 0.045)} fill={color} />
-            <Text {...infographicTargetAttrs({ kind: "text", itemPath: [index], field: "label" })} x={circleX - 25} y={circleY - 12} width={50} align="center" text={readString(item?.label) ?? String(index + 1).padStart(2, "0")} fontStyle="bold" fontSize={Math.max(10, height * 0.05)} fill={nodeTextColor} />
+            <Text {...infographicTargetAttrs({ kind: "text", itemPath: [index], field: "label" })} x={circleX - 25} y={circleY - 12} width={50} align="center" text={infographicNumberLabel(item, index)} fontStyle="bold" fontSize={Math.max(10, height * 0.05)} fill={nodeTextColor} />
             <Text x={calloutX} y={calloutY} width={calloutWidth} align={position.side < 0 ? "right" : "left"} text={readString(item?.heading) ?? defaults[index]} fontStyle="bold" fontSize={Math.max(10, height * 0.035)} fill={color} />
             <Text x={calloutX} y={calloutY + height * 0.052} width={calloutWidth} align={position.side < 0 ? "right" : "left"} text={readString(item?.description) ?? ""} fontSize={Math.max(9, height * 0.027)} lineHeight={1.15} fill={textColor} />
           </InfographicItemGroup>
@@ -6104,7 +6117,7 @@ function RawHierarchyInfographic({ type, ...props }: InfographicRendererProps & 
           const radius = position.depth === 0 ? nodeRadius * 1.25 : position.depth === 1 ? nodeRadius : nodeRadius * 0.57;
           return <InfographicItemGroup key={`hierarchy-node-${index}`} interactive={interactive} item={item} itemPath={[index]}><Circle x={position.x} y={position.y} radius={radius} fill={color} /><Text x={position.x - radius * 0.85} y={position.y - 18} width={radius * 1.7} height={36} align="center" verticalAlign="middle" text={readString(item?.heading) ?? ""} fontStyle={position.depth < 2 ? "bold" : "normal"} fontSize={Math.max(7, height * (position.depth === 2 ? 0.02 : 0.026))} fill={nodeTextColor} /></InfographicItemGroup>;
         }
-        return <InfographicItemGroup key={`hierarchy-node-${index}`} interactive={interactive} item={item} itemPath={[index]}><Rect x={position.x - boxWidth / 2} y={position.y - boxHeight / 2} width={boxWidth} height={boxHeight} fill={color} stroke={dark ? "#D1D5DB" : color} strokeWidth={1} /><Text {...infographicTargetAttrs({ kind: "text", itemPath: [index], field: "label" })} x={position.x - boxWidth * 0.46} y={position.y - boxHeight * 0.38} width={boxWidth * 0.22} text={readString(item?.label) ?? String(index + 1).padStart(2, "0")} fontStyle="bold" fontSize={Math.max(10, height * 0.036)} fill={nodeTextColor} /><Text x={position.x - boxWidth * 0.3} y={position.y - boxHeight * 0.28} width={boxWidth * 0.68} align="center" text={readString(item?.heading) ?? ""} fontStyle="bold" fontSize={Math.max(9, height * 0.031)} fill={nodeTextColor} /><Text x={position.x - boxWidth * 0.3} y={position.y + boxHeight * 0.04} width={boxWidth * 0.68} align="center" text={readString(item?.description) ?? ""} fontSize={Math.max(8, height * 0.026)} fill={nodeTextColor} /></InfographicItemGroup>;
+        return <InfographicItemGroup key={`hierarchy-node-${index}`} interactive={interactive} item={item} itemPath={[index]}><Rect x={position.x - boxWidth / 2} y={position.y - boxHeight / 2} width={boxWidth} height={boxHeight} fill={color} stroke={dark ? "#D1D5DB" : color} strokeWidth={1} /><Text {...infographicTargetAttrs({ kind: "text", itemPath: [index], field: "label" })} x={position.x - boxWidth * 0.46} y={position.y - boxHeight * 0.38} width={boxWidth * 0.22} text={infographicNumberLabel(item, index)} fontStyle="bold" fontSize={Math.max(10, height * 0.036)} fill={nodeTextColor} /><Text x={position.x - boxWidth * 0.3} y={position.y - boxHeight * 0.28} width={boxWidth * 0.68} align="center" text={readString(item?.heading) ?? ""} fontStyle="bold" fontSize={Math.max(9, height * 0.031)} fill={nodeTextColor} /><Text x={position.x - boxWidth * 0.3} y={position.y + boxHeight * 0.04} width={boxWidth * 0.68} align="center" text={readString(item?.description) ?? ""} fontSize={Math.max(8, height * 0.026)} fill={nodeTextColor} /></InfographicItemGroup>;
       })}
     </Group>
   );
