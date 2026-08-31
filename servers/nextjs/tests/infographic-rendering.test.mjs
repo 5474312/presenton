@@ -112,6 +112,49 @@ test("preserves aspect ratio and centers fixed-layout infographics", () => {
   assert.match(html, /top:115px/);
 });
 
+test("preserves infographic item offsets and image edits in export HTML", () => {
+  const movedGroup = renderInfographic("stair_step_blocks", {
+    items: [
+      {
+        heading: "Foundation",
+        __presenton_offset: { x: 14, y: -9 },
+      },
+    ],
+  });
+  assert.match(movedGroup, /data-presenton-infographic-item="true"/);
+  assert.match(movedGroup, /transform:translate\(14px,-9px\)/);
+
+  const movedGanttRow = renderInfographic("gantt", {
+    columns: [{ label: "Q1" }],
+    rows: [
+      {
+        label: "Research",
+        items: [],
+        __presenton_offset: { x: 8, y: 4 },
+      },
+    ],
+  });
+  assert.match(movedGanttRow, /transform:translate\(8px,4px\)/);
+
+  const editedImage = renderInfographic("radial_cycle", {
+    center_image: "https://example.com/center.png",
+    center_image_settings: {
+      fit: "contain",
+      focus_x: 25,
+      focus_y: 75,
+      crop_scale: 1.5,
+      flip_h: true,
+      opacity: 0.6,
+      border_radius: 18,
+    },
+  });
+  assert.match(editedImage, /object-fit:contain/);
+  assert.match(editedImage, /object-position:25% 75%/);
+  assert.match(editedImage, /scale\(-1\.5,1\.5\)/);
+  assert.match(editedImage, /opacity:0\.6/);
+  assert.match(editedImage, /border-radius:18px/);
+});
+
 test("keeps progress and gauge exports on their native meter renderers", () => {
   const progress = renderInfographic("progress_bar", {
     min_value: 0,
