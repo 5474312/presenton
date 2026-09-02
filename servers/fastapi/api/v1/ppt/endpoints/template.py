@@ -187,14 +187,14 @@ class McpTemplateUploadResponse(BaseModel):
     pptx_url: str = Field(
         description=(
             "Ready-to-use Presenton PPTX URL. Pass this exact value to "
-            "initialize_template or start_template_generation."
+            "start_template_generation."
         )
     )
     slide_image_urls: list[str] = Field(
         min_length=1,
         description=(
-            "Generated slide previews. Pass this exact array to initialize_template "
-            "or start_template_generation."
+            "Generated slide previews. Pass this exact array to "
+            "start_template_generation."
         ),
     )
     fonts: dict[str, str] = Field(

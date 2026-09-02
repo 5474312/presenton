@@ -573,7 +573,7 @@ To sign out, open **Settings → Other → Sign out**.
 
 #### API and MCP authentication
 
-Presenton exposes a client-neutral MCP 2026-07-28 Streamable HTTP endpoint at
+Presenton exposes a client-neutral MCP 2025-11-25 Streamable HTTP endpoint at
 `/mcp`. When authentication is enabled, REST API and MCP clients use the same
 administrator-provisioned, user-scoped API key. Browser JWT cookies are not
 accepted as MCP credentials.
@@ -620,8 +620,12 @@ Notes:
 - Revoking the key through the admin API takes effect immediately.
 - Standard, Smart Mode, and template generation tools return an async task ID.
   Poll `get_job_status` until `completed` or `error`; template listing is immediate.
+- MCP exposes only the polling Smart workflow (`start_smart_presentation` followed
+  by `get_job_status`) so Standard and Smart generation use the same job model.
 - `upload_template_assets` accepts one PPTX and its replacement fonts in a
-  single call, then returns the data needed by template initialization/generation.
+  single call, then returns the data needed by `start_template_generation`.
+- `upload_files` accepts reference documents and images as base64 and returns
+  user-scoped paths that can be passed unchanged to Standard or Smart generation.
 - MCP is not available in the Electron desktop app (`PRESENTON_ELECTRON=true`). Electron runs with `DISABLE_AUTH=true` by default, and the MCP server is disabled there to avoid auth conflicts.
 
 > Note: LLM and image variables above are forwarded from **`docker-compose.yml`** when set in `.env`.
