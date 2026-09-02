@@ -351,6 +351,7 @@ Other optional variables exist in code (for example advanced Mem0 paths, LitePar
 #### LLM and API keys
 
 - **CAN_CHANGE_KEYS**=[true/false]: Set to **false** if you want to keep API keys hidden and make them unmodifiable.
+- **PRESENTATION_GENERATION_MODE**=[both/standard/smart]: Controls which presentation generation mode is available in the UI. Defaults to **both**. A single-mode value hides the mode selector and forces that mode; `smart` also hides template and custom-template features.
 - **LLM**=[openai/deepseek/google/vertex/azure/bedrock/openrouter/fireworks/together/cerebras/anthropic/litellm/lmstudio/ollama/custom/codex]: Select the text **LLM**.
 - **OPENAI_API_KEY**: Required if **LLM** is **openai**.
 - **OPENAI_MODEL**: Required if **LLM** is **openai** (default: `gpt-4.1`).

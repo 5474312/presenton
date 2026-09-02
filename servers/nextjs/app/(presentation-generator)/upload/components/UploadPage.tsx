@@ -33,8 +33,12 @@ import {
   clampSlideCountValue,
   parseLimitedSlideCount,
 } from "@/utils/presentationLimits";
-
-type GenerationMode = "smart" | "standard";
+import {
+  type GenerationMode,
+  type PresentationGenerationMode,
+  getInitialGenerationMode,
+  isGenerationModeAvailable,
+} from "@/utils/presentationGenerationMode";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 const FILE_TYPE_WORD = new Set([".doc", ".docx", ".docm", ".odt", ".rtf"]);
@@ -132,14 +136,20 @@ const getDocumentPaths = (files: unknown): string[] => {
     .filter((filePath): filePath is string => typeof filePath === "string");
 };
 
-const UploadPage = () => {
+type UploadPageProps = {
+  presentationGenerationMode: PresentationGenerationMode;
+};
+
+const UploadPage = ({ presentationGenerationMode }: UploadPageProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const dispatch = useDispatch();
   const llmConfig = useSelector((state: RootState) => state.userConfig.llm_config);
 
   const [files, setFiles] = useState<File[]>([]);
-  const [generationMode, setGenerationMode] = useState<GenerationMode>("standard");
+  const [generationMode, setGenerationMode] = useState<GenerationMode>(() =>
+    getInitialGenerationMode(presentationGenerationMode),
+  );
   const [config, setConfig] = useState<PresentationConfig>({
     slides: null,
     language: LanguageType.Auto,
@@ -156,13 +166,19 @@ const UploadPage = () => {
     const params = new URLSearchParams(window.location.search);
     const requestedPrompt = params.get("prompt")?.trim();
 
-    if (params.get("mode") === "smart") {
-      setGenerationMode("smart");
+    const requestedMode = params.get("mode");
+    if (
+      (requestedMode === "standard" || requestedMode === "smart") &&
+      isGenerationModeAvailable(presentationGenerationMode, requestedMode)
+    ) {
+      setGenerationMode(requestedMode);
+    } else {
+      setGenerationMode(getInitialGenerationMode(presentationGenerationMode));
     }
     if (requestedPrompt) {
       setConfig((current) => ({ ...current, prompt: requestedPrompt }));
     }
-  }, [pathname]);
+  }, [pathname, presentationGenerationMode]);
 
   useEffect(() => {
     if (llmConfig?.WEB_GROUNDING !== undefined) {
@@ -232,6 +248,7 @@ const UploadPage = () => {
   };
 
   const handleGenerationModeChange = (mode: GenerationMode) => {
+    if (!isGenerationModeAvailable(presentationGenerationMode, mode)) return;
     if (mode === generationMode) return;
     const previousMode = generationMode;
     setGenerationMode(mode);
@@ -523,7 +540,11 @@ const UploadPage = () => {
           <ConfigurationSelects
             compact
             mode={generationMode}
-            onModeChange={handleGenerationModeChange}
+            onModeChange={
+              presentationGenerationMode === "both"
+                ? handleGenerationModeChange
+                : undefined
+            }
             config={config}
             onConfigChange={handleConfigChange}
           />
