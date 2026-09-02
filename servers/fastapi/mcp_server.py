@@ -19,10 +19,8 @@ from utils.get_env import (
     is_disable_auth_enabled,
     is_presenton_electron_desktop,
 )
-from models.sql.access_token import AccessToken as DatabaseAccessToken
-from models.sql.user import User
 from services.database import async_session_maker
-from services.mcp_credentials import MCP_KEY_PREFIX, verify_mcp_credential
+from services.api_keys import API_KEY_PREFIX, verify_api_key
 from api.v1.auth.config import SESSION_COOKIE_NAME
 from api.v1.auth.users import get_jwt_strategy
 from utils.mcp_public_urls import MCP_REQUEST_HEADER
@@ -154,32 +152,16 @@ with OPENAPI_SPEC_PATH.open("r", encoding="utf-8") as f:
 
 
 class PresentonTokenVerifier(TokenVerifier):
-    """Validate user-scoped MCP keys, with one-release legacy-key support."""
+    """Validate the same user-scoped API keys accepted by the REST API."""
 
     async def verify_token(self, token: str) -> AccessToken | None:
-        if not token.startswith("sk-presenton-"):
+        if not token.startswith(API_KEY_PREFIX):
             return None
         async with async_session_maker() as session:
-            if token.startswith(MCP_KEY_PREFIX):
-                verified = await verify_mcp_credential(session, token)
-                if verified is None:
-                    return None
-                user = verified.user
-                credential_id = verified.credential_id
-                legacy = False
-            else:
-                access_key = await session.get(DatabaseAccessToken, token)
-                if access_key is None:
-                    return None
-                user = await session.get(User, access_key.user_id)
-                if user is None or not user.is_active or not user.is_superuser:
-                    return None
-                credential_id = None
-                legacy = True
-                LOGGER.warning(
-                    "A legacy administrator API key authenticated to MCP; "
-                    "replace it with a user-scoped MCP credential"
-                )
+            verified = await verify_api_key(session, token)
+            if verified is None:
+                return None
+            user = verified.user
             try:
                 internal_session_token = await get_jwt_strategy(
                     lifetime_seconds=MCP_INTERNAL_SESSION_TTL_SECONDS
@@ -197,8 +179,7 @@ class PresentonTokenVerifier(TokenVerifier):
                 "u": user.username,
                 "role": "admin" if user.is_superuser else "user",
                 "user_id": str(user.id),
-                "credential_id": credential_id,
-                "legacy": legacy,
+                "api_key_id": verified.api_key_id,
                 "internal_session_token": internal_session_token,
             },
         )
@@ -253,7 +234,7 @@ def create_mcp_server(
 async def attach_request_auth_header(request: httpx.Request | httpx2.Request) -> None:
     """Exchange the MCP key for an internal session when calling FastAPI.
 
-    The long-lived MCP credential is deliberately never forwarded to an API
+    The long-lived API key is deliberately never forwarded to an API
     endpoint. The fallback paths exist for auth-disabled development and for
     older tests which provide a token object without verified claims.
     """

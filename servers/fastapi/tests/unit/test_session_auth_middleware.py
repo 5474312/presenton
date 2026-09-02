@@ -157,3 +157,53 @@ def test_template_generation_routes_allow_authenticated_normal_users(monkeypatch
 
     assert response.status_code == 200
     assert response.body == b"template route reached"
+
+
+def test_api_keys_cannot_access_browser_admin_routes(monkeypatch):
+    class Session:
+        async def scalar(self, _query):
+            return 1
+
+    class SessionContext:
+        async def __aenter__(self):
+            return Session()
+
+        async def __aexit__(self, *_args):
+            return None
+
+    async def resolve_principal(_request, _session):
+        return (
+            AuthPrincipal(
+                user_id=uuid.uuid4(),
+                username="admin",
+                is_admin=True,
+                method="api_key",
+            ),
+            object(),
+        )
+
+    async def unexpected_next(_request):
+        raise AssertionError("API keys must not reach admin configuration routes")
+
+    monkeypatch.setattr(middlewares, "is_disable_auth_enabled", lambda: False)
+    monkeypatch.setattr(middlewares, "async_session_maker", SessionContext)
+    monkeypatch.setattr(middlewares, "resolve_request_principal", resolve_principal)
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "scheme": "http",
+            "path": "/api/v1/admin/provider-settings",
+            "query_string": b"",
+            "headers": [],
+            "client": ("127.0.0.1", 1234),
+            "server": ("127.0.0.1", 5001),
+        }
+    )
+
+    response = asyncio.run(
+        SessionAuthMiddleware(app=None).dispatch(request, unexpected_next)
+    )
+
+    assert response.status_code == 403
+    assert json.loads(response.body) == {"detail": "Admin browser session required"}

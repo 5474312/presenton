@@ -571,23 +571,24 @@ one-time flag after the successful startup.
 
 To sign out, open **Settings → Other → Sign out**.
 
-#### MCP authentication
+#### API and MCP authentication
 
 Presenton exposes a client-neutral MCP 2026-07-28 Streamable HTTP endpoint at
-`/mcp`. When authentication is enabled, it requires an administrator-provisioned,
-user-scoped MCP key. Browser JWT cookies are not accepted as MCP credentials.
+`/mcp`. When authentication is enabled, REST API and MCP clients use the same
+administrator-provisioned, user-scoped API key. Browser JWT cookies are not
+accepted as MCP credentials.
 
 1. An administrator creates the target Presenton user, then calls
-   `POST /api/v1/admin/mcp-credentials` from an authenticated admin session with
-   `{"user_id":"...","label":"My MCP client","expiry_days":90}`. The response
+   `POST /api/v1/admin/api-keys` from an authenticated admin session with
+   `{"user_id":"...","label":"My API client","expiry_days":90}`. The response
    contains the new key. Listing and revocation use
-   `GET /api/v1/admin/mcp-credentials` and
-   `POST /api/v1/admin/mcp-credentials/{credential_id}/revoke`.
+   `GET /api/v1/admin/api-keys` and
+   `POST /api/v1/admin/api-keys/{api_key_id}/revoke`.
    An administrator can securely reveal a key again with
-   `GET /api/v1/admin/mcp-credentials/{credential_id}/token`.
+   `GET /api/v1/admin/api-keys/{api_key_id}/token`.
 
 2. Configure any Streamable HTTP MCP client to send the generated
-   `sk-presenton-mcp-...` key on
+   `sk-presenton-...` key on
    every request:
 
 ```json
@@ -597,7 +598,7 @@ user-scoped MCP key. Browser JWT cookies are not accepted as MCP credentials.
       "url": "http://localhost:5001/mcp",
       "type": "http",
       "headers": {
-        "Authorization": "Bearer sk-presenton-mcp-REPLACE_WITH_YOUR_KEY"
+        "Authorization": "Bearer sk-presenton-0123456789abcdef.REPLACE_WITH_SECRET"
       }
     }
   },
@@ -610,11 +611,11 @@ Notes:
 - This example uses VS Code's `.vscode/mcp.json` format. Use the equivalent
   Streamable HTTP and bearer-header configuration in Open WebUI or any other
   conforming MCP client.
-- MCP keys retain an Argon2 authentication hash and an encrypted, admin-only
+- API keys retain an Argon2 authentication hash and an encrypted, admin-only
   recoverable copy. They expire by default after 90 days and represent exactly
-  the selected Presenton user. They cannot sign in to the browser or authenticate
-  general REST endpoints.
-- The MCP key is exchanged inside the MCP process for a short-lived internal
+  the selected Presenton user. The same key authenticates general REST endpoints
+  and MCP, but cannot sign in to the browser or change admin/provider settings.
+- The API key is exchanged inside the MCP process for a short-lived internal
   user session. The long-lived key is never forwarded to presentation APIs.
 - Revoking the key through the admin API takes effect immediately.
 - Standard, Smart Mode, and template generation tools return an async task ID.
