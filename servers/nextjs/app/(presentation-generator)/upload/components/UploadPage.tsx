@@ -531,7 +531,7 @@ const UploadPage = () => {
 
         <PromptInput
           value={config.prompt}
-          variant={generationMode}
+         
           onChange={(value) => handleConfigChange("prompt", value)}
           onSubmit={handleGeneratePresentation}
           hasAttachments={files.length > 0}

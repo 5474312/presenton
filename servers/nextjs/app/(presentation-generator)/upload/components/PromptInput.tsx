@@ -6,7 +6,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 interface PromptInputProps {
   value: string;
   onChange: (value: string) => void;
-  variant?: "smart" | "standard";
+ 
   footer?: ReactNode;
   onSubmit?: () => void;
   hasAttachments?: boolean;
@@ -15,7 +15,7 @@ interface PromptInputProps {
 export function PromptInput({
   value,
   onChange,
-  variant = "standard",
+ 
   footer,
   onSubmit,
   hasAttachments = false,
@@ -45,7 +45,7 @@ export function PromptInput({
           <Textarea
             value={value}
             autoFocus
-            rows={variant === "smart" ? 3 : 6}
+            rows={6}
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Start with your idea... we'll handle the slides"
