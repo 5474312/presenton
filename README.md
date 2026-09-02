@@ -351,7 +351,7 @@ Other optional variables exist in code (for example advanced Mem0 paths, LitePar
 #### LLM and API keys
 
 - **CAN_CHANGE_KEYS**=[true/false]: Set to **false** if you want to keep API keys hidden and make them unmodifiable.
-- **PRESENTATION_GENERATION_MODE**=[both/standard/smart]: Controls which presentation generation mode is available in the UI. Defaults to **both**. A single-mode value hides the mode selector and forces that mode; `smart` also hides template and custom-template features.
+- **PRESENTATION_GENERATION_MODE**=[both/standard/smart]: Controls which presentation generation mode is available in the UI and which generation tools the MCP server exposes. Defaults to **both**. A single-mode value hides the mode selector and forces that mode; `smart` also hides template and custom-template features and tools.
 - **LLM**=[openai/deepseek/google/vertex/azure/bedrock/openrouter/fireworks/together/cerebras/anthropic/litellm/lmstudio/ollama/custom/codex]: Select the text **LLM**.
 - **OPENAI_API_KEY**: Required if **LLM** is **openai**.
 - **OPENAI_MODEL**: Required if **LLM** is **openai** (default: `gpt-4.1`).
@@ -395,7 +395,9 @@ Other optional variables exist in code (for example advanced Mem0 paths, LitePar
 - **ANTHROPIC_API_KEY**: Required if **LLM** is **anthropic**.
 - **ANTHROPIC_MODEL**: Required if **LLM** is **anthropic** (default: `claude-3-5-sonnet-20241022`).
 - **CODEX_MODEL**: Required if **LLM** is **codex** (Codex OAuth flow; compose maps host port **1455** for the callback).
-- **CUSTOM_LLM_URL**: OpenAI-compatible base URL if **LLM** is **custom**.
+- **CUSTOM_LLM_URL**: OpenAI-compatible base URL if **LLM** is **custom**. The
+  server must implement `POST /v1/chat/completions`; a provider-specific
+  completion endpoint is not sufficient.
 - **CUSTOM_LLM_API_KEY**: API key if **LLM** is **custom**.
 - **CUSTOM_MODEL**: Model id if **LLM** is **custom**.
 - **LITELLM_BASE_URL**: LiteLLM proxy or gateway base URL if **LLM** is **litellm**.
@@ -570,14 +572,21 @@ To sign out, open **Settings → Other → Sign out**.
 
 #### MCP authentication
 
-When auth is enabled, the MCP endpoint at `/mcp` requires an admin-generated
-Presenton access key. Browser JWT cookies are not accepted as MCP credentials.
+Presenton exposes a client-neutral MCP 2026-07-28 Streamable HTTP endpoint at
+`/mcp`. When authentication is enabled, it requires an administrator-provisioned,
+user-scoped MCP key. Browser JWT cookies are not accepted as MCP credentials.
 
-1. The Presenton administrator opens **Admin → API keys**, chooses
-   **Generate key**, and securely gives that key to the MCP user. The MCP user
-   does not need a Presenton account or an admin browser login.
+1. An administrator creates the target Presenton user, then calls
+   `POST /api/v1/admin/mcp-credentials` from an authenticated admin session with
+   `{"user_id":"...","label":"My MCP client","expiry_days":90}`. The response
+   contains the new key. Listing and revocation use
+   `GET /api/v1/admin/mcp-credentials` and
+   `POST /api/v1/admin/mcp-credentials/{credential_id}/revoke`.
+   An administrator can securely reveal a key again with
+   `GET /api/v1/admin/mcp-credentials/{credential_id}/token`.
 
-2. Configure the MCP client to send the generated `sk-presenton-...` key on
+2. Configure any Streamable HTTP MCP client to send the generated
+   `sk-presenton-mcp-...` key on
    every request:
 
 ```json
@@ -587,7 +596,7 @@ Presenton access key. Browser JWT cookies are not accepted as MCP credentials.
       "url": "http://localhost:5001/mcp",
       "type": "http",
       "headers": {
-        "Authorization": "Bearer sk-presenton-REPLACE_WITH_YOUR_KEY"
+        "Authorization": "Bearer sk-presenton-mcp-REPLACE_WITH_YOUR_KEY"
       }
     }
   },
@@ -598,10 +607,19 @@ Presenton access key. Browser JWT cookies are not accepted as MCP credentials.
 Notes:
 
 - This example uses VS Code's `.vscode/mcp.json` format. Use the equivalent
-  static-header configuration for other MCP clients.
-- Access keys authenticate API/MCP requests only; they cannot sign in to the
-  Presenton browser UI.
-- Revoking the key from the admin panel takes effect immediately.
+  Streamable HTTP and bearer-header configuration in Open WebUI or any other
+  conforming MCP client.
+- MCP keys retain an Argon2 authentication hash and an encrypted, admin-only
+  recoverable copy. They expire by default after 90 days and represent exactly
+  the selected Presenton user. They cannot sign in to the browser or authenticate
+  general REST endpoints.
+- The MCP key is exchanged inside the MCP process for a short-lived internal
+  user session. The long-lived key is never forwarded to presentation APIs.
+- Revoking the key through the admin API takes effect immediately.
+- Standard, Smart Mode, and template generation tools return an async task ID.
+  Poll `get_job_status` until `completed` or `error`; template listing is immediate.
+- `upload_template_assets` accepts one PPTX and its replacement fonts in a
+  single call, then returns the data needed by template initialization/generation.
 - MCP is not available in the Electron desktop app (`PRESENTON_ELECTRON=true`). Electron runs with `DISABLE_AUTH=true` by default, and the MCP server is disabled there to avoid auth conflicts.
 
 > Note: LLM and image variables above are forwarded from **`docker-compose.yml`** when set in `.env`.

@@ -97,7 +97,13 @@ from utils.sse import safe_sse_stream
 from api.v1.auth.config import SESSION_COOKIE_NAME
 from utils.web_search import get_selected_web_search_provider, get_web_search_route
 from utils.web_search import build_web_search_query, get_web_search_context
-from api.v1.auth.context import get_current_owner_id
+from api.v1.auth.context import (
+    get_current_owner_id,
+    reset_current_owner_id,
+    reset_current_owner_is_admin,
+    set_current_owner_id,
+    set_current_owner_is_admin,
+)
 from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from templates.v2.schema import get_template_schema
 from templates.v2.content import hydrate_repeated_top_level_groups
@@ -154,7 +160,7 @@ def _blank_presentation_slide_ui() -> dict[str, Any]:
     return copy.deepcopy(BLANK_PRESENTATION_SLIDE_UI)
 
 
-def _presentation_task_progress_data(
+def presentation_task_progress_data(
     created_slides: int,
     remaining_slides: int,
     presentation_id: Optional[uuid.UUID | str] = None,
@@ -1352,7 +1358,7 @@ async def _resolve_prepare_layout(
     )
 
 
-def _build_export_cookie_header(request: Request) -> Optional[str]:
+def build_export_cookie_header(request: Request) -> Optional[str]:
     cookie_header = (request.headers.get("cookie") or "").strip()
     if cookie_header:
         return cookie_header
@@ -1516,7 +1522,7 @@ async def export_existing_presentation(
         presentation.id,
         presentation.title or str(uuid.uuid4()),
         export_as,
-        cookie_header=_build_export_cookie_header(request_http),
+        cookie_header=build_export_cookie_header(request_http),
     )
 
     return PresentationPathAndEditPath(
@@ -1760,7 +1766,7 @@ async def prepare_presentation(
     return PresentationPrepareResponse(presentation_id=presentation.id)
 
 
-async def _stream_smart_presentation(
+async def stream_smart_presentation(
     presentation: PresentationModel,
     sql_session: AsyncSession,
 ) -> StreamingResponse:
@@ -2118,7 +2124,7 @@ async def stream_presentation(
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
     if presentation.generation_mode == "smart":
-        return await _stream_smart_presentation(presentation, sql_session)
+        return await stream_smart_presentation(presentation, sql_session)
     if not presentation.structure:
         raise HTTPException(
             status_code=400,
@@ -2551,7 +2557,7 @@ async def generate_presentation_handler(
             # Updating async status
             if async_status:
                 async_status.message = "Generating presentation outlines"
-                async_status.data = _presentation_task_progress_data(
+                async_status.data = presentation_task_progress_data(
                     created_slides=0,
                     remaining_slides=_requested_slide_count(request),
                     presentation_id=presentation_id,
@@ -2792,7 +2798,7 @@ async def generate_presentation_handler(
         # Updating async status
         if async_status:
             async_status.message = "Generating slides"
-            async_status.data = _presentation_task_progress_data(
+            async_status.data = presentation_task_progress_data(
                 created_slides=0,
                 remaining_slides=final_n_slides or 0,
                 presentation_id=presentation_id,
@@ -2854,7 +2860,7 @@ async def generate_presentation_handler(
                 batch_slides.append(slide)
 
             if async_status:
-                async_status.data = _presentation_task_progress_data(
+                async_status.data = presentation_task_progress_data(
                     created_slides=len(slides),
                     remaining_slides=total_slides_to_create - len(slides),
                     presentation_id=presentation_id,
@@ -2888,7 +2894,7 @@ async def generate_presentation_handler(
 
         if async_status:
             async_status.message = "Fetching assets for slides"
-            async_status.data = _presentation_task_progress_data(
+            async_status.data = presentation_task_progress_data(
                 created_slides=len(slides),
                 remaining_slides=0,
                 presentation_id=presentation_id,
@@ -2940,7 +2946,7 @@ async def generate_presentation_handler(
             async_status.message = "Presentation generation completed"
             async_status.status = AsyncTaskStatus.COMPLETED
             async_status.data = {
-                **_presentation_task_progress_data(
+                **presentation_task_progress_data(
                     created_slides=len(slides),
                     remaining_slides=0,
                     presentation_id=presentation_id,
@@ -3006,7 +3012,7 @@ async def generate_presentation_sync(
             request,
             presentation_id,
             None,
-            export_cookie_header=_build_export_cookie_header(request_http),
+            export_cookie_header=build_export_cookie_header(request_http),
             request_http=request_http,
             sql_session=sql_session,
         )
@@ -3022,34 +3028,41 @@ async def _run_generate_presentation_task(
     presentation_id: uuid.UUID,
     task_id: str,
     export_cookie_header: Optional[str],
+    owner_id: uuid.UUID | None = None,
 ) -> None:
-    async with async_session_maker() as sql_session:
-        async_status = await sql_session.get(AsyncTaskModel, task_id)
-        if not async_status:
-            logger.warning(
-                "[presentation.generate.async] task missing task_id=%s",
-                task_id,
+    owner_token = set_current_owner_id(owner_id)
+    admin_token = set_current_owner_is_admin(False)
+    try:
+        async with async_session_maker() as sql_session:
+            async_status = await sql_session.get(AsyncTaskModel, task_id)
+            if not async_status:
+                logger.warning(
+                    "[presentation.generate.async] task missing task_id=%s",
+                    task_id,
+                )
+                return
+
+            async_status.status = AsyncTaskStatus.PENDING
+            async_status.message = "Starting presentation generation"
+            async_status.data = presentation_task_progress_data(
+                created_slides=0,
+                remaining_slides=_requested_slide_count(request),
+                presentation_id=presentation_id,
             )
-            return
+            async_status.updated_at = datetime.now()
+            sql_session.add(async_status)
+            await sql_session.commit()
 
-        async_status.status = AsyncTaskStatus.PENDING
-        async_status.message = "Starting presentation generation"
-        async_status.data = _presentation_task_progress_data(
-            created_slides=0,
-            remaining_slides=_requested_slide_count(request),
-            presentation_id=presentation_id,
-        )
-        async_status.updated_at = datetime.now()
-        sql_session.add(async_status)
-        await sql_session.commit()
-
-        await generate_presentation_handler(
-            request,
-            presentation_id,
-            async_status=async_status,
-            export_cookie_header=export_cookie_header,
-            sql_session=sql_session,
-        )
+            await generate_presentation_handler(
+                request,
+                presentation_id,
+                async_status=async_status,
+                export_cookie_header=export_cookie_header,
+                sql_session=sql_session,
+            )
+    finally:
+        reset_current_owner_is_admin(admin_token)
+        reset_current_owner_id(owner_token)
 
 
 @PRESENTATION_ROUTER.post("/generate/async", response_model=AsyncTaskModel)
@@ -3066,7 +3079,7 @@ async def generate_presentation_async(
             type=ASYNC_TASK_TYPE_PRESENTATION_GENERATE,
             status=AsyncTaskStatus.PENDING,
             message="Queued for generation",
-            data=_presentation_task_progress_data(
+            data=presentation_task_progress_data(
                 created_slides=0,
                 remaining_slides=_requested_slide_count(request),
                 presentation_id=presentation_id,
@@ -3081,7 +3094,8 @@ async def generate_presentation_async(
             request,
             presentation_id,
             async_status.id,
-            _build_export_cookie_header(request_http),
+            build_export_cookie_header(request_http),
+            get_current_owner_id(),
         )
         return async_status
 
@@ -3148,7 +3162,7 @@ async def edit_presentation_with_new_content(
         presentation.id,
         presentation.title or str(uuid.uuid4()),
         data.export_as,
-        cookie_header=_build_export_cookie_header(request_http),
+        cookie_header=build_export_cookie_header(request_http),
     )
 
     return PresentationPathAndEditPath(
@@ -3192,7 +3206,7 @@ async def derive_presentation_from_existing_one(
         new_presentation.id,
         new_presentation.title or str(uuid.uuid4()),
         data.export_as,
-        cookie_header=_build_export_cookie_header(request_http),
+        cookie_header=build_export_cookie_header(request_http),
     )
 
     return PresentationPathAndEditPath(
