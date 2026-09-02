@@ -99,10 +99,9 @@ def _fake_pptx_bytes(slide_count: int) -> bytes:
     return buffer.getvalue()
 
 
-def test_build_google_fonts_stylesheet_url_includes_regular_and_bold_weights():
-    assert (
-        pptx_font_utils.build_google_fonts_stylesheet_url("Open Sans")
-        == "https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&display=swap"
+def test_packaged_font_url_resolves_open_sans():
+    assert pptx_font_utils.get_static_font_url("Open Sans") == (
+        "/vendor/fonts/sans_serif/opensans/OpenSans[wdth,wght].ttf"
     )
 
 
@@ -338,7 +337,7 @@ async def test_upload_fonts_and_preview_uses_trimmed_pptx_for_processing(
 
 
 @pytest.mark.anyio
-async def test_upload_fonts_and_preview_passes_google_fonts_to_html_preview(
+async def test_upload_fonts_and_preview_returns_packaged_fonts(
     monkeypatch,
     tmp_path,
 ):
@@ -367,11 +366,6 @@ async def test_upload_fonts_and_preview_passes_google_fonts_to_html_preview(
         del logger, session_dir, upload_fonts, google_font_replacements
         return {"Open Sans"}, {}, {}, [], pptx_path, [], [], {}, [], {}
 
-    async def fake_check_google_font_availability(font_name, variants=None):
-        captured["checked_font"] = font_name
-        captured["checked_variants"] = variants
-        return True
-
     async def fake_create_slide_previews(
         modified_pptx_path,
         temp_dir,
@@ -397,11 +391,6 @@ async def test_upload_fonts_and_preview_passes_google_fonts_to_html_preview(
     )
     monkeypatch.setattr(
         fonts_and_slides_preview,
-        "check_google_font_availability",
-        fake_check_google_font_availability,
-    )
-    monkeypatch.setattr(
-        fonts_and_slides_preview,
         "create_slide_previews",
         fake_create_slide_previews,
     )
@@ -419,29 +408,21 @@ async def test_upload_fonts_and_preview_passes_google_fonts_to_html_preview(
         temp_dir=str(tmp_path),
     )
 
-    expected_url = (
-        "https://fonts.googleapis.com/css2"
-        "?family=Open+Sans:wght@400;700&display=swap"
-    )
-    assert captured["checked_font"] == "Open Sans"
-    assert captured["checked_variants"] == ["bold"]
-    assert captured["font_stylesheet_urls"] == [expected_url]
+    expected_url = "/vendor/fonts/sans_serif/opensans/OpenSans[wdth,wght].ttf"
+    assert captured["font_stylesheet_urls"] == []
     assert response.fonts == {"Open Sans": expected_url}
     assert response.slide_image_urls == [str(slide_path)]
 
 
 @pytest.mark.anyio
-async def test_upload_fonts_and_preview_replaces_pptx_fonts_with_selected_google_fonts(
+async def test_upload_fonts_and_preview_replaces_pptx_fonts_with_selected_local_fonts(
     monkeypatch,
     tmp_path,
 ):
     captured = {}
     slide_path = tmp_path / "slide_1.png"
     slide_path.write_bytes(b"png")
-    google_url = (
-        "https://fonts.googleapis.com/css2"
-        "?family=Poppins:wght@100..900&display=swap"
-    )
+    local_url = "/vendor/fonts/sans_serif/poppins/Poppins-Regular.ttf"
 
     monkeypatch.setattr(
         fonts_and_slides_preview,
@@ -516,31 +497,27 @@ async def test_upload_fonts_and_preview_replaces_pptx_fonts_with_selected_google
         original_font_names=[],
         google_font_original_names=["Open Sans Bold"],
         google_font_replacement_names=["Poppins"],
-        google_font_urls=[google_url],
+        google_font_urls=[local_url],
         upload_presentation=False,
         temp_dir=str(tmp_path),
     )
 
     assert captured["google_font_replacements"] == {"Open Sans Bold": "Poppins"}
-    assert captured["font_stylesheet_urls"] == [google_url]
-    assert response.fonts == {"Poppins": google_url}
+    assert captured["font_stylesheet_urls"] == []
+    assert response.fonts == {"Poppins": local_url}
     assert response.slide_image_urls == [str(slide_path)]
 
 
-def test_build_google_fonts_stylesheet_url_sorts_and_deduplicates_weights():
-    assert (
-        pptx_font_utils.build_google_fonts_stylesheet_url("DM Sans", weights=[700, 400, 700])
-        == "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700&display=swap"
-    )
+def test_legacy_font_url_helper_uses_packaged_catalog():
+    assert pptx_font_utils.build_google_fonts_stylesheet_url(
+        "DM Sans", weights=[700, 400, 700]
+    ) == "/vendor/fonts/sans_serif/dmsans/DMSans[opsz,wght].ttf"
 
 
-def test_build_google_fonts_stylesheet_url_supports_italic_variants():
-    assert (
-        pptx_font_utils.build_google_fonts_stylesheet_url(
-            "Montserrat", variants=["regular", "bold", "italic", "bold_italic"]
-        )
-        == "https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,700;1,400;1,700&display=swap"
-    )
+def test_legacy_font_url_helper_ignores_remote_variant_parameters():
+    assert pptx_font_utils.build_google_fonts_stylesheet_url(
+        "Montserrat", variants=["regular", "bold", "italic", "bold_italic"]
+    ) == "/vendor/fonts/sans_serif/montserrat/Montserrat[wght].ttf"
 
 
 class _FakeGoogleFontsResponse:
@@ -575,36 +552,11 @@ class _FakeGoogleFontsSession:
         return _FakeGoogleFontsResponse(self._status, self._css)
 
 
-def test_check_google_font_availability_rejects_compatibility_font_kit(monkeypatch):
-    css = """\
-@font-face {
-  font-family: 'Calibri';
-  src: url(https://fonts.gstatic.com/l/font?kit=J7afnpV-BGlaFfdAhLEY6w) format('woff2');
-}
-"""
-    monkeypatch.setattr(
-        pptx_font_utils.aiohttp,
-        "ClientSession",
-        lambda: _FakeGoogleFontsSession(200, css, []),
-    )
-
+def test_packaged_font_availability_rejects_unknown_fonts():
     assert asyncio.run(pptx_font_utils.check_google_font_availability("Calibri")) is False
 
 
-def test_check_google_font_availability_checks_requested_variant_url(monkeypatch):
-    requested_urls = []
-    css = """\
-@font-face {
-  font-family: 'Montserrat';
-  src: url(https://fonts.gstatic.com/s/montserrat/v31/font.woff2) format('woff2');
-}
-"""
-    monkeypatch.setattr(
-        pptx_font_utils.aiohttp,
-        "ClientSession",
-        lambda: _FakeGoogleFontsSession(200, css, requested_urls),
-    )
-
+def test_packaged_font_availability_accepts_catalog_fonts():
     assert (
         asyncio.run(
             pptx_font_utils.check_google_font_availability(
@@ -613,9 +565,6 @@ def test_check_google_font_availability_checks_requested_variant_url(monkeypatch
         )
         is True
     )
-    assert requested_urls == [
-        "https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,700;1,400&display=swap"
-    ]
 
 
 def test_extract_fonts_from_oxml_ignores_embedded_font_declarations():
@@ -780,9 +729,9 @@ def test_font_stylesheet_links_for_slide_html_extracts_tailwind_font_classes():
         "<span class=\"font-['DM_Sans']\"></span>"
     )
 
-    assert "family=Poppins:wght@400;700" in links
-    assert "family=DM+Sans:wght@400;700" in links
-    assert links.count('rel="stylesheet"') == 2
+    assert "/vendor/fonts/sans_serif/poppins/Poppins-Regular.ttf" in links
+    assert "/vendor/fonts/sans_serif/dmsans/DMSans[opsz,wght].ttf" in links
+    assert links.count("@font-face") == 2
 
 
 def test_font_stylesheet_links_skip_embedded_and_uploaded_fonts():
@@ -796,8 +745,8 @@ def test_font_stylesheet_links_skip_embedded_and_uploaded_fonts():
 
     assert "family=Poppins" not in links
     assert "family=Snell+Roundhand" not in links
-    assert "family=DM+Sans:wght@400;700" in links
-    assert links.count('rel="stylesheet"') == 1
+    assert "/vendor/fonts/sans_serif/dmsans/DMSans[opsz,wght].ttf" in links
+    assert links.count("@font-face") == 1
 
 
 def test_font_css_family_aliases_match_tailwind_underscore_font_values():
@@ -1244,7 +1193,7 @@ def test_create_font_alias_config_preserves_explicit_aliases(tmp_path):
     assert "<string>Legacy Font</string>" not in alias_xml
 
 
-def test_get_available_and_unavailable_fonts_for_pptx_returns_bold_google_font_url(
+def test_get_available_and_unavailable_fonts_for_pptx_returns_packaged_font_url(
     monkeypatch,
 ):
     async def fake_to_thread(func, *args, **kwargs):
@@ -1258,17 +1207,6 @@ def test_get_available_and_unavailable_fonts_for_pptx_returns_bold_google_font_u
         lambda pptx_path, temp_dir: ({"Open Sans"}, [], []),
     )
 
-    async def fake_check_google_font_availability(font_name: str, variants=None) -> bool:
-        assert font_name == "Open Sans"
-        assert variants == ["regular"]
-        return True
-
-    monkeypatch.setattr(
-        pptx_font_utils,
-        "check_google_font_availability",
-        fake_check_google_font_availability,
-    )
-
     available_fonts, unavailable_fonts = asyncio.run(
         pptx_font_utils.get_available_and_unavailable_fonts_for_pptx(
             "presentation.pptx", "/tmp"
@@ -1279,13 +1217,13 @@ def test_get_available_and_unavailable_fonts_for_pptx_returns_bold_google_font_u
     assert available_fonts == [
         (
             "Open Sans",
-            "https://fonts.googleapis.com/css2?family=Open+Sans:wght@400&display=swap",
+            "/vendor/fonts/sans_serif/opensans/OpenSans[wdth,wght].ttf",
             ["regular"],
         )
     ]
 
 
-def test_get_available_and_unavailable_fonts_for_pptx_returns_variant_google_font_url(
+def test_get_available_and_unavailable_fonts_for_pptx_preserves_variants_for_local_font(
     monkeypatch,
 ):
     async def fake_to_thread(func, *args, **kwargs):
@@ -1303,16 +1241,6 @@ def test_get_available_and_unavailable_fonts_for_pptx_returns_variant_google_fon
         lambda pptx_path: {"Montserrat": {"regular", "bold", "italic"}},
     )
 
-    async def fake_check_google_font_availability(font_name: str, variants=None) -> bool:
-        assert variants == ["regular", "bold", "italic"]
-        return True
-
-    monkeypatch.setattr(
-        pptx_font_utils,
-        "check_google_font_availability",
-        fake_check_google_font_availability,
-    )
-
     available_fonts, unavailable_fonts = asyncio.run(
         pptx_font_utils.get_available_and_unavailable_fonts_for_pptx(
             "presentation.pptx", "/tmp"
@@ -1323,7 +1251,7 @@ def test_get_available_and_unavailable_fonts_for_pptx_returns_variant_google_fon
     assert available_fonts == [
         (
             "Montserrat",
-            "https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,700;1,400&display=swap",
+            "/vendor/fonts/sans_serif/montserrat/Montserrat[wght].ttf",
             ["regular", "bold", "italic"],
         )
     ]
@@ -2376,22 +2304,11 @@ async def test_embedded_fonts_are_installed_without_rewriting_pptx_names(
 
 
 @pytest.mark.anyio
-async def test_download_available_google_fonts_skips_when_api_key_missing(
+async def test_packaged_browser_fonts_do_not_require_backend_downloads(
     monkeypatch,
     tmp_path,
 ):
-    calls = []
-
-    async def fake_get_google_font_file_urls(*args, **kwargs):
-        calls.append((args, kwargs))
-        return []
-
     monkeypatch.delenv("GOOGLE_FONTS_API_KEY", raising=False)
-    monkeypatch.setattr(
-        fonts_and_slides_preview,
-        "get_google_font_file_urls",
-        fake_get_google_font_file_urls,
-    )
 
     result = await fonts_and_slides_preview._download_available_google_fonts(
         {"Montserrat"},
@@ -2400,4 +2317,3 @@ async def test_download_available_google_fonts_skips_when_api_key_missing(
     )
 
     assert result == []
-    assert calls == []
