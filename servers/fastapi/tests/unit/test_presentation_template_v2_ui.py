@@ -1460,6 +1460,84 @@ def test_chat_template_content_hydrates_repeated_top_level_groups():
     _assert_branching_timeline_hydrated(ui)
 
 
+def _nested_repeated_group_ui():
+    return {
+        "components": [
+            {
+                "id": "timeline_component",
+                "elements": [
+                    {
+                        "type": "group",
+                        "name": "timeline_items",
+                        "children": [
+                            {
+                                "type": "group",
+                                "name": f"timeline_item_{index}",
+                                "position": {"x": index * 100, "y": 200},
+                                "__presenton_manual_position": True,
+                                "children": [
+                                    {
+                                        "type": "text",
+                                        "decorative": False,
+                                        "name": f"title_{index}",
+                                        "min_length": 1,
+                                        "max_length": 40,
+                                        "runs": [{"text": f"Old {index}"}],
+                                    }
+                                ],
+                            }
+                            for index in range(1, 6)
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+
+def _nested_repeated_group_content():
+    return {
+        "timeline_component": {
+            "timeline_items": [
+                {"title": "First"},
+                {"title": "Second"},
+                {"title": "Third"},
+            ]
+        }
+    }
+
+
+def _assert_nested_repeated_group_is_centered(ui):
+    children = ui["components"][0]["elements"][0]["children"]
+    assert [child["position"]["x"] for child in children] == [200, 300, 400]
+    assert [child["children"][0]["runs"][0]["text"] for child in children] == [
+        "First",
+        "Second",
+        "Third",
+    ]
+    assert all("__presenton_manual_position" not in child for child in children)
+
+
+def test_nested_repeated_group_centers_reduced_content():
+    hydrated = presentation_endpoint._apply_template_content_to_ui(
+        _nested_repeated_group_ui(),
+        _nested_repeated_group_content(),
+    )
+
+    _assert_nested_repeated_group_is_centered(hydrated)
+
+
+def test_chat_nested_repeated_group_centers_reduced_content():
+    ui = _nested_repeated_group_ui()
+
+    PresentationChatMemoryLayer._apply_template_content_to_ui(
+        ui,
+        _nested_repeated_group_content(),
+    )
+
+    _assert_nested_repeated_group_is_centered(ui)
+
+
 def test_apply_template_content_to_ui_hydrates_direct_repeated_images():
     ui = {
         "id": "layout-1",

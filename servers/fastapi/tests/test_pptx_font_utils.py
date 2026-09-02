@@ -662,6 +662,9 @@ def test_preview_dimensions_preserve_converter_aspect_ratio():
     assert fonts_and_slides_preview._preview_dimensions_from_document(
         1280.0, 960.0
     ) == (1280, 960)
+    assert fonts_and_slides_preview._preview_dimensions_from_document(
+        1707.0, 960.0
+    ) == (1280, 720)
     assert fonts_and_slides_preview._preview_dimensions_from_document(0, 0) == (
         1280,
         720,
@@ -681,7 +684,7 @@ def test_preview_dimensions_from_pptx_use_export_core_coordinate_space(tmp_path)
 
     assert fonts_and_slides_preview._preview_dimensions_from_pptx(
         str(pptx_path)
-    ) == (960, 540)
+    ) == (1280, 720)
 
 
 def test_build_slide_preview_html_adds_fixed_viewport_css(monkeypatch):

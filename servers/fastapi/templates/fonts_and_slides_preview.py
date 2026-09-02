@@ -163,19 +163,24 @@ ET.register_namespace("r", PPT_NS["r"])
 
 def _preview_dimensions_from_document(width: float, height: float) -> Tuple[int, int]:
     try:
-        resolved_width = int(round(float(width)))
-        resolved_height = int(round(float(height)))
+        source_width = float(width)
+        source_height = float(height)
     except (TypeError, ValueError):
         return PREVIEW_WIDTH, PREVIEW_HEIGHT
 
-    if resolved_width <= 0 or resolved_height <= 0:
+    if source_width <= 0 or source_height <= 0:
         return PREVIEW_WIDTH, PREVIEW_HEIGHT
 
-    return resolved_width, resolved_height
+    # export-core normalizes PPTX-to-JSON coordinates to a 1280px-wide canvas.
+    # Capture previews in that same coordinate space so decks whose native PPTX
+    # dimensions are larger (for example 1707x960) do not render as a smaller
+    # 1280x720 slide in the top-left of a larger image.
+    normalized_height = int(round(source_height * PREVIEW_WIDTH / source_width))
+    return PREVIEW_WIDTH, max(1, normalized_height)
 
 
 def _preview_dimensions_from_pptx(pptx_path: str) -> Tuple[int, int]:
-    """Read the canvas size used by export-core from the PPTX package."""
+    """Derive export-core's normalized canvas from the PPTX aspect ratio."""
     try:
         with zipfile.ZipFile(pptx_path, "r") as archive:
             presentation_xml = archive.read("ppt/presentation.xml")

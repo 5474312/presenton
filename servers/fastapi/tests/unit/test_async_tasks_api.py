@@ -84,13 +84,18 @@ def test_async_task_status_enum_uses_string_column():
 
 @pytest.mark.parametrize("status", [AsyncTaskStatus.PENDING, "pending"])
 def test_async_task_status_serializes_without_pydantic_warnings(status):
-    task = AsyncTaskModel(type="template.create", status=status)
+    task = AsyncTaskModel(
+        type="template.create",
+        status=status,
+        payload={"private": "generation-input"},
+    )
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         payload = task.model_dump_json()
 
     assert '"status":"pending"' in payload
+    assert "generation-input" not in payload
 
 
 def test_check_async_task_status_returns_task():

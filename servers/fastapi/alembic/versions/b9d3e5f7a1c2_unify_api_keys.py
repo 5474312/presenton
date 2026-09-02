@@ -1,7 +1,7 @@
 """replace legacy and MCP credentials with unified API keys
 
 Revision ID: b9d3e5f7a1c2
-Revises: a7b9d1e3f5c8
+Revises: f5b8d1c3a7e9
 """
 
 from collections.abc import Sequence
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 
 revision: str = "b9d3e5f7a1c2"
-down_revision: str | None = "a7b9d1e3f5c8"
+down_revision: str | None = "f5b8d1c3a7e9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

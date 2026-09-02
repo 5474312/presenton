@@ -107,7 +107,10 @@ from api.v1.auth.context import (
 )
 from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from templates.v2.schema import get_template_schema
-from templates.v2.content import hydrate_repeated_top_level_groups
+from templates.v2.content import (
+    hydrate_repeated_top_level_groups,
+    repeated_child_source_index,
+)
 from templates.v2.theme import template_theme_for_presentation
 from templates.default_templates import resolve_default_template_id
 from services.community_presentations import (
@@ -683,6 +686,7 @@ def _apply_template_content_to_element(
             nested_content,
             direct_value=nested_direct_value,
             name_occurrences=nested_name_occurrences,
+            center_repeated_children=element_type == "group",
         )
         return updated
 
@@ -731,11 +735,17 @@ def _apply_template_content_to_children(
     *,
     direct_value: bool = False,
     name_occurrences: dict[str, int] | None = None,
+    center_repeated_children: bool = False,
 ) -> list[Any]:
     if isinstance(value, list) and children:
         return [
             _apply_template_content_to_element(
-                children[min(index, len(children) - 1)],
+                _repeated_child_for_index(
+                    children,
+                    index,
+                    content_count=len(value),
+                    center_when_reduced=center_repeated_children,
+                ),
                 item,
                 direct_value=True,
             )
@@ -748,6 +758,46 @@ def _apply_template_content_to_children(
         direct_value=direct_value,
         name_occurrences=name_occurrences,
     )
+
+
+def _repeated_child_for_index(
+    children: list[Any],
+    index: int,
+    *,
+    content_count: int,
+    center_when_reduced: bool,
+) -> Any:
+    source_index = repeated_child_source_index(
+        index,
+        template_count=len(children),
+        content_count=content_count,
+        center_when_reduced=center_when_reduced,
+    )
+    source = copy.deepcopy(children[source_index])
+    if not isinstance(source, dict):
+        return source
+
+    source.pop("__presenton_manual_position", None)
+    if index >= len(children):
+        _normalize_repeated_names(source, index)
+    return source
+
+
+def _normalize_repeated_names(value: Any, index: int) -> None:
+    if isinstance(value, list):
+        for item in value:
+            _normalize_repeated_names(item, index)
+        return
+
+    if not isinstance(value, dict):
+        return
+
+    name = value.get("name")
+    if isinstance(name, str):
+        value["name"] = re.sub(r"_\d+(?=_|$)", f"_{index + 1}", name)
+
+    for nested in value.values():
+        _normalize_repeated_names(nested, index)
 
 
 def _apply_template_content_to_element_list(
