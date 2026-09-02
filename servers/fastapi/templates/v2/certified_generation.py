@@ -2085,38 +2085,38 @@ def _validate_flexible_plan(
                 item_indices,
                 annotated_elements,
             )
-            if flow.mode == "group":
+            if flow.mode != "group":
+                requested_mode = flow.mode
                 try:
                     if repeatable:
-                        _infer_repeat_geometry(item_indices, source_elements)
+                        inferred_mode, _inferred_detail = _infer_repeat_geometry(
+                            item_indices,
+                            source_elements,
+                        )
                     else:
-                        _infer_fixed_flow_geometry(item_indices, source_elements)
-                except ValueError:
-                    pass
+                        inferred_mode, _inferred_detail = _infer_fixed_flow_geometry(
+                            item_indices,
+                            source_elements,
+                        )
+                except ValueError as exc:
+                    LOGGER.info(
+                        "[templates.v2.generate] preserving flexible flow as group "
+                        "name=%s requested_mode=%s reason=%s",
+                        flow.name,
+                        requested_mode,
+                        exc,
+                    )
+                    flow.mode = "group"
                 else:
-                    raise ValueError(
-                        f"flexible flow {flow.name} must use an inferred flow mode"
-                    )
-            elif repeatable:
-                inferred_mode, _columns = _infer_repeat_geometry(
-                    item_indices,
-                    source_elements,
-                )
-                if inferred_mode != flow.mode:
-                    raise ValueError(
-                        f"flexible flow {flow.name} must use inferred mode "
-                        f"{inferred_mode}"
-                    )
-            else:
-                inferred_mode, _alignment = _infer_fixed_flow_geometry(
-                    item_indices,
-                    source_elements,
-                )
-                if inferred_mode != flow.mode:
-                    raise ValueError(
-                        f"flexible flow {flow.name} must use inferred mode "
-                        f"{inferred_mode}"
-                    )
+                    if inferred_mode != requested_mode:
+                        LOGGER.info(
+                            "[templates.v2.generate] preserving flexible flow as "
+                            "group name=%s requested_mode=%s inferred_mode=%s",
+                            flow.name,
+                            requested_mode,
+                            inferred_mode,
+                        )
+                        flow.mode = "group"
             return flattened
 
         root_indices = validate_flow(region.root_flow_id, ())
@@ -3718,6 +3718,9 @@ def _structured_output_repair_rules(
         ]
     if output_model is TextCapacityPlan:
         return [
+            "Return every adjustment as one complete object containing path, all "
+            "four growth fields, and both alignment fields; never split fields "
+            "across array entries.",
             "Omit every no-op adjustment whose growth values are all zero and whose alignments are both preserve.",
             "Return an empty adjustments list when no text box needs growth or an alignment change.",
         ]
