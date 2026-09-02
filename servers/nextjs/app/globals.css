@@ -1,9 +1,47 @@
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/vendor/fonts/sans_serif/inter/Inter[opsz,wght].ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/vendor/fonts/sans_serif/inter/Inter-Italic[opsz,wght].ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("/vendor/fonts/sans_serif/manrope/Manrope[wght].ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Unbounded";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/vendor/fonts/display/unbounded/Unbounded[wght].ttf") format("truetype");
+}
+
+:root {
+  --font-syne: "Manrope", Arial, sans-serif;
+  --font-manrope: "Manrope", Arial, sans-serif;
+  --font-unbounded: "Unbounded", Arial, sans-serif;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
-  font-family: var(--font-syne), var(--font-unbounded), var(--font-inter),
+  font-family: var(--font-syne), var(--font-manrope),
     sans-serif;
 }
 
