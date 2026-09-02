@@ -124,7 +124,7 @@ CHAT_BUILTIN_THEMES: list[dict[str, Any]] = [
             "fonts": {
                 "textFont": {
                     "name": "Playfair Display",
-                    "url": "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400..900&display=swap",
+                    "url": "/vendor/fonts/serif/playfairdisplay/PlayfairDisplay[wght].ttf",
                 }
             },
         },
@@ -158,8 +158,8 @@ CHAT_BUILTIN_THEMES: list[dict[str, Any]] = [
             },
             "fonts": {
                 "textFont": {
-                    "name": "Overpass",
-                    "url": "https://fonts.googleapis.com/css2?family=Overpass:wght@100..900&display=swap",
+                    "name": "Outfit",
+                    "url": "/vendor/fonts/sans_serif/outfit/Outfit[wght].ttf",
                 }
             },
         },
@@ -193,8 +193,8 @@ CHAT_BUILTIN_THEMES: list[dict[str, Any]] = [
             },
             "fonts": {
                 "textFont": {
-                    "name": "Prompt",
-                    "url": "https://fonts.googleapis.com/css2?family=Prompt:wght@100..900&display=swap",
+                    "name": "Poppins",
+                    "url": "/vendor/fonts/sans_serif/poppins/Poppins-Regular.ttf",
                 }
             },
         },
@@ -229,7 +229,7 @@ CHAT_BUILTIN_THEMES: list[dict[str, Any]] = [
             "fonts": {
                 "textFont": {
                     "name": "Inter",
-                    "url": "https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap",
+                    "url": "/vendor/fonts/sans_serif/inter/Inter[opsz,wght].ttf",
                 }
             },
         },
@@ -263,8 +263,8 @@ CHAT_BUILTIN_THEMES: list[dict[str, Any]] = [
             },
             "fonts": {
                 "textFont": {
-                    "name": "Instrument Sans",
-                    "url": "https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&display=swap",
+                    "name": "DM Sans",
+                    "url": "/vendor/fonts/sans_serif/dmsans/DMSans[opsz,wght].ttf",
                 }
             },
         },
@@ -290,7 +290,7 @@ THEME_COLOR_KEYS = [
 ]
 DEFAULT_THEME_FONT = {
     "name": "Inter",
-    "url": "https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap",
+    "url": "/vendor/fonts/sans_serif/inter/Inter[opsz,wght].ttf",
 }
 
 

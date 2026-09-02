@@ -18,7 +18,7 @@ import { notify } from "@/components/ui/sonner";
 import type { TemplateV2Layout } from "@/components/slide-editor/importing/template-v2-import";
 import {
   templateFontOptionsFromMap,
-} from "@/components/slide-editor/text/google-fonts";
+} from "@/components/slide-editor/text/local-fonts";
 import {
   canUngroupTemplateV2Component,
   ungroupTemplateV2ComponentInUi,

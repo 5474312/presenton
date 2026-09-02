@@ -1857,7 +1857,7 @@ async def _stream_smart_presentation(
             source_context = source_context[:90_000]
 
         presentation.fonts = presentation.fonts or reference_fonts or {
-            "Inter": "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+            "Inter": "/vendor/fonts/sans_serif/inter/Inter[opsz,wght].ttf"
         }
         # Release the request session's read transaction before independent
         # checkpoint sessions begin writing (important for SQLite), while also
