@@ -352,7 +352,7 @@ Other optional variables exist in code (for example advanced Mem0 paths, LitePar
 
 - **CAN_CHANGE_KEYS**=[true/false]: Set to **false** if you want to keep API keys hidden and make them unmodifiable.
 - **PRESENTON_PUBLIC_URL**: Optional browser-reachable Presenton origin, for example `http://localhost:5001` or `https://slides.example.com`. Set this when an MCP client reaches Presenton through a Docker-internal hostname; generated download, edit, and preview links use this origin instead.
-- **PRESENTATION_GENERATION_MODE**=[both/standard/smart]: Controls which presentation generation mode is available in the UI and which generation tools the MCP server exposes. Defaults to **both**. A single-mode value hides the mode selector and forces that mode; `smart` also hides template and custom-template features and tools.
+- **PRESENTATION_GENERATION_MODE**=[both/standard/smart]: Controls which presentation generation mode is available in the UI and which generation tools the MCP server exposes. Defaults to **both**. A single-mode value hides the mode selector and forces that mode; `smart` also hides template and custom-template features and tools. See the **[presentation generation modes guide](docs/presentation-generation-modes.md)** for configuration examples and mode behavior.
 - **LLM**=[openai/deepseek/google/vertex/azure/bedrock/openrouter/fireworks/together/cerebras/anthropic/litellm/lmstudio/ollama/custom/codex]: Select the text **LLM**.
 - **OPENAI_API_KEY**: Required if **LLM** is **openai**.
 - **OPENAI_MODEL**: Required if **LLM** is **openai** (default: `gpt-4.1`).
