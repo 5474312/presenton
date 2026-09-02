@@ -33,7 +33,8 @@ REVISION_SMART_GENERATION = "f3a7c1d9e5b2"
 REVISION_PRESENTON_CLOUD_PROVIDER = "c6e8f1a3b5d7"
 REVISION_SMART_MODE_BACKFILL = "d2f4a6b8c0e1"
 REVISION_TEMPLATE_V2_THEME = "e4c7a9b2d6f1"
-REVISION_HEAD = REVISION_TEMPLATE_V2_THEME
+REVISION_ASYNC_TASK_PAYLOAD = "f5b8d1c3a7e9"
+REVISION_HEAD = REVISION_ASYNC_TASK_PAYLOAD
 
 
 async def migrate_database_on_startup() -> None:
@@ -140,6 +141,10 @@ def _infer_revision_from_schema(
         if "template_v2" in tables and _has_column(
             inspector, "template_v2", "theme"
         ):
+            if "async_tasks" in tables and _has_column(
+                inspector, "async_tasks", "payload"
+            ):
+                return REVISION_ASYNC_TASK_PAYLOAD
             return REVISION_TEMPLATE_V2_THEME
         if "presenton_cloud_provider" in tables:
             return REVISION_PRESENTON_CLOUD_PROVIDER

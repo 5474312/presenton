@@ -25,7 +25,10 @@ from services.mem0_presentation_memory_service import MEM0_PRESENTATION_MEMORY_S
 from services.temp_file_service import TEMP_FILE_SERVICE
 from templates.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from templates.v2.schema import get_template_schema
-from templates.v2.content import hydrate_repeated_top_level_groups
+from templates.v2.content import (
+    hydrate_repeated_top_level_groups,
+    repeated_child_source_index,
+)
 from utils.asset_directory_utils import (
     filesystem_image_path_to_app_data_url,
     get_images_directory,
@@ -3876,8 +3879,15 @@ class PresentationChatMemoryLayer:
             if isinstance(value, list) and children:
                 next_children: list[Any] = []
                 for index, item in enumerate(value):
-                    source_child = copy.deepcopy(children[min(index, len(children) - 1)])
+                    source_index = repeated_child_source_index(
+                        index,
+                        template_count=len(children),
+                        content_count=len(value),
+                        center_when_reduced=element_type == "group",
+                    )
+                    source_child = copy.deepcopy(children[source_index])
                     if isinstance(source_child, dict):
+                        source_child.pop("__presenton_manual_position", None)
                         cls._apply_template_element_content(
                             source_child,
                             item,

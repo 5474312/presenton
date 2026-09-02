@@ -948,8 +948,7 @@ function ResponsiveSlideViewport({
     };
   }, [bottomReserve, fitToAvailableHeight]);
 
-  const widthScale =
-    bounds.width > 0 ? (bounds.width / SLIDE_WIDTH) * 0.98 : 0;
+  const widthScale = bounds.width > 0 ? bounds.width / SLIDE_WIDTH : 0;
   const heightScale =
     fitToAvailableHeight && bounds.maxHeight > 0
       ? bounds.maxHeight / SLIDE_HEIGHT

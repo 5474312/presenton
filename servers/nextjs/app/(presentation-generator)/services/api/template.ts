@@ -70,6 +70,9 @@ export interface AsyncTaskResponse {
 }
 
 export interface TemplateCreateTaskData {
+    async_task_id?: string;
+    template_v2_id?: string;
+    attempt?: number;
     created_layouts?: number;
     remaining_layouts?: number;
     name?: string;
@@ -241,11 +244,10 @@ class TemplateService {
         }
     }
 
-    static async getProcessingTemplateCreateTasks(createdAtFrom: Date): Promise<TemplateCreateTaskResponse[]> {
+    static async getRecentTemplateCreateTasks(createdAtFrom: Date): Promise<TemplateCreateTaskResponse[]> {
         try {
             const params = new URLSearchParams({
                 type: "template.create",
-                status: "pending",
                 order_by: "created_at",
                 order: "desc",
                 limit: "50",
@@ -253,9 +255,28 @@ class TemplateService {
                 created_at: createdAtFrom.toISOString(),
             });
             const response = await fetch(getApiUrl(`/api/v1/async-tasks?${params.toString()}`));
-            return await ApiResponseHandler.handleResponse(response, "Failed to get processing template tasks");
+            return await ApiResponseHandler.handleResponse(response, "Failed to get recent template tasks");
         } catch (error) {
-            console.error("Failed to get processing template tasks", error);
+            console.error("Failed to get recent template tasks", error);
+            throw error;
+        }
+    }
+
+    static async retryTemplateCreateTask(taskId: string): Promise<TemplateCreateTaskResponse> {
+        try {
+            const response = await fetch(
+                getApiUrl(`/api/v1/ppt/template/async/${encodeURIComponent(taskId)}/retry`),
+                {
+                    method: "POST",
+                    headers: getHeader(),
+                },
+            );
+            return await ApiResponseHandler.handleResponse(
+                response,
+                "Failed to retry template generation",
+            );
+        } catch (error) {
+            console.error("Failed to retry template generation", error);
             throw error;
         }
     }

@@ -1839,7 +1839,10 @@ function RawElementNode({
           width={visualBox.width}
           height={visualBox.height}
           interactive={isEditMode}
-          vectorOriginBox={isVector ? box : null}
+          // Flow/container layout can move a vector without rewriting its source
+          // points. Keep the visual geometry relative to the source point bounds;
+          // using the laid-out box here cancels the layout offset.
+          vectorOriginBox={isVector ? elementBox(element) : null}
           selectedTableCell={selectedCell}
           onTableCellSelect={handleTableCellSelect}
           onTableCellEdit={handleTableCellEdit}

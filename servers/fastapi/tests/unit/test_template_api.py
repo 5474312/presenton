@@ -28,6 +28,7 @@ from api.v1.ppt.endpoints.template import (
     init_template,
     list_templates,
     patch_template_slide_layout,
+    retry_create_template,
     update_template_metadata,
 )
 from models.sql.async_task import AsyncTaskModel
@@ -541,7 +542,18 @@ def test_create_template_async_enqueues_task(fake_async_session):
     assert task.type == "template.create"
     assert task.status == "pending"
     assert task.message == "Queued for template creation"
+    assert task.payload == {
+        "pptx_url": "/app_data/uploads/template.pptx",
+        "slide_image_urls": ["/app_data/images/slide-1.png"],
+        "fonts": {},
+        "name": None,
+        "description": None,
+        "icon_type": "bold",
+    }
     assert task.data == {
+        "async_task_id": task.id,
+        "template_v2_id": task.data["template_v2_id"],
+        "attempt": 1,
         "created_layouts": 0,
         "remaining_layouts": 1,
         "slide_layout_statuses": [{"index": 0, "status": "pending"}],
@@ -553,6 +565,82 @@ def test_create_template_async_enqueues_task(fake_async_session):
     assert len(background_tasks.tasks) == 1
 
 
+def test_retry_create_template_reuses_failed_task(fake_async_session):
+    original_task = AsyncTaskModel(
+        id="task-template-create-failed",
+        type="template.create",
+        status="error",
+        message="Template creation failed",
+        error={"status_code": 500, "detail": "Template creation failed"},
+        payload={
+            "pptx_url": "/app_data/uploads/template.pptx",
+            "slide_image_urls": ["/app_data/images/slide-1.png"],
+            "fonts": {},
+            "name": "Retry me",
+            "description": None,
+            "icon_type": "bold",
+        },
+        data={
+            "async_task_id": "task-template-create-failed",
+            "template_v2_id": "template-v2-retry-id",
+            "attempt": 1,
+            "created_layouts": 0,
+            "remaining_layouts": 1,
+        },
+    )
+    fake_async_session._get_results[original_task.id] = original_task
+    background_tasks = BackgroundTasks()
+
+    retried_task = asyncio.run(
+        retry_create_template(
+            background_tasks=background_tasks,
+            task_id=original_task.id,
+            sql_session=fake_async_session,
+        )
+    )
+
+    assert retried_task is original_task
+    assert retried_task.id == "task-template-create-failed"
+    assert retried_task.status == "pending"
+    assert retried_task.message == "Queued for template creation retry"
+    assert retried_task.error is None
+    assert retried_task.data["async_task_id"] == original_task.id
+    assert retried_task.data["template_v2_id"] == "template-v2-retry-id"
+    assert retried_task.data["attempt"] == 2
+    assert retried_task.payload == original_task.payload
+    assert fake_async_session.added == [original_task]
+    assert fake_async_session.commit_count == 1
+    assert len(background_tasks.tasks) == 1
+
+
+def test_retry_create_template_rejects_non_failed_task(fake_async_session):
+    task = AsyncTaskModel(
+        id="task-template-create-pending",
+        type="template.create",
+        status="pending",
+        payload={},
+        data={
+            "async_task_id": "task-template-create-pending",
+            "template_v2_id": "template-v2-id",
+            "attempt": 1,
+        },
+    )
+    fake_async_session._get_results[task.id] = task
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            retry_create_template(
+                background_tasks=BackgroundTasks(),
+                task_id=task.id,
+                sql_session=fake_async_session,
+            )
+        )
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail == "Only failed template creation tasks can be retried"
+    assert fake_async_session.commit_count == 0
+
+
 def test_create_template_async_task_updates_slide_status_before_batch_completes(
     tmp_path,
 ):
@@ -562,6 +650,22 @@ def test_create_template_async_task_updates_slide_status_before_batch_completes(
         id="task-template-create",
         type="template.create",
         status="pending",
+        payload={
+            "pptx_url": "/app_data/uploads/template.pptx",
+            "slide_image_urls": [
+                "/app_data/images/slide-1.png",
+                "/app_data/images/slide-2.png",
+            ],
+            "fonts": {},
+            "name": None,
+            "description": None,
+            "icon_type": "bold",
+        },
+        data={
+            "async_task_id": "task-template-create",
+            "template_v2_id": "template-v2-generated-id",
+            "attempt": 1,
+        },
     )
     session = _TemplateTaskSession(task)
     generated_layouts = _two_template_layouts()["layouts"]
@@ -592,18 +696,7 @@ def test_create_template_async_task_updates_slide_status_before_batch_completes(
         "api.v1.ppt.endpoints.template.random.randint",
         side_effect=[4801, 4802],
     ):
-        asyncio.run(
-            _run_create_template_task(
-                task.id,
-                CreateTemplateRequest(
-                    pptx_url="/app_data/uploads/template.pptx",
-                    slide_image_urls=[
-                        "/app_data/images/slide-1.png",
-                        "/app_data/images/slide-2.png",
-                    ],
-                ),
-            )
-        )
+        asyncio.run(_run_create_template_task(task.id))
 
     in_progress_slide_snapshot = next(
         snapshot
@@ -626,6 +719,7 @@ def test_create_template_async_task_updates_slide_status_before_batch_completes(
         {"index": 1, "status": "completed"},
     ]
     persisted_template = next(obj for obj in session.added if isinstance(obj, TemplateV2))
+    assert persisted_template.id == "template-v2-generated-id"
     assert persisted_template.layouts["layouts"][0]["id"] == "slide_1_4801"
     assert persisted_template.layouts["layouts"][1]["id"] == "slide_2_4802"
 
