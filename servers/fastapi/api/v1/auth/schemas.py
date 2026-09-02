@@ -53,13 +53,13 @@ class AdminResetPasswordRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
-class AdminCreateMcpCredentialRequest(BaseModel):
+class AdminCreateApiKeyRequest(BaseModel):
     user_id: uuid.UUID
-    label: str = Field(default="MCP client", min_length=1, max_length=120)
+    label: str = Field(default="API client", min_length=1, max_length=120)
     expiry_days: int = Field(default=90, ge=1, le=365)
 
 
-class McpCredentialPublic(BaseModel):
+class ApiKeyPublic(BaseModel):
     id: str
     user_id: uuid.UUID
     created_by_id: uuid.UUID
@@ -72,10 +72,10 @@ class McpCredentialPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class McpCredentialCreated(McpCredentialPublic):
+class ApiKeyCreated(ApiKeyPublic):
     token: str
 
 
-class McpCredentialToken(BaseModel):
+class ApiKeyToken(BaseModel):
     id: str
     token: str

@@ -99,7 +99,7 @@ def test_auth_disabled_runtime_still_checks_presenton_cloud_proxy(monkeypatch):
         "/api/v1/ppt/template/async",
     ],
 )
-def test_template_generation_routes_require_admin_browser_session(monkeypatch, path):
+def test_template_generation_routes_allow_authenticated_normal_users(monkeypatch, path):
     class Session:
         async def scalar(self, _query):
             return 1
@@ -124,8 +124,66 @@ def test_template_generation_routes_require_admin_browser_session(monkeypatch, p
             object(),
         )
 
+    async def call_next(request):
+        assert request.state.auth_principal.user_id == user_id
+        assert request.state.auth_principal.is_admin is False
+        return Response("template route reached", status_code=200)
+
+    async def no_cloud_proxy(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(middlewares, "is_disable_auth_enabled", lambda: False)
+    monkeypatch.setattr(middlewares, "async_session_maker", SessionContext)
+    monkeypatch.setattr(middlewares, "resolve_request_principal", resolve_principal)
+    monkeypatch.setattr(
+        middlewares, "maybe_proxy_presenton_cloud_request", no_cloud_proxy
+    )
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "scheme": "http",
+            "path": path,
+            "query_string": b"",
+            "headers": [],
+            "client": ("127.0.0.1", 1234),
+            "server": ("127.0.0.1", 5001),
+        }
+    )
+
+    response = asyncio.run(
+        SessionAuthMiddleware(app=None).dispatch(request, call_next)
+    )
+
+    assert response.status_code == 200
+    assert response.body == b"template route reached"
+
+
+def test_api_keys_cannot_access_browser_admin_routes(monkeypatch):
+    class Session:
+        async def scalar(self, _query):
+            return 1
+
+    class SessionContext:
+        async def __aenter__(self):
+            return Session()
+
+        async def __aexit__(self, *_args):
+            return None
+
+    async def resolve_principal(_request, _session):
+        return (
+            AuthPrincipal(
+                user_id=uuid.uuid4(),
+                username="admin",
+                is_admin=True,
+                method="api_key",
+            ),
+            object(),
+        )
+
     async def unexpected_next(_request):
-        raise AssertionError("A normal user must not reach template generation")
+        raise AssertionError("API keys must not reach admin configuration routes")
 
     monkeypatch.setattr(middlewares, "is_disable_auth_enabled", lambda: False)
     monkeypatch.setattr(middlewares, "async_session_maker", SessionContext)
@@ -133,9 +191,9 @@ def test_template_generation_routes_require_admin_browser_session(monkeypatch, p
     request = Request(
         {
             "type": "http",
-            "method": "POST",
+            "method": "GET",
             "scheme": "http",
-            "path": path,
+            "path": "/api/v1/admin/provider-settings",
             "query_string": b"",
             "headers": [],
             "client": ("127.0.0.1", 1234),

@@ -133,12 +133,15 @@ def _http_request(
     scheme: str = "http",
     forwarded_host: str | None = None,
     forwarded_proto: str | None = None,
+    mcp: bool = False,
 ) -> Request:
     headers = [(b"host", host.encode())]
     if forwarded_host:
         headers.append((b"x-forwarded-host", forwarded_host.encode()))
     if forwarded_proto:
         headers.append((b"x-forwarded-proto", forwarded_proto.encode()))
+    if mcp:
+        headers.append((b"x-presenton-mcp-request", b"1"))
     return Request(
         {
             "type": "http",
@@ -900,6 +903,28 @@ def test_list_templates_returns_paginated_summary():
         "templateV2Id=00000000-0000-0000-0000-000000000001"
     )
     assert response.items[0].is_default is False
+
+
+def test_list_templates_uses_configured_public_url_for_mcp(monkeypatch):
+    monkeypatch.setenv("PRESENTON_PUBLIC_URL", "https://public.example.com")
+
+    response = asyncio.run(
+        list_templates(
+            request=_http_request(
+                forwarded_host="presenton-internal:80",
+                forwarded_proto="http",
+                mcp=True,
+            ),
+            page=1,
+            page_size=20,
+            sql_session=_ListSession(),
+        )
+    )
+
+    assert response.items[0].preview_url == (
+        "https://public.example.com/template-preview?"
+        "templateV2Id=00000000-0000-0000-0000-000000000001"
+    )
 
 
 def test_list_templates_filters_by_default_flag():

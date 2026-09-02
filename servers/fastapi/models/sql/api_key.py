@@ -9,10 +9,10 @@ from sqlmodel import Field, SQLModel
 from utils.datetime_utils import get_current_utc_datetime
 
 
-class McpCredential(SQLModel, table=True):
-    """A revocable, user-scoped credential used only by the MCP server."""
+class ApiKey(SQLModel, table=True):
+    """A revocable API key scoped to one Presenton user."""
 
-    __tablename__ = "mcp_credentials"
+    __tablename__ = "api_keys"
 
     id: str = Field(
         default_factory=lambda: secrets.token_hex(8),
@@ -35,7 +35,7 @@ class McpCredential(SQLModel, table=True):
             ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
         )
     )
-    label: str = Field(default="MCP client", max_length=120)
+    label: str = Field(default="API client", max_length=120)
     created_at: datetime = Field(
         sa_column=Column(
             DateTime(timezone=True),

@@ -50,6 +50,7 @@ from services.mem0_presentation_memory_service import (
 )
 from utils.dict_utils import deep_update
 from utils.export_utils import export_presentation
+from utils.mcp_public_urls import absolute_mcp_result_links
 from utils.llm_calls.generate_presentation_outlines import (
     generate_ppt_outline,
     get_messages as get_outline_messages,
@@ -3058,13 +3059,19 @@ async def generate_presentation_sync(
 ):
     try:
         (presentation_id,) = await check_if_api_request_is_valid(request, sql_session)
-        return await generate_presentation_handler(
+        response = await generate_presentation_handler(
             request,
             presentation_id,
             None,
             export_cookie_header=build_export_cookie_header(request_http),
             request_http=request_http,
             sql_session=sql_session,
+        )
+        return response.model_copy(
+            update=absolute_mcp_result_links(
+                request_http,
+                {"path": response.path, "edit_path": response.edit_path},
+            )
         )
     except HTTPException:
         raise
@@ -3159,6 +3166,7 @@ async def generate_presentation_async(
 
 @PRESENTATION_ROUTER.get("/status/{id}", response_model=AsyncTaskModel)
 async def check_async_presentation_generation_status(
+    request: Request,
     id: str = Path(description="ID of the presentation generation task"),
     sql_session: AsyncSession = Depends(get_async_session),
 ):
@@ -3167,7 +3175,10 @@ async def check_async_presentation_generation_status(
         raise HTTPException(
             status_code=404, detail="No presentation generation task found"
         )
-    return status
+    response = status.model_copy(deep=True)
+    if response.data:
+        response.data = absolute_mcp_result_links(request, response.data)
+    return response
 
 
 @PRESENTATION_ROUTER.post("/edit", response_model=PresentationPathAndEditPath)

@@ -3,7 +3,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
-  Cable,
   Copy,
   Eye,
   EyeOff,
@@ -37,12 +36,6 @@ type AdminUser = {
 };
 
 type ApiKey = {
-  token: string;
-  user_id: string;
-  created_at: string;
-};
-
-type McpCredential = {
   id: string;
   user_id: string;
   created_by_id: string;
@@ -53,13 +46,12 @@ type McpCredential = {
   revoked_at: string | null;
 };
 
-type McpCredentialCreated = McpCredential & { token: string };
+type ApiKeyCreated = ApiKey & { token: string };
 
 type AdminDialog =
   | { kind: "reset-password"; user: AdminUser }
   | { kind: "delete-user"; user: AdminUser }
-  | { kind: "revoke-key"; key: ApiKey }
-  | { kind: "revoke-mcp"; credential: McpCredential }
+  | { kind: "revoke-key"; apiKey: ApiKey }
   | null;
 
 type AdminPanelProps = {
@@ -73,10 +65,6 @@ async function errorDetail(response: Response): Promise<string> {
     : formatFastApiDetail(payload.detail);
 }
 
-function maskedKey(token: string) {
-  return `••••••••••••••••${token.slice(-4)}`;
-}
-
 const primaryButtonClass =
   "inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#7C51F8] px-5 text-xs font-semibold text-white transition hover:bg-[#6D46E6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
 
@@ -85,17 +73,15 @@ const inputClass =
 
 export default function AdminPanel({ embedded = false }: AdminPanelProps) {
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [keys, setKeys] = useState<ApiKey[]>([]);
-  const [mcpCredentials, setMcpCredentials] = useState<McpCredential[]>([]);
-  const [mcpTokens, setMcpTokens] = useState<Record<string, string>>({});
-  const [visibleMcpKeys, setVisibleMcpKeys] = useState<Set<string>>(() => new Set());
-  const [mcpUserId, setMcpUserId] = useState("");
-  const [mcpLabel, setMcpLabel] = useState("MCP client");
-  const [mcpExpiryDays, setMcpExpiryDays] = useState(90);
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [apiKeyTokens, setApiKeyTokens] = useState<Record<string, string>>({});
+  const [visibleApiKeys, setVisibleApiKeys] = useState<Set<string>>(() => new Set());
+  const [apiKeyUserId, setApiKeyUserId] = useState("");
+  const [apiKeyLabel, setApiKeyLabel] = useState("API client");
+  const [apiKeyExpiryDays, setApiKeyExpiryDays] = useState(90);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [resetPasswordValue, setResetPasswordValue] = useState("");
-  const [visibleKeys, setVisibleKeys] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [dialog, setDialog] = useState<AdminDialog>(null);
 
@@ -111,7 +97,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
       if (response.ok) {
         const loadedUsers = (await response.json()) as AdminUser[];
         setUsers(loadedUsers);
-        setMcpUserId((current) =>
+        setApiKeyUserId((current) =>
           current && loadedUsers.some((user) => user.id === current)
             ? current
             : loadedUsers.find((user) => user.role === "admin")?.id ?? loadedUsers[0]?.id ?? ""
@@ -144,56 +130,25 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
     }
   }, []);
 
-  const loadKeys = useCallback(async () => {
-    setBusy("keys");
+  const loadApiKeys = useCallback(async () => {
+    setBusy("api-keys");
     try {
-      const response = await fetch("/api/v1/auth/token/list", {
+      const response = await fetch("/api/v1/admin/api-keys", {
         cache: "no-store",
         credentials: "include",
       });
       if (response.ok) {
-        const loadedKeys = (await response.json()) as ApiKey[];
-        setKeys(loadedKeys);
+        const loaded = (await response.json()) as ApiKey[];
+        const active = loaded.filter((apiKey) => !apiKey.revoked_at);
+        setApiKeys(active);
         trackEvent(MixpanelEvent.Auth_Admin_API_Key_List_Loaded, {
-          api_key_count: loadedKeys.length,
+          api_key_count: active.length,
         });
       } else {
-        const detail = await errorDetail(response);
-        trackEvent(MixpanelEvent.Auth_Admin_API_Key_List_Failed, {
-          status_code: response.status,
-          error_message: sanitizeAnalyticsError(detail),
-        });
-        notify.error("Could not load API keys", detail);
-      }
-    } catch (loadError) {
-      trackEvent(MixpanelEvent.Auth_Admin_API_Key_List_Failed, {
-        status_code: null,
-        error_message: sanitizeAnalyticsError(
-          loadError,
-          "Could not load API keys"
-        ),
-      });
-      notify.error("Could not load API keys", "Please try again.");
-    } finally {
-      setBusy(null);
-    }
-  }, []);
-
-  const loadMcpCredentials = useCallback(async () => {
-    setBusy("mcp-keys");
-    try {
-      const response = await fetch("/api/v1/admin/mcp-credentials", {
-        cache: "no-store",
-        credentials: "include",
-      });
-      if (response.ok) {
-        const loaded = (await response.json()) as McpCredential[];
-        setMcpCredentials(loaded.filter((credential) => !credential.revoked_at));
-      } else {
-        notify.error("Could not load MCP keys", await errorDetail(response));
+        notify.error("Could not load API keys", await errorDetail(response));
       }
     } catch {
-      notify.error("Could not load MCP keys", "Please try again.");
+      notify.error("Could not load API keys", "Please try again.");
     } finally {
       setBusy(null);
     }
@@ -203,8 +158,8 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
     trackEvent(MixpanelEvent.Auth_Admin_Viewed, {
       embedded,
     });
-    void Promise.all([loadUsers(), loadKeys(), loadMcpCredentials()]);
-  }, [embedded, loadKeys, loadMcpCredentials, loadUsers]);
+    void Promise.all([loadUsers(), loadApiKeys()]);
+  }, [embedded, loadApiKeys, loadUsers]);
 
   const addUser = async (event: FormEvent) => {
     event.preventDefault();
@@ -351,164 +306,77 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
     }
   };
 
-  const createKey = async () => {
-    setBusy("create-key");
+  const createApiKey = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy("create-api-key");
     trackEvent(MixpanelEvent.Auth_Admin_API_Key_Create_Started, {
-      api_key_count_before: keys.length,
+      api_key_count_before: apiKeys.length,
     });
     try {
-      const response = await fetch("/api/v1/auth/token/create", {
+      const response = await fetch("/api/v1/admin/api-keys", {
         method: "POST",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: apiKeyUserId,
+          label: apiKeyLabel.trim(),
+          expiry_days: apiKeyExpiryDays,
+        }),
       });
-      if (response.ok) {
-        const key = (await response.json()) as ApiKey;
-        setKeys((current) => [key, ...current]);
-        trackEvent(MixpanelEvent.Auth_Admin_API_Key_Create_Completed, {
-          api_key_count_after: keys.length + 1,
-        });
-        try {
-          await navigator.clipboard.writeText(key.token);
-          notify.success("API key created", "The new key was copied to your clipboard.");
-        } catch {
-          notify.success("API key created", "Use the copy button to copy the new key.");
-        }
-      } else {
-        const detail = await errorDetail(response);
-        trackEvent(MixpanelEvent.Auth_Admin_API_Key_Create_Failed, {
-          status_code: response.status,
-          error_message: sanitizeAnalyticsError(detail),
-        });
-        notify.error("Could not create API key", detail);
+      if (!response.ok) {
+        notify.error("Could not create API key", await errorDetail(response));
+        return;
       }
-    } catch (createError) {
-      trackEvent(MixpanelEvent.Auth_Admin_API_Key_Create_Failed, {
-        status_code: null,
-        error_message: sanitizeAnalyticsError(
-          createError,
-          "Could not create API key"
-        ),
+      const created = (await response.json()) as ApiKeyCreated;
+      const { token, ...apiKey } = created;
+      setApiKeys((current) => [apiKey, ...current]);
+      setApiKeyTokens((current) => ({ ...current, [apiKey.id]: token }));
+      setVisibleApiKeys((current) => new Set(current).add(apiKey.id));
+      trackEvent(MixpanelEvent.Auth_Admin_API_Key_Create_Completed, {
+        api_key_count_after: apiKeys.length + 1,
       });
+      try {
+        await navigator.clipboard.writeText(token);
+        notify.success("API key created", "The key is visible and was copied to your clipboard.");
+      } catch {
+        notify.success("API key created", "The key is visible below.");
+      }
+    } catch {
       notify.error("Could not create API key", "Please try again.");
     } finally {
       setBusy(null);
     }
   };
 
-  const revokeKey = async () => {
-    if (dialog?.kind !== "revoke-key") return;
-
-    const { key } = dialog;
-    setBusy(`revoke:${key.token}`);
-    trackEvent(MixpanelEvent.Auth_Admin_API_Key_Revoke_Started, {
-      api_key_count_before: keys.length,
-    });
-    try {
-      const response = await fetch("/api/v1/auth/token/revoke", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: key.token }),
-      });
-      if (response.ok) {
-        setKeys((current) => current.filter((item) => item.token !== key.token));
-        setVisibleKeys((current) => {
-          const next = new Set(current);
-          next.delete(key.token);
-          return next;
-        });
-        trackEvent(MixpanelEvent.Auth_Admin_API_Key_Revoke_Completed, {
-          api_key_count_after: Math.max(0, keys.length - 1),
-        });
-        setDialog(null);
-        notify.success("API key revoked");
-      } else {
-        const detail = await errorDetail(response);
-        trackEvent(MixpanelEvent.Auth_Admin_API_Key_Revoke_Failed, {
-          status_code: response.status,
-          error_message: sanitizeAnalyticsError(detail),
-        });
-        notify.error("Could not revoke API key", detail);
-      }
-    } catch (revokeError) {
-      trackEvent(MixpanelEvent.Auth_Admin_API_Key_Revoke_Failed, {
-        status_code: null,
-        error_message: sanitizeAnalyticsError(
-          revokeError,
-          "Could not revoke API key"
-        ),
-      });
-      notify.error("Could not revoke API key", "Please try again.");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const createMcpCredential = async (event: FormEvent) => {
-    event.preventDefault();
-    setBusy("create-mcp-key");
-    try {
-      const response = await fetch("/api/v1/admin/mcp-credentials", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: mcpUserId,
-          label: mcpLabel.trim(),
-          expiry_days: mcpExpiryDays,
-        }),
-      });
-      if (!response.ok) {
-        notify.error("Could not create MCP key", await errorDetail(response));
-        return;
-      }
-      const created = (await response.json()) as McpCredentialCreated;
-      const { token, ...credential } = created;
-      setMcpCredentials((current) => [credential, ...current]);
-      setMcpTokens((current) => ({ ...current, [credential.id]: token }));
-      setVisibleMcpKeys((current) => new Set(current).add(credential.id));
-      try {
-        await navigator.clipboard.writeText(token);
-        notify.success("MCP key created", "The key is visible and was copied to your clipboard.");
-      } catch {
-        notify.success("MCP key created", "The key is visible below.");
-      }
-    } catch {
-      notify.error("Could not create MCP key", "Please try again.");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const getMcpToken = async (credentialId: string) => {
-    const cached = mcpTokens[credentialId];
+  const getApiKeyToken = async (apiKeyId: string) => {
+    const cached = apiKeyTokens[apiKeyId];
     if (cached) return cached;
     const response = await fetch(
-      `/api/v1/admin/mcp-credentials/${credentialId}/token`,
+      `/api/v1/admin/api-keys/${apiKeyId}/token`,
       { cache: "no-store", credentials: "include" }
     );
     if (!response.ok) throw new Error(await errorDetail(response));
     const payload = (await response.json()) as { token: string };
-    setMcpTokens((current) => ({ ...current, [credentialId]: payload.token }));
+    setApiKeyTokens((current) => ({ ...current, [apiKeyId]: payload.token }));
     return payload.token;
   };
 
-  const toggleMcpKeyVisibility = async (credentialId: string) => {
-    if (visibleMcpKeys.has(credentialId)) {
-      setVisibleMcpKeys((current) => {
+  const toggleApiKeyVisibility = async (apiKeyId: string) => {
+    if (visibleApiKeys.has(apiKeyId)) {
+      setVisibleApiKeys((current) => {
         const next = new Set(current);
-        next.delete(credentialId);
+        next.delete(apiKeyId);
         return next;
       });
       return;
     }
-    setBusy(`reveal-mcp:${credentialId}`);
+    setBusy(`reveal-api-key:${apiKeyId}`);
     try {
-      await getMcpToken(credentialId);
-      setVisibleMcpKeys((current) => new Set(current).add(credentialId));
+      await getApiKeyToken(apiKeyId);
+      setVisibleApiKeys((current) => new Set(current).add(apiKeyId));
     } catch (revealError) {
       notify.error(
-        "Could not reveal MCP key",
+        "Could not reveal API key",
         revealError instanceof Error ? revealError.message : "Please try again."
       );
     } finally {
@@ -516,14 +384,14 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
     }
   };
 
-  const copyMcpKey = async (credentialId: string) => {
-    setBusy(`reveal-mcp:${credentialId}`);
+  const copyApiKey = async (apiKeyId: string) => {
+    setBusy(`reveal-api-key:${apiKeyId}`);
     try {
-      await navigator.clipboard.writeText(await getMcpToken(credentialId));
-      notify.success("MCP key copied");
+      await navigator.clipboard.writeText(await getApiKeyToken(apiKeyId));
+      notify.success("API key copied");
     } catch (copyError) {
       notify.error(
-        "Could not copy MCP key",
+        "Could not copy API key",
         copyError instanceof Error ? copyError.message : "Please try again."
       );
     } finally {
@@ -531,65 +399,52 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
     }
   };
 
-  const revokeMcpCredential = async () => {
-    if (dialog?.kind !== "revoke-mcp") return;
-    const { credential } = dialog;
-    setBusy(`revoke-mcp:${credential.id}`);
+  const revokeApiKey = async () => {
+    if (dialog?.kind !== "revoke-key") return;
+    const { apiKey } = dialog;
+    setBusy(`revoke-api-key:${apiKey.id}`);
+    trackEvent(MixpanelEvent.Auth_Admin_API_Key_Revoke_Started, {
+      api_key_count_before: apiKeys.length,
+    });
     try {
       const response = await fetch(
-        `/api/v1/admin/mcp-credentials/${credential.id}/revoke`,
+        `/api/v1/admin/api-keys/${apiKey.id}/revoke`,
         { method: "POST", credentials: "include" }
       );
       if (!response.ok) {
-        notify.error("Could not revoke MCP key", await errorDetail(response));
+        notify.error("Could not revoke API key", await errorDetail(response));
         return;
       }
-      const revoked = (await response.json()) as McpCredential;
-      setMcpCredentials((current) =>
+      const revoked = (await response.json()) as ApiKey;
+      setApiKeys((current) =>
         current.filter((item) => item.id !== revoked.id)
       );
-      setMcpTokens((current) => {
+      setApiKeyTokens((current) => {
         const next = { ...current };
-        delete next[credential.id];
+        delete next[apiKey.id];
         return next;
       });
-      setVisibleMcpKeys((current) => {
+      setVisibleApiKeys((current) => {
         const next = new Set(current);
-        next.delete(credential.id);
+        next.delete(apiKey.id);
         return next;
+      });
+      trackEvent(MixpanelEvent.Auth_Admin_API_Key_Revoke_Completed, {
+        api_key_count_after: Math.max(0, apiKeys.length - 1),
       });
       setDialog(null);
-      notify.success("MCP key revoked");
+      notify.success("API key revoked");
     } catch {
-      notify.error("Could not revoke MCP key", "Please try again.");
+      notify.error("Could not revoke API key", "Please try again.");
     } finally {
       setBusy(null);
-    }
-  };
-
-  const toggleKeyVisibility = (token: string) => {
-    setVisibleKeys((current) => {
-      const next = new Set(current);
-      if (next.has(token)) next.delete(token);
-      else next.add(token);
-      return next;
-    });
-  };
-
-  const copyKey = async (token: string) => {
-    try {
-      await navigator.clipboard.writeText(token);
-      notify.success("API key copied");
-    } catch {
-      notify.error("Could not copy API key", "Please try again.");
     }
   };
 
   const dialogBusy =
     (dialog?.kind === "reset-password" && busy === `reset:${dialog.user.id}`) ||
     (dialog?.kind === "delete-user" && busy === `delete:${dialog.user.id}`) ||
-    (dialog?.kind === "revoke-key" && busy === `revoke:${dialog.key.token}`) ||
-    (dialog?.kind === "revoke-mcp" && busy === `revoke-mcp:${dialog.credential.id}`);
+    (dialog?.kind === "revoke-key" && busy === `revoke-api-key:${dialog.apiKey.id}`);
   const RootElement = embedded ? "section" : "main";
 
   return (
@@ -616,8 +471,8 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
             Manage access
           </h2>
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-[#6B7280]">
-            Create login accounts and manage API keys and user-scoped MCP keys.
-            User workspaces remain private.
+            Create login accounts and issue user-scoped keys for both the REST API
+            and MCP. User workspaces remain private.
           </p>
 
           <Tabs defaultValue="users" className="mt-6">
@@ -633,12 +488,6 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
               className="h-9 rounded-full px-5 text-xs text-[#667085] shadow-none data-[state=active]:bg-white data-[state=active]:text-[#5146E5] data-[state=active]:shadow-sm"
             >
               API keys
-            </TabsTrigger>
-            <TabsTrigger
-              value="mcp-keys"
-              className="h-9 rounded-full px-5 text-xs text-[#667085] shadow-none data-[state=active]:bg-white data-[state=active]:text-[#5146E5] data-[state=active]:shadow-sm"
-            >
-              MCP keys
             </TabsTrigger>
           </TabsList>
 
@@ -753,111 +602,28 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
             </section>
           </TabsContent>
 
-          <TabsContent value="keys" className="mt-6">
-            <section className="overflow-hidden rounded-[12px] border border-[#EDEEEF] bg-white">
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#EDEEEF] px-6 py-5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F4F3FF]">
-                    <KeyRound className="h-4 w-4 text-[#5146E5]" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-semibold text-[#101323]">API keys</h2>
-                    <p className="mt-0.5 text-xs text-[#667085]">
-                      Administrator-owned keys for direct REST API access.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className={primaryButtonClass}
-                  onClick={() => void createKey()}
-                  disabled={busy === "create-key"}
-                >
-                  {busy === "create-key" && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Generate key
-                </button>
-              </div>
-              <div className="divide-y divide-[#EDEEEF]">
-                {keys.length === 0 && (
-                  <div className="px-6 py-12 text-center">
-                    <KeyRound className="mx-auto h-6 w-6 text-[#B8B4C7]" />
-                    <p className="mt-3 text-sm text-[#667085]">
-                      No API keys have been generated.
-                    </p>
-                  </div>
-                )}
-                {keys.map((key) => {
-                  const isVisible = visibleKeys.has(key.token);
-                  return (
-                    <div
-                      key={key.token}
-                      className="flex flex-wrap items-center gap-3 px-6 py-4"
-                    >
-                      <div className="min-w-[220px] flex-1">
-                        <code className="block truncate text-xs text-[#344054]">
-                          {isVisible ? key.token : maskedKey(key.token)}
-                        </code>
-                        <p className="mt-1 text-[11px] text-[#98A2B3]">
-                          Created {new Date(key.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        aria-label={isVisible ? "Hide API key" : "Show API key"}
-                        title={isVisible ? "Hide API key" : "Show API key"}
-                        className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EDEEEF] text-[#667085] transition hover:bg-[#F4F3FF] hover:text-[#5146E5]"
-                        onClick={() => toggleKeyVisibility(key.token)}
-                      >
-                        {isVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Copy API key"
-                        title="Copy API key"
-                        className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EDEEEF] text-[#667085] transition hover:bg-[#F4F3FF] hover:text-[#5146E5]"
-                        onClick={() => void copyKey(key.token)}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Revoke API key"
-                        title="Revoke API key"
-                        className="flex h-9 w-9 items-center justify-center rounded-full border border-[#FEE4E2] text-[#D92D20] transition hover:bg-[#FEF3F2]"
-                        onClick={() => setDialog({ kind: "revoke-key", key })}
-                        disabled={busy !== null}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          </TabsContent>
-
-          <TabsContent value="mcp-keys" className="mt-6 space-y-5">
+          <TabsContent value="keys" className="mt-6 space-y-5">
             <section className="rounded-[12px] border border-[#EDEEEF] bg-white p-6">
               <div className="mb-5 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F4F3FF]">
-                  <Cable className="h-4 w-4 text-[#5146E5]" />
+                  <KeyRound className="h-4 w-4 text-[#5146E5]" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-semibold text-[#101323]">Generate MCP key</h2>
+                  <h2 className="text-sm font-semibold text-[#101323]">Generate API key</h2>
                   <p className="mt-0.5 text-xs text-[#667085]">
-                    Scope a key to one user. Administrator keys can also create templates.
+                    One user-scoped key works with both REST API and MCP clients.
                   </p>
                 </div>
               </div>
               <form
-                onSubmit={createMcpCredential}
+                onSubmit={createApiKey}
                 className="grid gap-3 lg:grid-cols-[1fr_1fr_150px_auto]"
               >
                 <select
-                  aria-label="MCP key user"
+                  aria-label="API key user"
                   className={inputClass}
-                  value={mcpUserId}
-                  onChange={(event) => setMcpUserId(event.target.value)}
+                  value={apiKeyUserId}
+                  onChange={(event) => setApiKeyUserId(event.target.value)}
                   required
                 >
                   <option value="" disabled>Select user</option>
@@ -868,20 +634,20 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                   ))}
                 </select>
                 <input
-                  aria-label="MCP key label"
+                  aria-label="API key label"
                   className={inputClass}
-                  value={mcpLabel}
-                  onChange={(event) => setMcpLabel(event.target.value)}
+                  value={apiKeyLabel}
+                  onChange={(event) => setApiKeyLabel(event.target.value)}
                   minLength={1}
                   maxLength={120}
                   placeholder="Client name"
                   required
                 />
                 <select
-                  aria-label="MCP key expiry days"
+                  aria-label="API key expiry days"
                   className={inputClass}
-                  value={mcpExpiryDays}
-                  onChange={(event) => setMcpExpiryDays(Number(event.target.value))}
+                  value={apiKeyExpiryDays}
+                  onChange={(event) => setApiKeyExpiryDays(Number(event.target.value))}
                   required
                 >
                   <option value={30}>30 days</option>
@@ -892,9 +658,9 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                 <button
                   type="submit"
                   className={primaryButtonClass}
-                  disabled={busy === "create-mcp-key" || !mcpUserId}
+                  disabled={busy === "create-api-key" || !apiKeyUserId}
                 >
-                  {busy === "create-mcp-key" && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {busy === "create-api-key" && <Loader2 className="h-4 w-4 animate-spin" />}
                   Generate key
                 </button>
               </form>
@@ -903,37 +669,37 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
             <section className="overflow-hidden rounded-[12px] border border-[#EDEEEF] bg-white">
               <div className="flex items-center justify-between border-b border-[#EDEEEF] px-6 py-5">
                 <div>
-                  <h2 className="text-sm font-semibold text-[#101323]">MCP keys</h2>
+                  <h2 className="text-sm font-semibold text-[#101323]">API keys</h2>
                   <p className="mt-0.5 text-xs text-[#667085]">
-                    Reveal or copy a key whenever you need to configure an MCP client.
+                    Reveal or copy a key whenever you configure an API or MCP client.
                   </p>
                 </div>
                 <button
                   type="button"
-                  aria-label="Refresh MCP keys"
+                  aria-label="Refresh API keys"
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EDEEEF] text-[#667085] transition hover:bg-[#F9FAFB] hover:text-[#5146E5]"
-                  onClick={() => void loadMcpCredentials()}
+                  onClick={() => void loadApiKeys()}
                 >
-                  <RefreshCw className={`h-4 w-4 ${busy === "mcp-keys" ? "animate-spin" : ""}`} />
+                  <RefreshCw className={`h-4 w-4 ${busy === "api-keys" ? "animate-spin" : ""}`} />
                 </button>
               </div>
               <div className="divide-y divide-[#EDEEEF]">
-                {mcpCredentials.length === 0 && (
+                {apiKeys.length === 0 && (
                   <div className="px-6 py-12 text-center">
-                    <Cable className="mx-auto h-6 w-6 text-[#B8B4C7]" />
-                    <p className="mt-3 text-sm text-[#667085]">No MCP keys have been generated.</p>
+                    <KeyRound className="mx-auto h-6 w-6 text-[#B8B4C7]" />
+                    <p className="mt-3 text-sm text-[#667085]">No API keys have been generated.</p>
                   </div>
                 )}
-                {mcpCredentials.map((credential) => {
-                  const isVisible = visibleMcpKeys.has(credential.id);
-                  const token = mcpTokens[credential.id];
-                  const user = users.find((item) => item.id === credential.user_id);
-                  const isRevoked = Boolean(credential.revoked_at);
+                {apiKeys.map((apiKey) => {
+                  const isVisible = visibleApiKeys.has(apiKey.id);
+                  const token = apiKeyTokens[apiKey.id];
+                  const user = users.find((item) => item.id === apiKey.user_id);
+                  const isRevoked = Boolean(apiKey.revoked_at);
                   return (
-                    <div key={credential.id} className="flex flex-wrap items-center gap-3 px-6 py-4">
+                    <div key={apiKey.id} className="flex flex-wrap items-center gap-3 px-6 py-4">
                       <div className="min-w-[260px] flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-[#101323]">{credential.label}</p>
+                          <p className="text-sm font-semibold text-[#101323]">{apiKey.label}</p>
                           {isRevoked && (
                             <span className="rounded-full bg-[#FEF3F2] px-2 py-0.5 text-[10px] font-semibold text-[#D92D20]">
                               Revoked
@@ -941,24 +707,24 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                           )}
                         </div>
                         <code className="mt-1 block truncate text-xs text-[#344054]">
-                          {isVisible && token ? token : `sk-presenton-mcp-••••••••${credential.id.slice(-4)}`}
+                          {isVisible && token ? token : `sk-presenton-••••••••${apiKey.id.slice(-4)}`}
                         </code>
                         <p className="mt-1 text-[11px] text-[#98A2B3]">
-                          {user?.username ?? credential.user_id} · Expires {new Date(credential.expires_at).toLocaleDateString()}
-                          {credential.last_used_at
-                            ? ` · Last used ${new Date(credential.last_used_at).toLocaleDateString()}`
+                          {user?.username ?? apiKey.user_id} · Expires {new Date(apiKey.expires_at).toLocaleDateString()}
+                          {apiKey.last_used_at
+                            ? ` · Last used ${new Date(apiKey.last_used_at).toLocaleDateString()}`
                             : " · Never used"}
                         </p>
                       </div>
                       <button
                         type="button"
-                        aria-label={isVisible ? "Hide MCP key" : "Show MCP key"}
-                        title={isVisible ? "Hide MCP key" : "Show MCP key"}
+                        aria-label={isVisible ? "Hide API key" : "Show API key"}
+                        title={isVisible ? "Hide API key" : "Show API key"}
                         className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EDEEEF] text-[#667085] transition hover:bg-[#F4F3FF] hover:text-[#5146E5] disabled:opacity-50"
-                        onClick={() => void toggleMcpKeyVisibility(credential.id)}
-                        disabled={busy === `reveal-mcp:${credential.id}`}
+                        onClick={() => void toggleApiKeyVisibility(apiKey.id)}
+                        disabled={busy === `reveal-api-key:${apiKey.id}`}
                       >
-                        {busy === `reveal-mcp:${credential.id}` ? (
+                        {busy === `reveal-api-key:${apiKey.id}` ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : isVisible ? (
                           <EyeOff className="h-4 w-4" />
@@ -968,21 +734,21 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                       </button>
                       <button
                         type="button"
-                        aria-label="Copy MCP key"
-                        title="Copy MCP key"
+                        aria-label="Copy API key"
+                        title="Copy API key"
                         className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EDEEEF] text-[#667085] transition hover:bg-[#F4F3FF] hover:text-[#5146E5] disabled:opacity-50"
-                        onClick={() => void copyMcpKey(credential.id)}
-                        disabled={busy === `reveal-mcp:${credential.id}`}
+                        onClick={() => void copyApiKey(apiKey.id)}
+                        disabled={busy === `reveal-api-key:${apiKey.id}`}
                       >
                         <Copy className="h-4 w-4" />
                       </button>
                       {!isRevoked && (
                         <button
                           type="button"
-                          aria-label="Revoke MCP key"
-                          title="Revoke MCP key"
+                          aria-label="Revoke API key"
+                          title="Revoke API key"
                           className="flex h-9 w-9 items-center justify-center rounded-full border border-[#FEE4E2] text-[#D92D20] transition hover:bg-[#FEF3F2]"
-                          onClick={() => setDialog({ kind: "revoke-mcp", credential })}
+                          onClick={() => setDialog({ kind: "revoke-key", apiKey })}
                           disabled={busy !== null}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1101,7 +867,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                   Revoke API key?
                 </DialogTitle>
                 <DialogDescription className="pt-1 text-sm leading-6 text-[#667085]">
-                  Any application using this key will lose API access
+                  Clients using “{dialog.apiKey.label}” will lose REST API and MCP access
                   immediately. This action cannot be undone.
                 </DialogDescription>
               </DialogHeader>
@@ -1117,7 +883,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                 <button
                   type="button"
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#D92D20] px-5 text-xs font-semibold text-white transition hover:bg-[#B42318] disabled:opacity-60"
-                  onClick={() => void revokeKey()}
+                  onClick={() => void revokeApiKey()}
                   disabled={dialogBusy}
                 >
                   {dialogBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -1127,41 +893,6 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
             </>
           )}
 
-          {dialog?.kind === "revoke-mcp" && (
-            <>
-              <DialogHeader className="px-7 pb-6 pt-7 text-left">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#FEF3F2]">
-                  <AlertTriangle className="h-5 w-5 text-[#D92D20]" />
-                </div>
-                <DialogTitle className="text-xl font-semibold leading-7 text-[#101323]">
-                  Revoke MCP key?
-                </DialogTitle>
-                <DialogDescription className="pt-1 text-sm leading-6 text-[#667085]">
-                  Clients using “{dialog.credential.label}” will lose MCP access
-                  immediately. Only revoke it if the key is no longer needed or may be compromised.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter className="flex-row border-t border-[#EAECF0] p-4 sm:justify-end sm:space-x-0">
-                <button
-                  type="button"
-                  className="h-10 rounded-full border border-[#E1E1E5] px-5 text-xs font-semibold text-[#344054] transition hover:bg-[#F9FAFB]"
-                  onClick={() => setDialog(null)}
-                  disabled={dialogBusy}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#D92D20] px-5 text-xs font-semibold text-white transition hover:bg-[#B42318] disabled:opacity-60"
-                  onClick={() => void revokeMcpCredential()}
-                  disabled={dialogBusy}
-                >
-                  {dialogBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                  Revoke key
-                </button>
-              </DialogFooter>
-            </>
-          )}
         </DialogContent>
       </Dialog>
     </RootElement>

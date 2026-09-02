@@ -282,6 +282,7 @@ class TestPresentationGenerationAPI:
 
         response = asyncio.run(
             check_async_presentation_generation_status(
+                request=FakeRequest(),
                 id=task.id,
                 sql_session=fake_session,
             )

@@ -19,12 +19,11 @@ from utils.get_env import (
     is_disable_auth_enabled,
     is_presenton_electron_desktop,
 )
-from models.sql.access_token import AccessToken as DatabaseAccessToken
-from models.sql.user import User
 from services.database import async_session_maker
-from services.mcp_credentials import MCP_KEY_PREFIX, verify_mcp_credential
+from services.api_keys import API_KEY_PREFIX, verify_api_key
 from api.v1.auth.config import SESSION_COOKIE_NAME
 from api.v1.auth.users import get_jwt_strategy
+from utils.mcp_public_urls import MCP_REQUEST_HEADER
 
 OPENAPI_SPEC_PATH = Path(__file__).with_name("openai_spec.json")
 MCP_API_BASE_URL = "http://127.0.0.1:8000"
@@ -141,10 +140,10 @@ blocking alternative and returns the exported presentation without polling.
 """
     if generation_mode in {"both", "standard"}:
         instructions += """Template listing is immediate. Custom-template upload,
-initialization, and generation require a credential scoped to an administrator.
+initialization, and generation create templates scoped to the authenticated user.
 For a custom template, call upload_template_assets once, then pass its response
-to initialize_template or start_template_generation. When a user wants to
-inspect a template visually, share the preview_url returned by list_templates.
+to initialize_template or start_template_generation. When a user wants to inspect
+a template visually, share the preview_url returned by list_templates.
 """
     return instructions + "Never ask a user to paste their Presenton key into chat.\n"
 
@@ -153,32 +152,16 @@ with OPENAPI_SPEC_PATH.open("r", encoding="utf-8") as f:
 
 
 class PresentonTokenVerifier(TokenVerifier):
-    """Validate user-scoped MCP keys, with one-release legacy-key support."""
+    """Validate the same user-scoped API keys accepted by the REST API."""
 
     async def verify_token(self, token: str) -> AccessToken | None:
-        if not token.startswith("sk-presenton-"):
+        if not token.startswith(API_KEY_PREFIX):
             return None
         async with async_session_maker() as session:
-            if token.startswith(MCP_KEY_PREFIX):
-                verified = await verify_mcp_credential(session, token)
-                if verified is None:
-                    return None
-                user = verified.user
-                credential_id = verified.credential_id
-                legacy = False
-            else:
-                access_key = await session.get(DatabaseAccessToken, token)
-                if access_key is None:
-                    return None
-                user = await session.get(User, access_key.user_id)
-                if user is None or not user.is_active or not user.is_superuser:
-                    return None
-                credential_id = None
-                legacy = True
-                LOGGER.warning(
-                    "A legacy administrator API key authenticated to MCP; "
-                    "replace it with a user-scoped MCP credential"
-                )
+            verified = await verify_api_key(session, token)
+            if verified is None:
+                return None
+            user = verified.user
             try:
                 internal_session_token = await get_jwt_strategy(
                     lifetime_seconds=MCP_INTERNAL_SESSION_TTL_SECONDS
@@ -196,8 +179,7 @@ class PresentonTokenVerifier(TokenVerifier):
                 "u": user.username,
                 "role": "admin" if user.is_superuser else "user",
                 "user_id": str(user.id),
-                "credential_id": credential_id,
-                "legacy": legacy,
+                "api_key_id": verified.api_key_id,
                 "internal_session_token": internal_session_token,
             },
         )
@@ -252,7 +234,7 @@ def create_mcp_server(
 async def attach_request_auth_header(request: httpx.Request | httpx2.Request) -> None:
     """Exchange the MCP key for an internal session when calling FastAPI.
 
-    The long-lived MCP credential is deliberately never forwarded to an API
+    The long-lived API key is deliberately never forwarded to an API
     endpoint. The fallback paths exist for auth-disabled development and for
     older tests which provide a token object without verified claims.
     """
@@ -264,6 +246,7 @@ async def attach_request_auth_header(request: httpx.Request | httpx2.Request) ->
             "x-forwarded-proto",
         }
     )
+    request.headers[MCP_REQUEST_HEADER] = "1"
 
     # Preserve the public origin across the MCP -> internal FastAPI request so
     # API responses can expose browser links for the host the client connected to.
