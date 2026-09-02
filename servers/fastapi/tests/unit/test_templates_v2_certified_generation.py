@@ -236,6 +236,179 @@ def test_certified_compiler_preserves_source_stack_across_components():
     assert layout.components[1].elements[0].runs[0].text == "Signature Menu Items"
 
 
+def test_group_compilation_preserves_text_bounds_over_decorative_surface():
+    raw_layout = generation.RawSlideLayout.model_validate(
+        {
+            "id": "icon_badge",
+            "description": "A pill badge containing an icon and text.",
+            "elements": [
+                {
+                    "type": "vector",
+                    "shape": "polygon",
+                    "closed": True,
+                    "points": [
+                        {"x": 100, "y": 50},
+                        {"x": 300, "y": 50},
+                        {"x": 300, "y": 100},
+                        {"x": 100, "y": 100},
+                    ],
+                    "fill": {"color": "#D6FF3F"},
+                },
+                {
+                    "type": "image",
+                    "position": {"x": 125, "y": 65},
+                    "size": {"width": 20, "height": 20},
+                    "data": "/static/icons/placeholder.svg",
+                    "decorative": True,
+                    "name": "badge_icon",
+                    "is_icon": True,
+                },
+                {
+                    "type": "text",
+                    "position": {"x": 165, "y": 60},
+                    "size": {"width": 120, "height": 30},
+                    "font": {"size": 20, "color": "#292929"},
+                    "runs": [{"text": "The Brand"}],
+                    "decorative": True,
+                    "name": "badge_text",
+                    "min_length": 4,
+                    "max_length": 9,
+                },
+            ],
+        }
+    )
+    manifest = generation.SemanticSlideManifest.model_validate(
+        {
+            "id": "icon_badge",
+            "description": "A pill badge containing an icon and text.",
+            "components": [
+                {
+                    "id": "badge",
+                    "description": "The icon and text badge.",
+                    "element_indices": [0, 1, 2],
+                    "repeated_items": None,
+                }
+            ],
+            "annotations": [
+                {
+                    "path": "elements.1",
+                    "name": "badge_icon",
+                    "decorative": False,
+                    "is_icon": True,
+                },
+                {
+                    "path": "elements.2",
+                    "name": "badge_text",
+                    "decorative": False,
+                },
+            ],
+        }
+    )
+    flexible_plan = generation.FlexibleSlidePlan.model_validate(
+        {
+            "regions": [
+                {
+                    "component_id": "badge",
+                    "root_flow_id": "badge_group",
+                    "flows": [
+                        {
+                            "id": "badge_group",
+                            "name": "badge_group",
+                            "mode": "group",
+                            "items": [
+                                {"indices": [0], "flow_id": None},
+                                {"indices": [1], "flow_id": None},
+                                {"indices": [2], "flow_id": None},
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+
+    layout = generation._compile_semantic_layout(
+        raw_layout,
+        manifest,
+        flexible_plan,
+        generation.TextCapacityPlan(adjustments=[]),
+    )
+
+    group = layout.components[0].elements[0]
+    text = group.children[2]
+    assert text.position.x == 65
+    assert text.position.y == 10
+    assert text.size.width == 120
+    assert text.size.height == 30
+
+
+@pytest.mark.parametrize("mode", ["row", "column"])
+def test_fixed_flow_sizing_does_not_rewrite_text_size(mode):
+    children = [
+        {"type": "text", "size": {"width": 120, "height": 30}},
+        {"type": "image", "size": {"width": 120, "height": 30}},
+    ]
+    bounds = [
+        {"x": 0, "y": 0, "width": 120, "height": 30},
+        {"x": 140, "y": 0, "width": 120, "height": 30},
+    ]
+
+    generation._apply_fixed_flow_child_sizing(
+        children,
+        bounds,
+        [True, True],
+        mode=mode,
+        cross_size=240,
+        align_items="flex-start",
+    )
+
+    assert children[0]["size"] == {"width": 120, "height": 30}
+    if mode == "row":
+        assert "size" not in children[1]
+    else:
+        assert children[1]["size"] == {"width": 240, "height": 30}
+
+
+def test_llm_text_capacity_expansion_recalculates_text_limits():
+    elements = [
+        {
+            "type": "text",
+            "position": {"x": 100, "y": 100},
+            "size": {"width": 100, "height": 20},
+            "font": {"size": 10, "line_height": 1},
+            "runs": [{"text": "Short text"}],
+            "decorative": False,
+            "name": "body",
+            "min_length": 5,
+            "max_length": 10,
+        }
+    ]
+    plan = generation.TextCapacityPlan.model_validate(
+        {
+            "adjustments": [
+                {
+                    "path": "elements.0",
+                    "left_characters": 0,
+                    "right_characters": 10,
+                    "top_lines": 0,
+                    "bottom_lines": 0,
+                    "horizontal_alignment": "preserve",
+                    "vertical_alignment": "preserve",
+                }
+            ]
+        }
+    )
+
+    generation._apply_text_capacity_plan(elements, plan)
+
+    text = elements[0]
+    assert text["position"] == {"x": 100.0, "y": 100.0}
+    assert text["size"]["width"] > 100
+    assert text["size"]["height"] == 20
+    assert text["max_length"] > 10
+    assert text["min_length"] == (text["max_length"] + 1) // 2
+
+
 def test_generate_slide_layout_runs_focused_passes(monkeypatch):
     raw_layout = _raw_layout()
     manifest = _manifest()

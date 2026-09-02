@@ -2733,7 +2733,7 @@ def _compile_flow_node(
         base["min_children"] = min_children
         base["max_children"] = len(children)
     if mode == "group":
-        _normalize_compact_text_overlay_geometry(base)
+        pass
     elif mode == "grid":
         base.update(
             {
@@ -2758,61 +2758,6 @@ def _compile_flow_node(
         if repeatable:
             base["justify_content"] = "center"
     return base
-
-
-_DECORATIVE_SURFACE_TYPES = {"container", "group", "image", "vector"}
-
-
-def _normalize_compact_text_overlay_geometry(group: dict[str, Any]) -> None:
-    """Let a compact surface own its overlapping text's bounds."""
-    children = group.get("children")
-    if not isinstance(children, list) or len(children) < 2:
-        return
-    text_children = [
-        child
-        for child in children
-        if child.get("type") == "text" and child.get("decorative") is False
-    ]
-    if len(text_children) != 1:
-        return
-
-    text = text_children[0]
-    text_bounds = _element_bounds(text)
-    if text_bounds is None:
-        return
-    surface_children = []
-    for child in children:
-        if (
-            child.get("type") not in _DECORATIVE_SURFACE_TYPES
-            or child.get("decorative", True) is not True
-        ):
-            continue
-        child_bounds = _element_bounds(child)
-        if child_bounds is None:
-            continue
-        if _vector_is_text_bounds_twin(child, text, text_bounds, child_bounds):
-            continue
-        surface_children.append(child)
-    if len(surface_children) != 1:
-        return
-
-    surface_bounds = _element_bounds(surface_children[0])
-    if surface_bounds is None:
-        return
-    if abs(surface_bounds["x"]) > 1.0 or abs(surface_bounds["y"]) > 1.0:
-        return
-    if not _bounds_overlap(surface_bounds, text_bounds):
-        return
-    if surface_bounds["height"] > text_bounds["height"] * 4:
-        return
-
-    surface_size = {
-        "width": surface_bounds["width"],
-        "height": surface_bounds["height"],
-    }
-    text["position"] = {"x": surface_bounds["x"], "y": surface_bounds["y"]}
-    text["size"] = surface_size.copy()
-    group["size"] = surface_size
 
 
 def _apply_fixed_flow_child_sizing(
@@ -2843,12 +2788,16 @@ def _apply_fixed_flow_child_sizing(
     if mode == "column":
         if align_items == "flex-start" and cross_size is not None:
             for index in flexible_indices:
+                if children[index].get("type") in {"text", "text-list"}:
+                    continue
                 size = children[index].get("size")
                 if isinstance(size, dict):
                     size["width"] = max(float(size["width"]), cross_size)
         return
 
     for index in flexible_indices:
+        if children[index].get("type") in {"text", "text-list"}:
+            continue
         children[index].pop("size", None)
 
 
