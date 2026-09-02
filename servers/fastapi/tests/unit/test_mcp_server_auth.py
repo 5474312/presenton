@@ -219,6 +219,15 @@ def test_get_mcp_api_timeout_supports_long_running_requests():
     assert timeout.connect == mcp_server.MCP_API_CONNECT_TIMEOUT_SECONDS
 
 
+def test_mcp_template_instructions_reject_host_attachment_ids():
+    instructions = mcp_server.get_mcp_instructions("standard")
+
+    assert "PPTX binary" in instructions
+    assert "as base64" in instructions
+    assert "OpenWebUI file UUID" in instructions
+    assert "empty slide_image_urls" in instructions
+
+
 @pytest.mark.parametrize(
     ("generation_mode", "expected_tools"),
     [

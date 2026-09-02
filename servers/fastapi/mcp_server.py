@@ -141,9 +141,13 @@ blocking alternative and returns the exported presentation without polling.
     if generation_mode in {"both", "standard"}:
         instructions += """Template listing is immediate. Custom-template upload,
 initialization, and generation create templates scoped to the authenticated user.
-For a custom template, call upload_template_assets once, then pass its response
-to initialize_template or start_template_generation. When a user wants to inspect
-a template visually, share the preview_url returned by list_templates.
+For a custom template, first call upload_template_assets with the PPTX binary encoded
+as base64, then pass its pptx_url, slide_image_urls, and fonts unchanged to exactly one
+of initialize_template or start_template_generation. A host application attachment ID
+(including an OpenWebUI file UUID) is not a Presenton URL and must never be supplied as
+pptx_url. If the host cannot provide the attachment bytes, explain that limitation and
+do not start a template job with an empty slide_image_urls array. When a user wants to
+inspect a template visually, share the preview_url returned by list_templates.
 """
     return instructions + "Never ask a user to paste their Presenton key into chat.\n"
 

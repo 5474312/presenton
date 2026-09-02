@@ -854,23 +854,13 @@ def test_upgrade_from_previous_head_adds_template_v2_theme(tmp_path):
         engine.dispose()
 
 
-def test_upgrade_from_template_v2_theme_adds_private_async_task_payload(tmp_path):
+def test_upgrade_from_template_v2_theme_adds_unified_keys_and_task_payload(tmp_path):
     database_url = f"sqlite:///{tmp_path / 'async-task-payload.db'}"
     engine = create_engine(database_url)
     try:
-        with engine.begin() as connection:
-            connection.execute(
-                text("CREATE TABLE async_tasks (id VARCHAR PRIMARY KEY)")
-            )
-            connection.execute(
-                text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
-            )
-            connection.execute(
-                text("INSERT INTO alembic_version (version_num) VALUES (:revision)"),
-                {"revision": migrations.REVISION_TEMPLATE_V2_THEME},
-            )
-
-        command.upgrade(_alembic_config(database_url), "head")
+        config = _alembic_config(database_url)
+        command.upgrade(config, migrations.REVISION_TEMPLATE_V2_THEME)
+        command.upgrade(config, "head")
 
         with engine.connect() as connection:
             version = connection.execute(
@@ -880,8 +870,16 @@ def test_upgrade_from_template_v2_theme_adds_private_async_task_payload(tmp_path
                 row[1]
                 for row in connection.execute(text("PRAGMA table_info(async_tasks)"))
             }
+            tables = {
+                row[0]
+                for row in connection.execute(
+                    text("SELECT name FROM sqlite_master WHERE type = 'table'")
+                )
+            }
 
         assert version == migrations.REVISION_HEAD
         assert "payload" in async_task_columns
+        assert "api_keys" in tables
+        assert "access_tokens" not in tables
     finally:
         engine.dispose()

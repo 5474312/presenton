@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException, Request
+from pydantic import ValidationError
 
 from api.v1.ppt.endpoints.template import (
     TEMPLATE_ROUTER,
@@ -545,34 +546,32 @@ def test_create_template_persists_when_component_dedup_fails(
 
 
 def test_create_template_requires_slide_images(fake_async_session):
-    with pytest.raises(HTTPException) as exc:
-        asyncio.run(
-            _create_template_sync(
-                CreateTemplateRequest(
-                    pptx_url="/app_data/uploads/template.pptx",
-                    slide_image_urls=[],
-                ),
-                sql_session=fake_async_session,
-            )
+    with pytest.raises(ValidationError) as exc:
+        CreateTemplateRequest(
+            pptx_url="/app_data/uploads/template.pptx",
+            slide_image_urls=[],
         )
 
-    assert exc.value.status_code == 400
-    assert exc.value.detail == "At least one slide image is required"
+    assert exc.value.errors()[0]["type"] == "too_short"
 
 
 def test_create_template_async_enqueues_task(fake_async_session):
     background_tasks = BackgroundTasks()
 
-    task = asyncio.run(
-        create_template(
-            background_tasks=background_tasks,
-            request=CreateTemplateRequest(
-                pptx_url="/app_data/uploads/template.pptx",
-                slide_image_urls=["/app_data/images/slide-1.png"],
-            ),
-            sql_session=fake_async_session,
+    with patch(
+        "api.v1.ppt.endpoints.template.resolve_app_path_to_filesystem",
+        return_value=__file__,
+    ):
+        task = asyncio.run(
+            create_template(
+                background_tasks=background_tasks,
+                request=CreateTemplateRequest(
+                    pptx_url="/app_data/uploads/template.pptx",
+                    slide_image_urls=["/app_data/images/slide-1.png"],
+                ),
+                sql_session=fake_async_session,
+            )
         )
-    )
 
     assert task.type == "template.create"
     assert task.status == "pending"
@@ -598,6 +597,28 @@ def test_create_template_async_enqueues_task(fake_async_session):
     assert fake_async_session.added == [task]
     assert fake_async_session.commit_count == 1
     assert len(background_tasks.tasks) == 1
+
+
+def test_create_template_async_rejects_external_attachment_id(fake_async_session):
+    with patch(
+        "api.v1.ppt.endpoints.template.resolve_app_path_to_filesystem",
+        return_value=None,
+    ), pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            create_template(
+                background_tasks=BackgroundTasks(),
+                request=CreateTemplateRequest(
+                    pptx_url="614d750d-82d9-4c89-b757-dd5d9f371ead",
+                    slide_image_urls=["/app_data/images/slide-1.png"],
+                ),
+                sql_session=fake_async_session,
+            )
+        )
+
+    assert exc.value.status_code == 400
+    assert "attachment ID cannot be used directly" in exc.value.detail
+    assert fake_async_session.added == []
+    assert fake_async_session.commit_count == 0
 
 
 def test_retry_create_template_reuses_failed_task(fake_async_session):
@@ -703,7 +724,11 @@ def test_mcp_template_upload_combines_pptx_and_fonts():
     ) as handler:
         response = asyncio.run(upload_template_assets_for_mcp(request))
 
-    assert response == expected
+    assert response.model_dump() == {
+        "pptx_url": expected.modified_pptx_url,
+        "slide_image_urls": expected.slide_image_urls,
+        "fonts": expected.fonts,
+    }
     assert handler.await_args.kwargs["pptx_file"].filename == "template.pptx"
     assert handler.await_args.kwargs["font_files"][0].filename == "brand.woff2"
     assert handler.await_args.kwargs["original_font_names"] == ["Brand Sans"]
