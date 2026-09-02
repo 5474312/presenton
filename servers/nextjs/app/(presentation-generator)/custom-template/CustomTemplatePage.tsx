@@ -43,6 +43,7 @@ import {
   EDITOR_STAGE_WIDTH,
 } from "@/components/slide-editor/types";
 import {
+  ensureLocalFontLoaded,
   LOCAL_FONT_OPTIONS,
   type LocalFontOption,
 } from "@/components/slide-editor/text/local-fonts";
@@ -486,9 +487,13 @@ function FontFallbackPicker({
   );
   const visibleOptionCount =
     viewportRows + FONT_FALLBACK_OVERSCAN_ROWS * 2 + 1;
-  const visibleOptions = filteredOptions.slice(
-    firstVisibleIndex,
-    firstVisibleIndex + visibleOptionCount,
+  const visibleOptions = useMemo(
+    () =>
+      filteredOptions.slice(
+        firstVisibleIndex,
+        firstVisibleIndex + visibleOptionCount,
+      ),
+    [filteredOptions, firstVisibleIndex, visibleOptionCount],
   );
 
   useEffect(() => {
@@ -502,6 +507,19 @@ function FontFallbackPicker({
     if (!open || normalizedQuery.length === 0) return;
     onLoadOptions();
   }, [normalizedQuery, onLoadOptions, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    visibleOptions.forEach((option) => {
+      void ensureLocalFontLoaded(option.family);
+    });
+  }, [open, visibleOptions]);
+
+  useEffect(() => {
+    if (selectedOption) {
+      void ensureLocalFontLoaded(selectedOption.family);
+    }
+  }, [selectedOption]);
 
   const handleListScroll = (event: React.UIEvent<HTMLDivElement>) => {
     const target = event.currentTarget;
@@ -527,7 +545,15 @@ function FontFallbackPicker({
           className="h-11 w-full justify-between rounded-lg border-[#DADDE6] bg-white px-3 font-syne text-sm font-medium text-[#282A32] shadow-none hover:border-[#B8BCC8] hover:bg-white"
         >
           <span className="min-w-0 truncate">
-            {selectedOption?.family ?? "Choose fallback"}
+            <span
+              style={
+                selectedOption
+                  ? { fontFamily: `"${selectedOption.family}"` }
+                  : undefined
+              }
+            >
+              {selectedOption?.family ?? "Choose fallback"}
+            </span>
           </span>
           <ChevronDown className="h-4 w-4 shrink-0 text-[#61646F]" />
         </Button>
@@ -571,6 +597,7 @@ function FontFallbackPicker({
                       className="absolute left-1 right-1 h-10 cursor-pointer justify-between rounded-lg px-3 font-syne text-sm font-medium text-[#242630] data-[selected=true]:bg-[#F6F5FF]"
                       style={{
                         top: optionIndex * FONT_FALLBACK_OPTION_HEIGHT + 4,
+                        fontFamily: `"${option.family}"`,
                       }}
                     >
                       <span className="min-w-0 truncate">{option.family}</span>

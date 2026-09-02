@@ -35,6 +35,7 @@ from templates.pptx_font_utils import (
 )
 from utils.asset_directory_utils import (
     absolute_fastapi_asset_url,
+    get_uploads_directory,
     resolve_app_path_to_filesystem,
 )
 from utils.get_env import get_app_data_directory_env
@@ -272,14 +273,17 @@ def _preview_asset_url_to_data_uri(
     parsed = urllib.parse.urlparse(url)
     fallback_url = url
     if parsed.scheme in ("http", "https"):
-        if not parsed.path.startswith(("/app_data/", "/static/")):
+        if not parsed.path.startswith(
+            ("/app_data/", "/static/", "/vendor/fonts/")
+        ):
             return url
         candidate = urllib.parse.unquote(parsed.path)
     elif parsed.scheme == "file":
         candidate = urllib.parse.unquote(parsed.path)
-    elif url.startswith(("/app_data/", "/static/")):
+    elif url.startswith(("/app_data/", "/static/", "/vendor/fonts/")):
         candidate = url
-        fallback_url = absolute_fastapi_asset_url(candidate)
+        if not url.startswith("/vendor/fonts/"):
+            fallback_url = absolute_fastapi_asset_url(candidate)
     elif (
         not parsed.scheme
         and relative_asset_root
@@ -659,7 +663,7 @@ def _get_fonts_directory() -> str:
 
 def _get_template_preview_session_dir(session_id: uuid.UUID) -> str:
     session_dir = os.path.join(
-        _app_data_directory(), "uploads", "template-previews", str(session_id)
+        get_uploads_directory(), "template-previews", str(session_id)
     )
     os.makedirs(session_dir, exist_ok=True)
     return session_dir
@@ -762,6 +766,7 @@ async def render_pptx_slides_to_images(
     max_slides: Optional[int],
     logger,
     font_stylesheet_urls: Optional[List[str]] = None,
+    preview_fonts: Optional[Dict[str, str]] = None,
 ) -> List[str]:
     local_font_css = ""
     if font_paths_for_install:
@@ -787,11 +792,24 @@ async def render_pptx_slides_to_images(
         f"Rendering {len(slide_layouts)} slide previews from PPTX-to-JSON at {width}x{height}"
     )
 
-    fonts: Dict[str, object] = {}
+    fonts: Dict[str, object] = {
+        family: _preview_asset_url_to_data_uri(url)
+        for family, url in (preview_fonts or {}).items()
+        if family and url
+    }
     if local_font_css:
         fonts["css"] = local_font_css
     if font_stylesheet_urls:
-        fonts["fonts"] = font_stylesheet_urls
+        if preview_fonts:
+            fonts.update(
+                {
+                    f"stylesheet_{index}": url
+                    for index, url in enumerate(font_stylesheet_urls)
+                    if url
+                }
+            )
+        else:
+            fonts["fonts"] = font_stylesheet_urls
 
     rendered = await EXPORT_TASK_SERVICE.render_jsons_to_images(
         data=slide_layouts,
@@ -1404,9 +1422,7 @@ async def upload_fonts_and_preview_handler(
                 max_slides=slide_cap,
                 logger=logger,
                 session_dir=session_dir,
-                font_stylesheet_urls=[
-                    url for url in fonts.values() if _is_font_stylesheet_url(url)
-                ],
+                preview_fonts=fonts,
             )
 
         modified_pptx_path_out = ""
@@ -1692,6 +1708,7 @@ async def create_slide_previews(
     logger,
     session_dir: str,
     font_stylesheet_urls: Optional[List[str]] = None,
+    preview_fonts: Optional[Dict[str, str]] = None,
 ) -> List[str]:
     del temp_dir, font_mapping, explicit_font_aliases, protected_font_names
 
@@ -1701,6 +1718,7 @@ async def create_slide_previews(
         max_slides=max_slides,
         logger=logger,
         font_stylesheet_urls=font_stylesheet_urls,
+        preview_fonts=preview_fonts,
     )
     logger.info("Generated slide previews from PPTX-to-JSON with Chromium")
 

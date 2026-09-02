@@ -2,6 +2,7 @@ import asyncio
 import io
 import os
 import struct
+import uuid
 import zipfile
 import xml.etree.ElementTree as ET
 from types import SimpleNamespace
@@ -227,6 +228,26 @@ def test_template_preview_slide_cap_and_pptx_trim(tmp_path):
         assert "/ppt/slides/slide51.xml" not in content_types
 
 
+def test_template_preview_session_uses_owner_scoped_upload_directory(
+    monkeypatch,
+    tmp_path,
+):
+    uploads_dir = tmp_path / "uploads" / "users" / "owner-id"
+    session_id = uuid.uuid4()
+    monkeypatch.setattr(
+        fonts_and_slides_preview,
+        "get_uploads_directory",
+        lambda: str(uploads_dir),
+    )
+
+    session_dir = fonts_and_slides_preview._get_template_preview_session_dir(
+        session_id
+    )
+
+    assert session_dir == str(uploads_dir / "template-previews" / str(session_id))
+    assert os.path.isdir(session_dir)
+
+
 @pytest.mark.anyio
 async def test_upload_fonts_and_preview_uses_trimmed_pptx_for_processing(
     monkeypatch,
@@ -279,10 +300,12 @@ async def test_upload_fonts_and_preview_uses_trimmed_pptx_for_processing(
         logger,
         session_dir,
         font_stylesheet_urls=None,
+        preview_fonts=None,
     ):
         del temp_dir, font_paths_for_install, font_mapping, explicit_font_aliases
         del protected_font_names, logger, session_dir
-        assert font_stylesheet_urls == []
+        assert font_stylesheet_urls is None
+        assert preview_fonts == {}
         captured["preview_pptx_path"] = modified_pptx_path
         assert max_slides == 50
         assert_slide_count(modified_pptx_path, 50)
@@ -377,11 +400,13 @@ async def test_upload_fonts_and_preview_returns_packaged_fonts(
         logger,
         session_dir,
         font_stylesheet_urls=None,
+        preview_fonts=None,
     ):
         del modified_pptx_path, temp_dir, font_paths_for_install, font_mapping
         del explicit_font_aliases, protected_font_names, max_slides, logger
         del session_dir
         captured["font_stylesheet_urls"] = font_stylesheet_urls
+        captured["preview_fonts"] = preview_fonts
         return [str(slide_path)]
 
     monkeypatch.setattr(
@@ -409,7 +434,8 @@ async def test_upload_fonts_and_preview_returns_packaged_fonts(
     )
 
     expected_url = "/vendor/fonts/sans_serif/opensans/OpenSans[wdth,wght].ttf"
-    assert captured["font_stylesheet_urls"] == []
+    assert captured["font_stylesheet_urls"] is None
+    assert captured["preview_fonts"] == {"Open Sans": expected_url}
     assert response.fonts == {"Open Sans": expected_url}
     assert response.slide_image_urls == [str(slide_path)]
 
@@ -468,11 +494,13 @@ async def test_upload_fonts_and_preview_replaces_pptx_fonts_with_selected_local_
         logger,
         session_dir,
         font_stylesheet_urls=None,
+        preview_fonts=None,
     ):
         del modified_pptx_path, temp_dir, font_paths_for_install, font_mapping
         del explicit_font_aliases, protected_font_names, max_slides, logger
         del session_dir
         captured["font_stylesheet_urls"] = font_stylesheet_urls
+        captured["preview_fonts"] = preview_fonts
         return [str(slide_path)]
 
     monkeypatch.setattr(
@@ -503,7 +531,8 @@ async def test_upload_fonts_and_preview_replaces_pptx_fonts_with_selected_local_
     )
 
     assert captured["google_font_replacements"] == {"Open Sans Bold": "Poppins"}
-    assert captured["font_stylesheet_urls"] == []
+    assert captured["font_stylesheet_urls"] is None
+    assert captured["preview_fonts"] == {"Poppins": local_url}
     assert response.fonts == {"Poppins": local_url}
     assert response.slide_image_urls == [str(slide_path)]
 
@@ -975,6 +1004,12 @@ async def test_create_slide_previews_from_json_uses_pptx_dimensions_and_fonts(
 ):
     font_path = tmp_path / "Khand-Bold.ttf"
     font_path.write_bytes(b"font")
+    app_data = tmp_path / "app_data"
+    uploaded_font_path = app_data / "fonts" / "Uploaded.ttf"
+    uploaded_font_path.parent.mkdir(parents=True)
+    uploaded_font_path.write_bytes(b"uploaded-font")
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+    monkeypatch.setenv("DISABLE_AUTH", "true")
     rendered_path = tmp_path / "slide.png"
     rendered_path.write_bytes(b"png")
     render_calls = []
@@ -1022,6 +1057,10 @@ async def test_create_slide_previews_from_json_uses_pptx_dimensions_and_fonts(
         font_stylesheet_urls=[
             "https://fonts.googleapis.com/css2?family=Montserrat:wght@400&display=swap"
         ],
+        preview_fonts={
+            "Poppins": "/vendor/fonts/sans_serif/poppins/Poppins-Regular.ttf",
+            "Uploaded": "/app_data/fonts/Uploaded.ttf",
+        },
     )
 
     assert result == [str(rendered_path)]
@@ -1032,9 +1071,11 @@ async def test_create_slide_previews_from_json_uses_pptx_dimensions_and_fonts(
     assert layouts == [{"elements": [{"type": "text", "text": "Slide"}]}]
     assert 'font-family: "Khand Bold";' in fonts["css"]
     assert font_path.resolve().as_uri() in fonts["css"]
-    assert fonts["fonts"] == [
+    assert fonts["stylesheet_0"] == (
         "https://fonts.googleapis.com/css2?family=Montserrat:wght@400&display=swap"
-    ]
+    )
+    assert fonts["Poppins"].startswith("data:font/ttf;base64,")
+    assert fonts["Uploaded"].startswith("data:font/ttf;base64,")
 
 
 @pytest.mark.anyio
@@ -1128,11 +1169,13 @@ async def test_create_slide_previews_uses_json_render_path(monkeypatch, tmp_path
         max_slides,
         logger,
         font_stylesheet_urls=None,
+        preview_fonts=None,
     ):
         assert modified_pptx_path == "deck.pptx"
         assert font_paths_for_install == ["font.ttf"]
         assert max_slides == 2
         assert font_stylesheet_urls is None
+        assert preview_fonts is None
         return rendered_paths
 
     async def fake_persist_files_to_session(pairs):
