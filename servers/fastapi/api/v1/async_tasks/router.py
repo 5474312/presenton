@@ -78,7 +78,7 @@ async def check_async_task_status(
     task = await sql_session.get(AsyncTaskModel, id)
     if not task:
         raise HTTPException(status_code=404, detail="No async task found")
-    response = task.model_copy(deep=True)
-    if response.data:
-        response.data = absolute_mcp_result_links(request, response.data)
+    response = task.model_dump(mode="python")
+    if task.data:
+        response["data"] = absolute_mcp_result_links(request, task.data)
     return response

@@ -124,8 +124,20 @@ def _build_template_preview_url(request: Request, template_id: str) -> str:
 
 
 class InitTemplateRequest(BaseModel):
-    pptx_url: str
-    slide_image_urls: list[str]
+    pptx_url: str = Field(
+        min_length=1,
+        description=(
+            "Presenton-hosted PPTX URL returned as pptx_url by "
+            "upload_template_assets. External client attachment IDs are not valid."
+        ),
+    )
+    slide_image_urls: list[str] = Field(
+        min_length=1,
+        description=(
+            "Non-empty slide_image_urls returned by upload_template_assets; pass the "
+            "array unchanged."
+        ),
+    )
     fonts: dict[str, Any] = Field(default_factory=dict)
     name: Optional[str] = None
     description: Optional[str] = None
@@ -141,7 +153,10 @@ class McpEncodedUpload(BaseModel):
     content_base64: str = Field(
         min_length=1,
         max_length=MCP_TEMPLATE_UPLOAD_MAX_BASE64_CHARS,
-        description="Standard base64-encoded file contents",
+        description=(
+            "Standard base64-encoded file contents. A host application's attachment "
+            "ID or filename is not file content."
+        ),
     )
     original_font_name: Optional[str] = Field(
         default=None,
@@ -150,7 +165,12 @@ class McpEncodedUpload(BaseModel):
 
 
 class McpTemplateUploadRequest(BaseModel):
-    pptx: McpEncodedUpload
+    pptx: McpEncodedUpload = Field(
+        description=(
+            "The attached PPTX filename and binary contents encoded as base64. Do not "
+            "send an OpenWebUI or other host attachment UUID."
+        )
+    )
     fonts: list[McpEncodedUpload] = Field(default_factory=list, max_length=32)
 
     @model_validator(mode="after")
@@ -161,6 +181,26 @@ class McpTemplateUploadRequest(BaseModel):
         if encoded_size > MCP_TEMPLATE_UPLOAD_MAX_BASE64_CHARS:
             raise ValueError("Combined template upload exceeds 100 MiB")
         return self
+
+
+class McpTemplateUploadResponse(BaseModel):
+    pptx_url: str = Field(
+        description=(
+            "Ready-to-use Presenton PPTX URL. Pass this exact value to "
+            "initialize_template or start_template_generation."
+        )
+    )
+    slide_image_urls: list[str] = Field(
+        min_length=1,
+        description=(
+            "Generated slide previews. Pass this exact array to initialize_template "
+            "or start_template_generation."
+        ),
+    )
+    fonts: dict[str, str] = Field(
+        default_factory=dict,
+        description="Uploaded replacement fonts to pass to the template operation.",
+    )
 
 
 def _decode_mcp_upload(upload: McpEncodedUpload, *, max_bytes: int) -> bytes:
@@ -857,16 +897,6 @@ async def _prepare_template_source(
         len(request.fonts or {}),
         bool((request.name or "").strip()),
     )
-    if not request.slide_image_urls:
-        LOGGER.warning(
-            "[template.%s] rejected request without slide images pptx_url=%s",
-            operation,
-            request.pptx_url,
-        )
-        raise HTTPException(
-            status_code=400, detail="At least one slide image is required"
-        )
-
     pptx_path = resolve_app_path_to_filesystem(request.pptx_url)
     if not pptx_path or not os.path.isfile(pptx_path):
         LOGGER.warning(
@@ -876,7 +906,14 @@ async def _prepare_template_source(
             request.pptx_url,
             pptx_path,
         )
-        raise HTTPException(status_code=400, detail="PPTX file not found")
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "PPTX file not found. MCP clients must call upload_template_assets "
+                "with the PPTX file contents and use the returned pptx_url; a host "
+                "application attachment ID cannot be used directly."
+            ),
+        )
 
     LOGGER.info(
         "[template.%s] converting PPTX to JSON pptx_path=%s",
@@ -1136,7 +1173,7 @@ async def upload_template_fonts_and_slides_preview(
 
 @TEMPLATE_ROUTER.post(
     "/mcp-upload",
-    response_model=FontsUploadAndSlidesPreviewResponse,
+    response_model=McpTemplateUploadResponse,
     operation_id="mcp_template_upload",
 )
 async def upload_template_assets_for_mcp(request: McpTemplateUploadRequest):
@@ -1179,10 +1216,15 @@ async def upload_template_assets_for_mcp(request: McpTemplateUploadRequest):
             or os.path.splitext(os.path.basename(font.filename))[0]
         )
 
-    return await upload_fonts_and_slides_preview_handler(
+    uploaded = await upload_fonts_and_slides_preview_handler(
         pptx_file=pptx_file,
         font_files=font_files or None,
         original_font_names=original_font_names or None,
+    )
+    return McpTemplateUploadResponse(
+        pptx_url=uploaded.modified_pptx_url,
+        slide_image_urls=uploaded.slide_image_urls,
+        fonts=uploaded.fonts,
     )
 
 
@@ -1489,6 +1531,18 @@ async def create_template(
     request: CreateTemplateRequest = Body(...),
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    # Reject foreign attachment IDs before persisting an async task. Presenton can
+    # only process files uploaded into its own user-scoped app-data directory.
+    pptx_path = resolve_app_path_to_filesystem(request.pptx_url)
+    if not pptx_path or not os.path.isfile(pptx_path):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "PPTX file not found. MCP clients must call upload_template_assets "
+                "with the PPTX file contents and use the returned pptx_url; a host "
+                "application attachment ID cannot be used directly."
+            ),
+        )
     template_id = str(uuid.uuid4())
     task = AsyncTaskModel(
         type=ASYNC_TASK_TYPE_TEMPLATE_CREATE,

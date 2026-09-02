@@ -113,7 +113,7 @@ def test_check_async_task_status_returns_task():
         )
     )
 
-    assert response == task
+    assert response == task.model_dump(mode="python")
 
 
 def test_check_async_task_status_returns_404_for_missing_task():
@@ -149,7 +149,7 @@ def test_check_async_task_status_qualifies_mcp_result_links(monkeypatch):
         )
     )
 
-    assert response.data == {
+    assert response["data"] == {
         "path": "https://presenton.example.com/app_data/exports/deck.pptx",
         "edit_path": "https://presenton.example.com/presentation?id=deck-id",
     }
@@ -172,7 +172,7 @@ def test_check_async_task_status_uses_configured_public_url(monkeypatch):
         )
     )
 
-    assert response.data["path"] == (
+    assert response["data"]["path"] == (
         "https://slides.example.com/root/app_data/exports/deck.pptx"
     )
 
