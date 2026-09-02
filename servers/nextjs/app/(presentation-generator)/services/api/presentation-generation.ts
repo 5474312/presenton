@@ -8,7 +8,6 @@ import {
 } from "@/utils/presentationLimits";
 import type { PresentationVersion } from "./dashboard";
 import type { Slide } from "../../types/slide";
-import { store } from "@/store/store";
 
 export type BlankPresentationResponse = {
   id: string;
@@ -104,15 +103,8 @@ export class PresentationGenerationApi {
         typeof n_slides === "number"
           ? Math.min(Math.max(n_slides, 1), MAX_NUMBER_OF_SLIDES)
           : null;
-      const usePresentonSmartEndpoint =
-        generation_mode === "smart" &&
-        store.getState().userConfig.llm_config.LLM === "presenton";
       const response = await fetch(
-        getApiUrl(
-          usePresentonSmartEndpoint
-            ? `/api/v2/ppt/presentation/generate-html/init`
-            : `/api/v1/ppt/presentation/create`
-        ),
+        getApiUrl(`/api/v1/ppt/presentation/create`),
         {
           method: "POST",
           headers: getHeader(),
@@ -138,22 +130,9 @@ export class PresentationGenerationApi {
         response,
         "Failed to create presentation"
       );
-      if (!usePresentonSmartEndpoint) {
-        return {
-          ...result,
-          type: generation_mode,
-        };
-      }
-
-      if (!result || typeof result.presentation_id !== "string") {
-        throw new Error("Smart presentation response did not include an id");
-      }
       return {
         ...result,
-        id: result.presentation_id,
-        version: "v2-standard",
-        generation_mode: "smart",
-        type: "smart",
+        type: generation_mode,
       };
     } catch (error) {
       console.error("error in presentation creation", error);

@@ -3,14 +3,18 @@ import os
 import shutil
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.auth.schemas import (
+    AdminCreateMcpCredentialRequest,
     AdminCreateUserRequest,
     AdminResetPasswordRequest,
     PublicUser,
+    McpCredentialCreated,
+    McpCredentialPublic,
+    McpCredentialToken,
 )
 from api.v1.auth.users import (
     PASSWORD_HELPER,
@@ -19,10 +23,13 @@ from api.v1.auth.users import (
     serialize_user,
 )
 from models.sql.user import User
+from models.sql.mcp_credential import McpCredential
 from models.sql.key_value import KeyValueSqlModel
 from services.database import get_async_session
 from services.provider_settings import get_provider_settings, save_provider_settings
 from services.presenton_cloud import get_presenton_provider, has_cloud_credentials
+from services.mcp_credentials import issue_mcp_credential, reveal_mcp_key
+from utils.datetime_utils import get_current_utc_datetime
 from utils.get_env import (
     get_app_data_directory_env,
     get_can_change_keys_env,
@@ -34,6 +41,93 @@ from utils.user_config import update_env_with_user_config
 
 
 API_V1_ADMIN_ROUTER = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
+
+
+@API_V1_ADMIN_ROUTER.get(
+    "/mcp-credentials", response_model=list[McpCredentialPublic]
+)
+async def list_mcp_credentials(
+    _: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    return list(
+        (
+            await session.scalars(
+                select(McpCredential).order_by(McpCredential.created_at.desc())
+            )
+        ).all()
+    )
+
+
+@API_V1_ADMIN_ROUTER.post(
+    "/mcp-credentials",
+    response_model=McpCredentialCreated,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_mcp_credential(
+    body: AdminCreateMcpCredentialRequest,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    target = await session.get(User, body.user_id)
+    if target is None or not target.is_active:
+        raise HTTPException(status_code=404, detail="Active user not found")
+    credential, token = await issue_mcp_credential(
+        session,
+        user_id=target.id,
+        created_by_id=admin.id,
+        label=body.label,
+        expiry_days=body.expiry_days,
+    )
+    return McpCredentialCreated.model_validate(
+        {**McpCredentialPublic.model_validate(credential).model_dump(), "token": token}
+    )
+
+
+@API_V1_ADMIN_ROUTER.get(
+    "/mcp-credentials/{credential_id}/token",
+    response_model=McpCredentialToken,
+)
+async def get_mcp_credential_token(
+    credential_id: str,
+    response: Response,
+    _: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    credential = await session.get(McpCredential, credential_id)
+    if credential is None:
+        raise HTTPException(status_code=404, detail="MCP credential not found")
+    if credential.revoked_at is not None:
+        raise HTTPException(status_code=410, detail="MCP credential has been revoked")
+    token = reveal_mcp_key(credential)
+    if token is None:
+        raise HTTPException(
+            status_code=409,
+            detail="This MCP key was created before secure key reveal was available",
+        )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return McpCredentialToken(id=credential.id, token=token)
+
+
+@API_V1_ADMIN_ROUTER.post(
+    "/mcp-credentials/{credential_id}/revoke",
+    response_model=McpCredentialPublic,
+)
+async def revoke_mcp_credential(
+    credential_id: str,
+    _: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_async_session),
+):
+    credential = await session.get(McpCredential, credential_id)
+    if credential is None:
+        raise HTTPException(status_code=404, detail="MCP credential not found")
+    if credential.revoked_at is None:
+        credential.revoked_at = get_current_utc_datetime()
+        session.add(credential)
+        await session.commit()
+        await session.refresh(credential)
+    return credential
 
 
 async def require_settings_admin(
