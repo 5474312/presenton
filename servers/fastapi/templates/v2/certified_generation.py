@@ -3028,7 +3028,8 @@ def _fallback_semantic_manifest(source_layout: RawSlideLayout) -> SemanticSlideM
             "name": name,
             "decorative": (
                 False
-                if element_type in {"chart", "infographic", "table", "text-list"}
+                if element_type
+                in {"chart", "infographic", "table", "text", "text-list"}
                 else bool(element.get("decorative", True))
             ),
         }
