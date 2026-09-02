@@ -655,32 +655,5 @@ def flexible_slide_plan_llm_json_schema() -> dict:
 
 
 def text_capacity_plan_llm_json_schema() -> dict:
-    """Return an LLM contract that excludes zero-growth preserve no-ops."""
-    schema = TextCapacityPlan.model_json_schema()
-    adjustment_schema = schema["$defs"]["TextCapacityAdjustment"]
-    adjustment_schema["anyOf"] = [
-        {"properties": {field: {"minimum": 1}}}
-        for field in (
-            "left_characters",
-            "right_characters",
-            "top_lines",
-            "bottom_lines",
-        )
-    ]
-    adjustment_schema["anyOf"].extend(
-        [
-            {
-                "properties": {
-                    "horizontal_alignment": {
-                        "enum": ["left", "center", "right", "justify"]
-                    }
-                }
-            },
-            {
-                "properties": {
-                    "vertical_alignment": {"enum": ["top", "middle", "bottom"]}
-                }
-            },
-        ]
-    )
-    return schema
+    """Return a flat LLM contract; runtime validation rejects no-op adjustments."""
+    return TextCapacityPlan.model_json_schema()

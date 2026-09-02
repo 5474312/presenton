@@ -145,6 +145,71 @@ def test_certified_compiler_builds_dynamic_grid():
     )
 
 
+def test_flexible_validation_preserves_explicit_group_for_regular_geometry():
+    raw_layout = _raw_layout()
+    manifest = _manifest()
+    flexible_plan = _flexible_plan()
+    flexible_plan.regions[0].flows[0].mode = "group"
+    source_elements = raw_layout.model_dump(mode="json")["elements"]
+
+    generation._validate_flexible_plan(
+        flexible_plan,
+        manifest=manifest,
+        source_elements=source_elements,
+    )
+
+    assert flexible_plan.regions[0].flows[0].mode == "group"
+    layout = generation._compile_semantic_layout(
+        raw_layout,
+        manifest,
+        flexible_plan,
+        generation.TextCapacityPlan(adjustments=[]),
+    )
+    assert layout.components[1].elements[0].type == "group"
+
+
+def test_flexible_validation_downgrades_invalid_geometry_to_group():
+    raw_layout = _raw_layout()
+    manifest = _manifest()
+    flexible_plan = generation.FlexibleSlidePlan.model_validate(
+        {
+            "regions": [
+                {
+                    "component_id": "metrics",
+                    "root_flow_id": "metric_cards",
+                    "flows": [
+                        {
+                            "id": "metric_cards",
+                            "name": "metric_cards",
+                            "mode": "row",
+                            "items": [
+                                {"indices": [1], "flow_id": None},
+                                {"indices": [2, 3, 4], "flow_id": None},
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+    source_elements = raw_layout.model_dump(mode="json")["elements"]
+
+    generation._validate_flexible_plan(
+        flexible_plan,
+        manifest=manifest,
+        source_elements=source_elements,
+    )
+
+    assert flexible_plan.regions[0].flows[0].mode == "group"
+    layout = generation._compile_semantic_layout(
+        raw_layout,
+        manifest,
+        flexible_plan,
+        generation.TextCapacityPlan(adjustments=[]),
+    )
+    assert layout.components[1].elements[0].type == "group"
+
+
 def test_certified_compiler_preserves_source_stack_across_components():
     raw_layout = generation.RawSlideLayout.model_validate(
         {
@@ -860,24 +925,20 @@ def test_flexible_retry_prompt_repeats_tree_correction_contract():
     assert "omit the region instead of guessing" in prompt
 
 
-def test_text_capacity_llm_schema_excludes_no_op_adjustments():
+def test_text_capacity_llm_schema_requires_complete_flat_adjustments():
     schema = generation._llm_output_json_schema(generation.TextCapacityPlan)
     adjustment_schema = schema["$defs"]["TextCapacityAdjustment"]
 
-    alternatives = adjustment_schema["anyOf"]
-    assert {"properties": {"bottom_lines": {"minimum": 1}}} in alternatives
-    assert {
-        "properties": {
-            "horizontal_alignment": {
-                "enum": ["left", "center", "right", "justify"]
-            }
-        }
-    } in alternatives
-    assert {
-        "properties": {
-            "vertical_alignment": {"enum": ["top", "middle", "bottom"]}
-        }
-    } in alternatives
+    assert "anyOf" not in adjustment_schema
+    assert adjustment_schema["required"] == [
+        "path",
+        "left_characters",
+        "right_characters",
+        "top_lines",
+        "bottom_lines",
+        "horizontal_alignment",
+        "vertical_alignment",
+    ]
 
 
 def test_text_capacity_retry_prompt_forbids_no_op_adjustments():
@@ -907,5 +968,7 @@ def test_text_capacity_retry_prompt_forbids_no_op_adjustments():
 
     prompt = retry_messages[-1].content
     assert "Task-specific correction rules:" in prompt
+    assert "one complete object" in prompt
+    assert "never split fields across array entries" in prompt
     assert "Omit every no-op adjustment" in prompt
     assert "Return an empty adjustments list" in prompt
