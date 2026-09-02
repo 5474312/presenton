@@ -711,7 +711,10 @@ def test_generation_failure_falls_back_without_rewriting_source(monkeypatch):
     assert len(layout.components[0].elements) == len(raw_layout.elements)
     assert layout.components[0].elements[0].type == "vector"
     assert layout.components[0].elements[1].children[0].name == "metric_1"
-    assert layout.components[0].elements[1].children[0].decorative is True
+    assert all(
+        element.children[0].decorative is False
+        for element in layout.components[0].elements[1:]
+    )
 
 
 def test_structured_generation_honors_requested_validation_retries():
