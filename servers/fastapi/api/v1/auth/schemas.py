@@ -51,3 +51,31 @@ class AdminCreateUserRequest(AuthCredentialsRequest):
 
 class AdminResetPasswordRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
+
+
+class AdminCreateMcpCredentialRequest(BaseModel):
+    user_id: uuid.UUID
+    label: str = Field(default="MCP client", min_length=1, max_length=120)
+    expiry_days: int = Field(default=90, ge=1, le=365)
+
+
+class McpCredentialPublic(BaseModel):
+    id: str
+    user_id: uuid.UUID
+    created_by_id: uuid.UUID
+    label: str
+    created_at: datetime
+    expires_at: datetime
+    last_used_at: datetime | None
+    revoked_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class McpCredentialCreated(McpCredentialPublic):
+    token: str
+
+
+class McpCredentialToken(BaseModel):
+    id: str
+    token: str

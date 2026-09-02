@@ -1,11 +1,12 @@
 import asyncio
+import base64
 import uuid
 from copy import deepcopy
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import BackgroundTasks, HTTPException, Request
 
 from api.v1.ppt.endpoints.template import (
     TEMPLATE_ROUTER,
@@ -14,6 +15,8 @@ from api.v1.ppt.endpoints.template import (
     GenerateTemplateLayoutRequest,
     GenerateTemplateBlocksRequest,
     InitTemplateRequest,
+    McpEncodedUpload,
+    McpTemplateUploadRequest,
     PatchTemplateSlideLayoutRequest,
     UpdateTemplateMetadataRequest,
     _create_template_sync,
@@ -30,7 +33,9 @@ from api.v1.ppt.endpoints.template import (
     patch_template_slide_layout,
     retry_create_template,
     update_template_metadata,
+    upload_template_assets_for_mcp,
 )
+from templates.preview import FontsUploadAndSlidesPreviewResponse
 from models.sql.async_task import AsyncTaskModel
 from models.sql.template_v2 import TemplateV2
 from models.theme_data import PresentationThemeData
@@ -120,6 +125,33 @@ GENERATED_THEME_DATA = {
     },
     "fonts": {"textFont": {"name": "Inter", "url": "Inter"}},
 }
+
+
+def _http_request(
+    *,
+    host: str = "localhost:5001",
+    scheme: str = "http",
+    forwarded_host: str | None = None,
+    forwarded_proto: str | None = None,
+) -> Request:
+    headers = [(b"host", host.encode())]
+    if forwarded_host:
+        headers.append((b"x-forwarded-host", forwarded_host.encode()))
+    if forwarded_proto:
+        headers.append((b"x-forwarded-proto", forwarded_proto.encode()))
+    return Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "scheme": scheme,
+            "server": ("127.0.0.1", 8000),
+            "path": "/api/v1/ppt/template/all",
+            "query_string": b"",
+            "headers": headers,
+        }
+    )
+
+
 GENERATED_THEME = PresentationThemeData.model_validate(GENERATED_THEME_DATA)
 
 
@@ -641,6 +673,68 @@ def test_retry_create_template_rejects_non_failed_task(fake_async_session):
     assert fake_async_session.commit_count == 0
 
 
+def test_mcp_template_upload_combines_pptx_and_fonts():
+    expected = FontsUploadAndSlidesPreviewResponse(
+        slide_image_urls=["/app_data/images/slide-1.png"],
+        pptx_url="/app_data/uploads/template.pptx",
+        modified_pptx_url="/app_data/uploads/template-modified.pptx",
+        fonts={"Brand Sans": "/app_data/fonts/brand.woff2"},
+    )
+    request = McpTemplateUploadRequest(
+        pptx=McpEncodedUpload(
+            filename="template.pptx",
+            content_base64=base64.b64encode(b"pptx-bytes").decode(),
+        ),
+        fonts=[
+            McpEncodedUpload(
+                filename="brand.woff2",
+                original_font_name="Brand Sans",
+                content_base64=base64.b64encode(b"font-bytes").decode(),
+            )
+        ],
+    )
+
+    with patch(
+        "api.v1.ppt.endpoints.template.upload_fonts_and_slides_preview_handler",
+        new=AsyncMock(return_value=expected),
+    ) as handler:
+        response = asyncio.run(upload_template_assets_for_mcp(request))
+
+    assert response == expected
+    assert handler.await_args.kwargs["pptx_file"].filename == "template.pptx"
+    assert handler.await_args.kwargs["font_files"][0].filename == "brand.woff2"
+    assert handler.await_args.kwargs["original_font_names"] == ["Brand Sans"]
+
+
+def test_mcp_template_upload_rejects_combined_binary_size(monkeypatch):
+    monkeypatch.setattr(
+        "api.v1.ppt.endpoints.template.MCP_TEMPLATE_UPLOAD_MAX_TOTAL_BYTES",
+        4,
+    )
+    request = McpTemplateUploadRequest(
+        pptx=McpEncodedUpload(
+            filename="template.pptx",
+            content_base64=base64.b64encode(b"123").decode(),
+        ),
+        fonts=[
+            McpEncodedUpload(
+                filename="brand.woff2",
+                content_base64=base64.b64encode(b"45").decode(),
+            )
+        ],
+    )
+
+    with patch(
+        "api.v1.ppt.endpoints.template.upload_fonts_and_slides_preview_handler",
+        new=AsyncMock(),
+    ) as handler, pytest.raises(HTTPException) as exc:
+        asyncio.run(upload_template_assets_for_mcp(request))
+
+    assert exc.value.status_code == 413
+    assert "Combined template upload" in exc.value.detail
+    handler.assert_not_awaited()
+
+
 def test_create_template_async_task_updates_slide_status_before_batch_completes(
     tmp_path,
 ):
@@ -780,7 +874,16 @@ def test_init_template_persists_assets_without_layouts(tmp_path, fake_async_sess
 
 def test_list_templates_returns_paginated_summary():
     response = asyncio.run(
-        list_templates(page=1, page_size=20, sql_session=_ListSession())
+        list_templates(
+            request=_http_request(
+                host="127.0.0.1:8000",
+                forwarded_host="slides.example.com",
+                forwarded_proto="https",
+            ),
+            page=1,
+            page_size=20,
+            sql_session=_ListSession(),
+        )
     )
 
     assert response.total == 1
@@ -792,6 +895,10 @@ def test_list_templates_returns_paginated_summary():
     assert response.items[0].description == "Board deck template"
     assert response.items[0].layout_count == 1
     assert response.items[0].thumbnail == "/app_data/images/slide-1.png"
+    assert response.items[0].preview_url == (
+        "https://slides.example.com/template-preview?"
+        "templateV2Id=00000000-0000-0000-0000-000000000001"
+    )
     assert response.items[0].is_default is False
 
 
@@ -822,6 +929,7 @@ def test_list_templates_filters_by_default_flag():
 
     default_response = asyncio.run(
         list_templates(
+            request=_http_request(),
             page=1,
             page_size=20,
             default=True,
@@ -830,6 +938,7 @@ def test_list_templates_filters_by_default_flag():
     )
     custom_response = asyncio.run(
         list_templates(
+            request=_http_request(),
             page=1,
             page_size=20,
             default=False,
@@ -863,7 +972,11 @@ def test_get_template_returns_layouts_components_and_fonts(fake_async_session):
     fake_async_session._get_results[template_id] = template
 
     response = asyncio.run(
-        get_template(template_id, sql_session=fake_async_session)
+        get_template(
+            request=_http_request(),
+            template_id=template_id,
+            sql_session=fake_async_session,
+        )
     )
 
     assert response.id == template_id
@@ -1441,7 +1554,11 @@ def test_get_template_returns_template(fake_async_session):
     fake_async_session._get_results[template_id] = template
 
     response = asyncio.run(
-        get_template(template_id, sql_session=fake_async_session)
+        get_template(
+            request=_http_request(),
+            template_id=template_id,
+            sql_session=fake_async_session,
+        )
     )
 
     assert response.id == template.id
@@ -1699,7 +1816,13 @@ def test_delete_template_deletes_template(fake_async_session):
 
 def test_get_template_returns_404_for_missing_template(fake_async_session):
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(get_template("missing-template", sql_session=fake_async_session))
+        asyncio.run(
+            get_template(
+                request=_http_request(),
+                template_id="missing-template",
+                sql_session=fake_async_session,
+            )
+        )
 
     assert exc.value.status_code == 404
     assert exc.value.detail == "Template not found"

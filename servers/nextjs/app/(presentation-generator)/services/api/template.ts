@@ -42,6 +42,7 @@ export interface TemplateListItem {
     description?: string | null;
     layout_count?: number;
     thumbnail?: string | null;
+    preview_url?: string | null;
     is_default?: boolean;
     status?: string | null;
     generation_status?: string | null;

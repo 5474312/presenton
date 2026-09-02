@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
+  Cable,
   Copy,
   Eye,
   EyeOff,
@@ -41,10 +42,24 @@ type ApiKey = {
   created_at: string;
 };
 
+type McpCredential = {
+  id: string;
+  user_id: string;
+  created_by_id: string;
+  label: string;
+  created_at: string;
+  expires_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+};
+
+type McpCredentialCreated = McpCredential & { token: string };
+
 type AdminDialog =
   | { kind: "reset-password"; user: AdminUser }
   | { kind: "delete-user"; user: AdminUser }
   | { kind: "revoke-key"; key: ApiKey }
+  | { kind: "revoke-mcp"; credential: McpCredential }
   | null;
 
 type AdminPanelProps = {
@@ -71,6 +86,12 @@ const inputClass =
 export default function AdminPanel({ embedded = false }: AdminPanelProps) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [mcpCredentials, setMcpCredentials] = useState<McpCredential[]>([]);
+  const [mcpTokens, setMcpTokens] = useState<Record<string, string>>({});
+  const [visibleMcpKeys, setVisibleMcpKeys] = useState<Set<string>>(() => new Set());
+  const [mcpUserId, setMcpUserId] = useState("");
+  const [mcpLabel, setMcpLabel] = useState("MCP client");
+  const [mcpExpiryDays, setMcpExpiryDays] = useState(90);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [resetPasswordValue, setResetPasswordValue] = useState("");
@@ -90,6 +111,11 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
       if (response.ok) {
         const loadedUsers = (await response.json()) as AdminUser[];
         setUsers(loadedUsers);
+        setMcpUserId((current) =>
+          current && loadedUsers.some((user) => user.id === current)
+            ? current
+            : loadedUsers.find((user) => user.role === "admin")?.id ?? loadedUsers[0]?.id ?? ""
+        );
         trackEvent(MixpanelEvent.Auth_Admin_User_List_Loaded, {
           trigger,
           user_count: loadedUsers.length,
@@ -153,12 +179,32 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
     }
   }, []);
 
+  const loadMcpCredentials = useCallback(async () => {
+    setBusy("mcp-keys");
+    try {
+      const response = await fetch("/api/v1/admin/mcp-credentials", {
+        cache: "no-store",
+        credentials: "include",
+      });
+      if (response.ok) {
+        const loaded = (await response.json()) as McpCredential[];
+        setMcpCredentials(loaded.filter((credential) => !credential.revoked_at));
+      } else {
+        notify.error("Could not load MCP keys", await errorDetail(response));
+      }
+    } catch {
+      notify.error("Could not load MCP keys", "Please try again.");
+    } finally {
+      setBusy(null);
+    }
+  }, []);
+
   useEffect(() => {
     trackEvent(MixpanelEvent.Auth_Admin_Viewed, {
       embedded,
     });
-    void Promise.all([loadUsers(), loadKeys()]);
-  }, [embedded, loadKeys, loadUsers]);
+    void Promise.all([loadUsers(), loadKeys(), loadMcpCredentials()]);
+  }, [embedded, loadKeys, loadMcpCredentials, loadUsers]);
 
   const addUser = async (event: FormEvent) => {
     event.preventDefault();
@@ -398,6 +444,129 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
     }
   };
 
+  const createMcpCredential = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy("create-mcp-key");
+    try {
+      const response = await fetch("/api/v1/admin/mcp-credentials", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: mcpUserId,
+          label: mcpLabel.trim(),
+          expiry_days: mcpExpiryDays,
+        }),
+      });
+      if (!response.ok) {
+        notify.error("Could not create MCP key", await errorDetail(response));
+        return;
+      }
+      const created = (await response.json()) as McpCredentialCreated;
+      const { token, ...credential } = created;
+      setMcpCredentials((current) => [credential, ...current]);
+      setMcpTokens((current) => ({ ...current, [credential.id]: token }));
+      setVisibleMcpKeys((current) => new Set(current).add(credential.id));
+      try {
+        await navigator.clipboard.writeText(token);
+        notify.success("MCP key created", "The key is visible and was copied to your clipboard.");
+      } catch {
+        notify.success("MCP key created", "The key is visible below.");
+      }
+    } catch {
+      notify.error("Could not create MCP key", "Please try again.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const getMcpToken = async (credentialId: string) => {
+    const cached = mcpTokens[credentialId];
+    if (cached) return cached;
+    const response = await fetch(
+      `/api/v1/admin/mcp-credentials/${credentialId}/token`,
+      { cache: "no-store", credentials: "include" }
+    );
+    if (!response.ok) throw new Error(await errorDetail(response));
+    const payload = (await response.json()) as { token: string };
+    setMcpTokens((current) => ({ ...current, [credentialId]: payload.token }));
+    return payload.token;
+  };
+
+  const toggleMcpKeyVisibility = async (credentialId: string) => {
+    if (visibleMcpKeys.has(credentialId)) {
+      setVisibleMcpKeys((current) => {
+        const next = new Set(current);
+        next.delete(credentialId);
+        return next;
+      });
+      return;
+    }
+    setBusy(`reveal-mcp:${credentialId}`);
+    try {
+      await getMcpToken(credentialId);
+      setVisibleMcpKeys((current) => new Set(current).add(credentialId));
+    } catch (revealError) {
+      notify.error(
+        "Could not reveal MCP key",
+        revealError instanceof Error ? revealError.message : "Please try again."
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const copyMcpKey = async (credentialId: string) => {
+    setBusy(`reveal-mcp:${credentialId}`);
+    try {
+      await navigator.clipboard.writeText(await getMcpToken(credentialId));
+      notify.success("MCP key copied");
+    } catch (copyError) {
+      notify.error(
+        "Could not copy MCP key",
+        copyError instanceof Error ? copyError.message : "Please try again."
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const revokeMcpCredential = async () => {
+    if (dialog?.kind !== "revoke-mcp") return;
+    const { credential } = dialog;
+    setBusy(`revoke-mcp:${credential.id}`);
+    try {
+      const response = await fetch(
+        `/api/v1/admin/mcp-credentials/${credential.id}/revoke`,
+        { method: "POST", credentials: "include" }
+      );
+      if (!response.ok) {
+        notify.error("Could not revoke MCP key", await errorDetail(response));
+        return;
+      }
+      const revoked = (await response.json()) as McpCredential;
+      setMcpCredentials((current) =>
+        current.filter((item) => item.id !== revoked.id)
+      );
+      setMcpTokens((current) => {
+        const next = { ...current };
+        delete next[credential.id];
+        return next;
+      });
+      setVisibleMcpKeys((current) => {
+        const next = new Set(current);
+        next.delete(credential.id);
+        return next;
+      });
+      setDialog(null);
+      notify.success("MCP key revoked");
+    } catch {
+      notify.error("Could not revoke MCP key", "Please try again.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const toggleKeyVisibility = (token: string) => {
     setVisibleKeys((current) => {
       const next = new Set(current);
@@ -419,7 +588,8 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
   const dialogBusy =
     (dialog?.kind === "reset-password" && busy === `reset:${dialog.user.id}`) ||
     (dialog?.kind === "delete-user" && busy === `delete:${dialog.user.id}`) ||
-    (dialog?.kind === "revoke-key" && busy === `revoke:${dialog.key.token}`);
+    (dialog?.kind === "revoke-key" && busy === `revoke:${dialog.key.token}`) ||
+    (dialog?.kind === "revoke-mcp" && busy === `revoke-mcp:${dialog.credential.id}`);
   const RootElement = embedded ? "section" : "main";
 
   return (
@@ -432,7 +602,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
     >
       <div className={embedded ? "max-w-5xl" : "mx-auto max-w-5xl"}>
         {!embedded ? (
-          <h1 className="font-unbounded text-[28px] font-normal tracking-[-0.84px] text-black">
+          <h1 className="font-syne font-medium text-[28px] tracking-[-0.84px] text-black">
             Admin
           </h1>
         ) : null}
@@ -446,7 +616,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
             Manage access
           </h2>
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-[#6B7280]">
-            Create login accounts and manage admin-owned API/MCP access keys.
+            Create login accounts and manage API keys and user-scoped MCP keys.
             User workspaces remain private.
           </p>
 
@@ -463,6 +633,12 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
               className="h-9 rounded-full px-5 text-xs text-[#667085] shadow-none data-[state=active]:bg-white data-[state=active]:text-[#5146E5] data-[state=active]:shadow-sm"
             >
               API keys
+            </TabsTrigger>
+            <TabsTrigger
+              value="mcp-keys"
+              className="h-9 rounded-full px-5 text-xs text-[#667085] shadow-none data-[state=active]:bg-white data-[state=active]:text-[#5146E5] data-[state=active]:shadow-sm"
+            >
+              MCP keys
             </TabsTrigger>
           </TabsList>
 
@@ -585,9 +761,9 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                     <KeyRound className="h-4 w-4 text-[#5146E5]" />
                   </div>
                   <div>
-                    <h2 className="text-sm font-semibold text-[#101323]">API and MCP keys</h2>
+                    <h2 className="text-sm font-semibold text-[#101323]">API keys</h2>
                     <p className="mt-0.5 text-xs text-[#667085]">
-                      Keys are hidden by default. Generate as many as you need.
+                      Administrator-owned keys for direct REST API access.
                     </p>
                   </div>
                 </div>
@@ -653,6 +829,165 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </TabsContent>
+
+          <TabsContent value="mcp-keys" className="mt-6 space-y-5">
+            <section className="rounded-[12px] border border-[#EDEEEF] bg-white p-6">
+              <div className="mb-5 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F4F3FF]">
+                  <Cable className="h-4 w-4 text-[#5146E5]" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-[#101323]">Generate MCP key</h2>
+                  <p className="mt-0.5 text-xs text-[#667085]">
+                    Scope a key to one user. Administrator keys can also create templates.
+                  </p>
+                </div>
+              </div>
+              <form
+                onSubmit={createMcpCredential}
+                className="grid gap-3 lg:grid-cols-[1fr_1fr_150px_auto]"
+              >
+                <select
+                  aria-label="MCP key user"
+                  className={inputClass}
+                  value={mcpUserId}
+                  onChange={(event) => setMcpUserId(event.target.value)}
+                  required
+                >
+                  <option value="" disabled>Select user</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.username} ({user.role})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  aria-label="MCP key label"
+                  className={inputClass}
+                  value={mcpLabel}
+                  onChange={(event) => setMcpLabel(event.target.value)}
+                  minLength={1}
+                  maxLength={120}
+                  placeholder="Client name"
+                  required
+                />
+                <select
+                  aria-label="MCP key expiry days"
+                  className={inputClass}
+                  value={mcpExpiryDays}
+                  onChange={(event) => setMcpExpiryDays(Number(event.target.value))}
+                  required
+                >
+                  <option value={30}>30 days</option>
+                  <option value={90}>90 days</option>
+                  <option value={180}>180 days</option>
+                  <option value={365}>365 days</option>
+                </select>
+                <button
+                  type="submit"
+                  className={primaryButtonClass}
+                  disabled={busy === "create-mcp-key" || !mcpUserId}
+                >
+                  {busy === "create-mcp-key" && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Generate key
+                </button>
+              </form>
+            </section>
+
+            <section className="overflow-hidden rounded-[12px] border border-[#EDEEEF] bg-white">
+              <div className="flex items-center justify-between border-b border-[#EDEEEF] px-6 py-5">
+                <div>
+                  <h2 className="text-sm font-semibold text-[#101323]">MCP keys</h2>
+                  <p className="mt-0.5 text-xs text-[#667085]">
+                    Reveal or copy a key whenever you need to configure an MCP client.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Refresh MCP keys"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EDEEEF] text-[#667085] transition hover:bg-[#F9FAFB] hover:text-[#5146E5]"
+                  onClick={() => void loadMcpCredentials()}
+                >
+                  <RefreshCw className={`h-4 w-4 ${busy === "mcp-keys" ? "animate-spin" : ""}`} />
+                </button>
+              </div>
+              <div className="divide-y divide-[#EDEEEF]">
+                {mcpCredentials.length === 0 && (
+                  <div className="px-6 py-12 text-center">
+                    <Cable className="mx-auto h-6 w-6 text-[#B8B4C7]" />
+                    <p className="mt-3 text-sm text-[#667085]">No MCP keys have been generated.</p>
+                  </div>
+                )}
+                {mcpCredentials.map((credential) => {
+                  const isVisible = visibleMcpKeys.has(credential.id);
+                  const token = mcpTokens[credential.id];
+                  const user = users.find((item) => item.id === credential.user_id);
+                  const isRevoked = Boolean(credential.revoked_at);
+                  return (
+                    <div key={credential.id} className="flex flex-wrap items-center gap-3 px-6 py-4">
+                      <div className="min-w-[260px] flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-[#101323]">{credential.label}</p>
+                          {isRevoked && (
+                            <span className="rounded-full bg-[#FEF3F2] px-2 py-0.5 text-[10px] font-semibold text-[#D92D20]">
+                              Revoked
+                            </span>
+                          )}
+                        </div>
+                        <code className="mt-1 block truncate text-xs text-[#344054]">
+                          {isVisible && token ? token : `sk-presenton-mcp-••••••••${credential.id.slice(-4)}`}
+                        </code>
+                        <p className="mt-1 text-[11px] text-[#98A2B3]">
+                          {user?.username ?? credential.user_id} · Expires {new Date(credential.expires_at).toLocaleDateString()}
+                          {credential.last_used_at
+                            ? ` · Last used ${new Date(credential.last_used_at).toLocaleDateString()}`
+                            : " · Never used"}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label={isVisible ? "Hide MCP key" : "Show MCP key"}
+                        title={isVisible ? "Hide MCP key" : "Show MCP key"}
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EDEEEF] text-[#667085] transition hover:bg-[#F4F3FF] hover:text-[#5146E5] disabled:opacity-50"
+                        onClick={() => void toggleMcpKeyVisibility(credential.id)}
+                        disabled={busy === `reveal-mcp:${credential.id}`}
+                      >
+                        {busy === `reveal-mcp:${credential.id}` ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : isVisible ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Copy MCP key"
+                        title="Copy MCP key"
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EDEEEF] text-[#667085] transition hover:bg-[#F4F3FF] hover:text-[#5146E5] disabled:opacity-50"
+                        onClick={() => void copyMcpKey(credential.id)}
+                        disabled={busy === `reveal-mcp:${credential.id}`}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                      {!isRevoked && (
+                        <button
+                          type="button"
+                          aria-label="Revoke MCP key"
+                          title="Revoke MCP key"
+                          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#FEE4E2] text-[#D92D20] transition hover:bg-[#FEF3F2]"
+                          onClick={() => setDialog({ kind: "revoke-mcp", credential })}
+                          disabled={busy !== null}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -766,7 +1101,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                   Revoke API key?
                 </DialogTitle>
                 <DialogDescription className="pt-1 text-sm leading-6 text-[#667085]">
-                  Any application using this key will lose API and MCP access
+                  Any application using this key will lose API access
                   immediately. This action cannot be undone.
                 </DialogDescription>
               </DialogHeader>
@@ -783,6 +1118,42 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                   type="button"
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#D92D20] px-5 text-xs font-semibold text-white transition hover:bg-[#B42318] disabled:opacity-60"
                   onClick={() => void revokeKey()}
+                  disabled={dialogBusy}
+                >
+                  {dialogBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  Revoke key
+                </button>
+              </DialogFooter>
+            </>
+          )}
+
+          {dialog?.kind === "revoke-mcp" && (
+            <>
+              <DialogHeader className="px-7 pb-6 pt-7 text-left">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#FEF3F2]">
+                  <AlertTriangle className="h-5 w-5 text-[#D92D20]" />
+                </div>
+                <DialogTitle className="text-xl font-semibold leading-7 text-[#101323]">
+                  Revoke MCP key?
+                </DialogTitle>
+                <DialogDescription className="pt-1 text-sm leading-6 text-[#667085]">
+                  Clients using “{dialog.credential.label}” will lose MCP access
+                  immediately. Only revoke it if the key is no longer needed or may be compromised.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="flex-row border-t border-[#EAECF0] p-4 sm:justify-end sm:space-x-0">
+                <button
+                  type="button"
+                  className="h-10 rounded-full border border-[#E1E1E5] px-5 text-xs font-semibold text-[#344054] transition hover:bg-[#F9FAFB]"
+                  onClick={() => setDialog(null)}
+                  disabled={dialogBusy}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#D92D20] px-5 text-xs font-semibold text-white transition hover:bg-[#B42318] disabled:opacity-60"
+                  onClick={() => void revokeMcpCredential()}
                   disabled={dialogBusy}
                 >
                   {dialogBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}

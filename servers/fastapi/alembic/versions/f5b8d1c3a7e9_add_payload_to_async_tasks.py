@@ -1,7 +1,7 @@
 """add private payload to async tasks
 
 Revision ID: f5b8d1c3a7e9
-Revises: e4c7a9b2d6f1
+Revises: a7b9d1e3f5c8
 """
 
 from collections.abc import Sequence
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 
 revision: str = "f5b8d1c3a7e9"
-down_revision: str | None = "e4c7a9b2d6f1"
+down_revision: str | None = "a7b9d1e3f5c8"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
