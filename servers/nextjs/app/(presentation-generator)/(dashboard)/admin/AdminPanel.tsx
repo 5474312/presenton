@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { notify } from "@/components/ui/sonner";
 import { sanitizeAnalyticsError } from "@/utils/analytics";
 import { formatFastApiDetail } from "@/utils/authErrors";
+import { copyTextToClipboard } from "@/utils/clipboard";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 
 type AdminUser = {
@@ -336,7 +337,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
         api_key_count_after: apiKeys.length + 1,
       });
       try {
-        await navigator.clipboard.writeText(token);
+        await copyTextToClipboard(token);
         notify.success("API key created", "The key is visible and was copied to your clipboard.");
       } catch {
         notify.success("API key created", "The key is visible below.");
@@ -387,7 +388,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
   const copyApiKey = async (apiKeyId: string) => {
     setBusy(`reveal-api-key:${apiKeyId}`);
     try {
-      await navigator.clipboard.writeText(await getApiKeyToken(apiKeyId));
+      await copyTextToClipboard(await getApiKeyToken(apiKeyId));
       notify.success("API key copied");
     } catch (copyError) {
       notify.error(
