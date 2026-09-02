@@ -211,6 +211,7 @@ def test_attach_request_auth_header_forwards_public_origin(monkeypatch):
 
     assert request.headers["X-Forwarded-Host"] == "presenton.example.com"
     assert request.headers["X-Forwarded-Proto"] == "https"
+    assert request.headers["X-Presenton-MCP-Request"] == "1"
 
 
 def test_get_mcp_api_timeout_supports_long_running_requests():

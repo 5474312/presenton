@@ -52,6 +52,8 @@ from api.v1.auth.context import (
     set_current_owner_is_admin,
 )
 from services.export_task_service import EXPORT_TASK_SERVICE
+from utils.get_env import get_presenton_public_url
+from utils.mcp_public_urls import is_mcp_request
 from templates.preview import (
     FontsUploadAndSlidesPreviewResponse,
     upload_fonts_and_slides_preview_handler,
@@ -101,15 +103,21 @@ MCP_TEMPLATE_UPLOAD_MAX_BASE64_CHARS = (
 
 
 def _build_template_preview_url(request: Request, template_id: str) -> str:
-    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",", 1)[
-        0
-    ].strip()
-    scheme = forwarded_proto if forwarded_proto in {"http", "https"} else request.url.scheme
-    forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",", 1)[
-        0
-    ].strip()
-    host = forwarded_host or request.headers.get("host") or request.url.netloc
-    public_url = f"{scheme}://{host}".rstrip("/")
+    public_url = get_presenton_public_url() if is_mcp_request(request) else None
+    if not public_url:
+        forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(
+            ",", 1
+        )[0].strip()
+        scheme = (
+            forwarded_proto
+            if forwarded_proto in {"http", "https"}
+            else request.url.scheme
+        )
+        forwarded_host = (request.headers.get("x-forwarded-host") or "").split(
+            ",", 1
+        )[0].strip()
+        host = forwarded_host or request.headers.get("host") or request.url.netloc
+        public_url = f"{scheme}://{host}".rstrip("/")
     query = urlencode({"templateV2Id": template_id})
     return f"{public_url}/template-preview?{query}"
 

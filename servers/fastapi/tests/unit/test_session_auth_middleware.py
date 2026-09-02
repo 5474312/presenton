@@ -99,7 +99,7 @@ def test_auth_disabled_runtime_still_checks_presenton_cloud_proxy(monkeypatch):
         "/api/v1/ppt/template/async",
     ],
 )
-def test_template_generation_routes_require_admin_browser_session(monkeypatch, path):
+def test_template_generation_routes_allow_authenticated_normal_users(monkeypatch, path):
     class Session:
         async def scalar(self, _query):
             return 1
@@ -124,12 +124,20 @@ def test_template_generation_routes_require_admin_browser_session(monkeypatch, p
             object(),
         )
 
-    async def unexpected_next(_request):
-        raise AssertionError("A normal user must not reach template generation")
+    async def call_next(request):
+        assert request.state.auth_principal.user_id == user_id
+        assert request.state.auth_principal.is_admin is False
+        return Response("template route reached", status_code=200)
+
+    async def no_cloud_proxy(*_args, **_kwargs):
+        return None
 
     monkeypatch.setattr(middlewares, "is_disable_auth_enabled", lambda: False)
     monkeypatch.setattr(middlewares, "async_session_maker", SessionContext)
     monkeypatch.setattr(middlewares, "resolve_request_principal", resolve_principal)
+    monkeypatch.setattr(
+        middlewares, "maybe_proxy_presenton_cloud_request", no_cloud_proxy
+    )
     request = Request(
         {
             "type": "http",
@@ -144,8 +152,8 @@ def test_template_generation_routes_require_admin_browser_session(monkeypatch, p
     )
 
     response = asyncio.run(
-        SessionAuthMiddleware(app=None).dispatch(request, unexpected_next)
+        SessionAuthMiddleware(app=None).dispatch(request, call_next)
     )
 
-    assert response.status_code == 403
-    assert json.loads(response.body) == {"detail": "Admin browser session required"}
+    assert response.status_code == 200
+    assert response.body == b"template route reached"

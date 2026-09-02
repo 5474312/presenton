@@ -99,15 +99,6 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 or path.startswith("/api/v1/auth/token/")
                 or path.startswith("/api/v1/ppt/codex/auth/")
                 or (
-                    path
-                    in {
-                        "/api/v1/ppt/template/mcp-upload",
-                        "/api/v1/ppt/template/init",
-                        "/api/v1/ppt/template/async",
-                    }
-                    and request.method == "POST"
-                )
-                or (
                     path.startswith("/api/v1/ppt/fonts/")
                     and request.method in {"POST", "DELETE"}
                 )

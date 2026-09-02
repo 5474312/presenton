@@ -29,6 +29,7 @@ from models.sql.presentation import PresentationModel
 from services.database import async_session_maker, get_async_session
 from utils.export_utils import export_presentation
 from utils.llm_calls.generate_smart_presentation import resolve_smart_slide_count
+from utils.mcp_public_urls import absolute_mcp_result_links
 
 
 PRESENTATION_V2_ROUTER = APIRouter(
@@ -238,11 +239,17 @@ async def generate_smart_presentation_sync(
     """Generate and export a Smart presentation in one blocking request."""
     try:
         presentation = await _create_smart_presentation(request, sql_session)
-        return await _generate_and_export_smart_presentation(
+        response = await _generate_and_export_smart_presentation(
             presentation,
             export_as=request.export_as,
             export_cookie_header=build_export_cookie_header(request_http),
             sql_session=sql_session,
+        )
+        return response.model_copy(
+            update=absolute_mcp_result_links(
+                request_http,
+                {"path": response.path, "edit_path": response.edit_path},
+            )
         )
     except HTTPException:
         raise

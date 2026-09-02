@@ -25,6 +25,7 @@ from services.database import async_session_maker
 from services.mcp_credentials import MCP_KEY_PREFIX, verify_mcp_credential
 from api.v1.auth.config import SESSION_COOKIE_NAME
 from api.v1.auth.users import get_jwt_strategy
+from utils.mcp_public_urls import MCP_REQUEST_HEADER
 
 OPENAPI_SPEC_PATH = Path(__file__).with_name("openai_spec.json")
 MCP_API_BASE_URL = "http://127.0.0.1:8000"
@@ -141,10 +142,10 @@ blocking alternative and returns the exported presentation without polling.
 """
     if generation_mode in {"both", "standard"}:
         instructions += """Template listing is immediate. Custom-template upload,
-initialization, and generation require a credential scoped to an administrator.
+initialization, and generation create templates scoped to the authenticated user.
 For a custom template, call upload_template_assets once, then pass its response
-to initialize_template or start_template_generation. When a user wants to
-inspect a template visually, share the preview_url returned by list_templates.
+to initialize_template or start_template_generation. When a user wants to inspect
+a template visually, share the preview_url returned by list_templates.
 """
     return instructions + "Never ask a user to paste their Presenton key into chat.\n"
 
@@ -264,6 +265,7 @@ async def attach_request_auth_header(request: httpx.Request | httpx2.Request) ->
             "x-forwarded-proto",
         }
     )
+    request.headers[MCP_REQUEST_HEADER] = "1"
 
     # Preserve the public origin across the MCP -> internal FastAPI request so
     # API responses can expose browser links for the host the client connected to.
