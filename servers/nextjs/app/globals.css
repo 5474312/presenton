@@ -14,18 +14,11 @@
   src: url("/vendor/fonts/sans_serif/syne/Syne[wght].ttf") format("truetype");
 }
 
-@font-face {
-  font-family: "Unbounded";
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url("/vendor/fonts/display/unbounded/Unbounded[wght].ttf") format("truetype");
-}
+
 
 :root {
   --font-syne: "Syne", Arial, sans-serif;
   --font-manrope: "Manrope", Arial, sans-serif;
-  --font-unbounded: "Unbounded", Arial, sans-serif;
 }
 
 @tailwind base;
