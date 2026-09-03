@@ -53,6 +53,7 @@ const structuralTypes = [
   "chevron_process",
   "radial_cycle",
   "conversion_funnel",
+  "vertical_funnel",
   "pyramid",
   "segmented_wheel",
   "customer_journey",
@@ -110,6 +111,34 @@ test("preserves aspect ratio and centers fixed-layout infographics", () => {
 
   assert.match(html, /transform:scale\(0\.5\)/);
   assert.match(html, /top:115px/);
+});
+
+test("renders vertical funnel bands proportionally to stage percentages", () => {
+  const html = renderer.templateV2UiToHtml({
+    elements: [
+      {
+        type: "infographic",
+        position: { x: 0, y: 0 },
+        size: { width: 720, height: 480 },
+        data: {
+          type: "vertical_funnel",
+          items: [
+            { value: 100, heading: "Awareness" },
+            { value: 50, heading: "Interest" },
+            { value: 25, heading: "Conversion" },
+          ],
+        },
+        colors: ["#EFF4EA", "#285B20", "#73926B", "#B7C8B2"],
+      },
+    ],
+    components: [],
+  });
+
+  assert.match(html, /points="210,38 510,38 435,172\.6+ 285,172\.6+"/);
+  assert.match(html, /points="285,172\.6+ 435,172\.6+ 397\.5,307\.3+ 322\.5,307\.3+"/);
+  assert.match(html, />100%<\/div>/);
+  assert.match(html, />50%<\/div>/);
+  assert.match(html, />25%<\/div>/);
 });
 
 test("preserves infographic item offsets and image edits in export HTML", () => {

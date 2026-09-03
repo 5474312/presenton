@@ -48,6 +48,7 @@ type InfographicKind =
   | "chevron_process"
   | "radial_cycle"
   | "conversion_funnel"
+  | "vertical_funnel"
   | "pyramid"
   | "segmented_wheel"
   | "customer_journey"
@@ -406,18 +407,33 @@ function renderTextList(item: JsonRecord, mode: RenderMode): string {
   const marker = readString(item.marker);
   const tag = marker === "number" ? "ol" : "ul";
   const font = readRecord(item.font);
+  const itemGap = Math.max(0, readNumber(item.gap) ?? 0);
+  const rawMarkerGap = readNumber(item.marker_gap ?? item.markerGap);
+  const markerGap = rawMarkerGap == null ? null : Math.max(0, rawMarkerGap);
+  const usesCustomMarkers = marker !== "none" && markerGap != null;
   const entries = readArray(item.items)
-    .map((entry) => {
+    .map((entry, index) => {
       const runs = normalizedListRunsForHtml(entry, font);
       const html = runs
         .map((run) =>
           renderTextRunHtml(run, { ...font, ...readRecord(run.font) }),
         )
         .join("");
-      return `<li style="${textOverflowStyle()}">${html}</li>`;
+      const gapStyle =
+        index > 0 && itemGap > 0
+          ? `margin-top:${cssNumber(itemGap)}px;`
+          : "";
+      if (usesCustomMarkers) {
+        const markerText = marker === "number" ? `${index + 1}.` : "•";
+        return `<li style="${gapStyle}display:grid;grid-template-columns:max-content minmax(0,1fr);column-gap:${cssNumber(
+          markerGap
+        )}px;${textOverflowStyle()}"><span aria-hidden="true">${markerText}</span><span>${html}</span></li>`;
+      }
+      return `<li style="${gapStyle}${textOverflowStyle()}">${html}</li>`;
     })
     .join("");
-  const listStyle = `margin:0;padding-left:${marker === "none" ? 0 : 24}px;${marker === "none" ? "list-style-type:none;" : ""
+  const hidesNativeMarkers = marker === "none" || usesCustomMarkers;
+  const listStyle = `margin:0;padding-left:${hidesNativeMarkers ? 0 : 24}px;${hidesNativeMarkers ? "list-style-type:none;" : ""
     }`;
 
   return `<div style="${frameStyle(item, mode)}${transformStyle(item)}${fontStyle(
@@ -943,6 +959,10 @@ const FIXED_INFOGRAPHIC_RENDERERS: Partial<
     designSize: { width: 720, height: 320 },
     renderer: renderConversionFunnelInfographic,
   },
+  vertical_funnel: {
+    designSize: { width: 720, height: 480 },
+    renderer: renderVerticalFunnelInfographic,
+  },
   pyramid: { designSize: { width: 720, height: 400 }, renderer: renderPyramidInfographic },
   segmented_wheel: {
     designSize: { width: 720, height: 460 },
@@ -1459,6 +1479,48 @@ function renderConversionFunnelInfographic(item: JsonRecord, mode: RenderMode): 
   return `<div style="${frameStyle(item, mode, { width: 720, height: 320 })}${transformStyle(
     item
   )}position:relative;overflow:hidden"><svg width="100%" height="100%" viewBox="0 0 720 320" preserveAspectRatio="none" style="position:absolute;inset:0;display:block">${fills}<path d="${curvePath}" fill="none" stroke="${escapeAttribute(escapeCssColor(colors[(safeEntries.length + 1) % colors.length]))}" stroke-width="6" stroke-linejoin="round"/>${separators}<rect x=".75" y=".75" width="718.5" height="318.5" fill="none" stroke="#D1D1D1" stroke-width="1.5"/></svg>${labels}</div>`;
+}
+
+function renderVerticalFunnelInfographic(item: JsonRecord, mode: RenderMode): string {
+  const data = infographicData(item);
+  const entries = readArray(data.items).map(readRecord).slice(0, 8);
+  const safeEntries = entries.length > 0 ? entries : [{ value: 50, heading: "Stage" }];
+  const colors = infographicPalette(item);
+  const background = infographicBaseColor(item);
+  const dark = isDarkInfographicColor(background);
+  const textColor = infographicTextColor(item, dark ? "#F0F1F4" : "#111111");
+  const top = 38;
+  const bottom = 38;
+  const funnelCenterX = 360;
+  const maxFunnelWidth = 300;
+  const stageHeight = (480 - top - bottom) / safeEntries.length;
+  const valueAt = (index: number) => clamp(readNumber(safeEntries[index]?.value) ?? 0, 0, 100);
+  const widthAt = (value: number) => Math.max(4, (value / 100) * maxFunnelWidth);
+  const guides = safeEntries.map((_, index) => {
+    const y = top + index * stageHeight;
+    return `<line x1="140" y1="${cssNumber(y)}" x2="615" y2="${cssNumber(y)}" stroke="#D1D5DB" stroke-width="1"/>`;
+  }).join("");
+  const fills = safeEntries.map((_, index) => {
+    const y0 = top + index * stageHeight;
+    const y1 = y0 + stageHeight;
+    const topWidth = widthAt(valueAt(index));
+    const bottomWidth = widthAt(valueAt(Math.min(index + 1, safeEntries.length - 1)));
+    const points = [
+      `${cssNumber(funnelCenterX - topWidth / 2)},${cssNumber(y0)}`,
+      `${cssNumber(funnelCenterX + topWidth / 2)},${cssNumber(y0)}`,
+      `${cssNumber(funnelCenterX + bottomWidth / 2)},${cssNumber(y1)}`,
+      `${cssNumber(funnelCenterX - bottomWidth / 2)},${cssNumber(y1)}`,
+    ].join(" ");
+    return `<polygon points="${points}" fill="${escapeAttribute(escapeCssColor(colors[index % colors.length]))}"/>`;
+  }).join("");
+  const labels = safeEntries.map((entry, index) => {
+    const y = top + index * stageHeight;
+    const value = valueAt(index);
+    return `<div style="position:absolute;left:18px;top:${cssNumber(y - 12)}px;width:185px;color:${escapeCssColor(textColor)};font-family:Arial,Helvetica,sans-serif"><div style="font-size:15px;font-weight:700;line-height:1.1">${escapeHtml(readString(entry.heading) ?? `Stage ${index + 1}`)}</div><div style="padding-top:5px;font-size:10px;line-height:1.15">${escapeHtml(readString(entry.description) ?? "")}</div></div><div style="position:absolute;left:628px;top:${cssNumber(y - 12)}px;width:74px;color:${escapeCssColor(textColor)};font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;line-height:1.1">${cssNumber(value)}%</div>`;
+  }).join("");
+  return `<div style="${frameStyle(item, mode, { width: 720, height: 480 })}${transformStyle(
+    item
+  )}position:relative;overflow:hidden"><svg width="100%" height="100%" viewBox="0 0 720 480" preserveAspectRatio="none" style="position:absolute;inset:0;display:block">${guides}${fills}</svg>${labels}</div>`;
 }
 
 function renderPyramidInfographic(item: JsonRecord, mode: RenderMode): string {
@@ -2752,6 +2814,7 @@ function infographicKindFromValue(value: string | null): InfographicKind {
     value === "chevron_process" ||
     value === "radial_cycle" ||
     value === "conversion_funnel" ||
+    value === "vertical_funnel" ||
     value === "pyramid" ||
     value === "segmented_wheel" ||
     value === "customer_journey" ||
