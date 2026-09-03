@@ -174,7 +174,7 @@ export const LOCAL_FONT_OPTIONS: LocalFontOption[] = [
 const APPLICATION_FONT_OPTIONS: LocalFontOption[] = [
   {
     family: "Syne",
-    sourceUrl: "/vendor/fonts/sans_serif/manrope/Manrope[wght].ttf",
+    sourceUrl: "/vendor/fonts/sans_serif/syne/Syne[wght].ttf",
   },
 ];
 

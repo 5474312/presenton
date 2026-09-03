@@ -57,11 +57,12 @@ test("the local font catalog points to checked-in vendor assets", async () => {
   const fontFiles = await listFiles(
     path.join(projectDirectory, "public/vendor/fonts"),
   );
-  assert.equal(fontFiles.length, 318);
+  assert.equal(fontFiles.length, 320);
 
   await Promise.all(
     [
       "sans_serif/manrope/Manrope[wght].ttf",
+      "sans_serif/syne/Syne[wght].ttf",
       "sans_serif/montserrat/Montserrat[wght].ttf",
       "serif/playfairdisplay/PlayfairDisplay[wght].ttf",
       "display/unbounded/Unbounded[wght].ttf",

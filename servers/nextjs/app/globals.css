@@ -7,6 +7,14 @@
 }
 
 @font-face {
+  font-family: "Syne";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("/vendor/fonts/sans_serif/syne/Syne[wght].ttf") format("truetype");
+}
+
+@font-face {
   font-family: "Unbounded";
   font-style: normal;
   font-weight: 100 900;
@@ -15,7 +23,7 @@
 }
 
 :root {
-  --font-syne: "Manrope", Arial, sans-serif;
+  --font-syne: "Syne", Arial, sans-serif;
   --font-manrope: "Manrope", Arial, sans-serif;
   --font-unbounded: "Unbounded", Arial, sans-serif;
 }
@@ -25,8 +33,7 @@
 @tailwind utilities;
 
 body {
-  font-family: var(--font-syne), var(--font-manrope),
-    sans-serif;
+  font-family: var(--font-manrope), var(--font-syne), sans-serif;
 }
 
 @layer utilities {

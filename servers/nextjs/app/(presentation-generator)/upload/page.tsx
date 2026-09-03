@@ -66,7 +66,7 @@ const page = () => {
             </svg>
 
           </h1>
-          <p className="mt-2 max-w-2xl font-syne text-base text-[#101323CC] sm:text-lg lg:text-xl min-[1920px]:text-2xl">Turn prompts or documents into presentations with AI</p>
+          <p className="mt-2 max-w-2xl font-manrope text-base text-[#101323CC] sm:text-lg lg:text-xl min-[1920px]:text-2xl">Turn prompts or documents into presentations with AI</p>
         </div>
 
         <UploadPage presentationGenerationMode={presentationGenerationMode} />
