@@ -345,7 +345,7 @@ const LanguageSelect: React.FC<{
       <Command>
         <CommandInput
           placeholder="Search language..."
-          className="font-instrument_sans"
+          className="font-manrope"
         />
         <CommandList>
           <CommandEmpty>No language found.</CommandEmpty>
@@ -359,7 +359,7 @@ const LanguageSelect: React.FC<{
                   onValueChange(currentValue);
                   onOpenChange(false);
                 }}
-                className="font-instrument_sans"
+                className="font-manrope"
               >
                 <Check
                   className={cn(
