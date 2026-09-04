@@ -663,7 +663,19 @@ def test_certified_generation_prompts_split_flexible_and_visual_decisions():
     assert "Collapse unary nesting" in flexible_prompt
     assert "exactly the component's element_indices, once each" in flexible_prompt
     assert "Always invalid" in flexible_prompt
-    assert "progress bar, gauge, table, or text list" in visual_prompt
+    assert "chart, infographic, table, or text list" in visual_prompt
+    assert "Use kind=infographic for either a complete infographic image" in visual_prompt
+    assert "data.type=progress_bar or data.type=gauge" in visual_prompt
+    assert "Atomicity is mandatory" in visual_prompt
+    assert "exactly one typed replacement" in visual_prompt
+    assert "Never emit table cells, rows, headers, borders" in visual_prompt
+    assert "Never emit or leave any chart internal" in visual_prompt
+    assert "structured table as one atomic editable element" in (
+        certified_generation.GENERATE_SLIDE_LAYOUT_SYSTEM_PROMPT
+    )
+    assert "structured chart as one atomic editable element" in (
+        certified_generation.GENERATE_SLIDE_LAYOUT_SYSTEM_PROMPT
+    )
     assert "capacity growth" in capacity_prompt.lower()
     assert "Never return a no-op adjustment" in capacity_prompt
     assert "previewSlide" not in flexible_prompt

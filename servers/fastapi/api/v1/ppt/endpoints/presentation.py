@@ -492,6 +492,7 @@ GENERATED_VALUE_ELEMENT_TYPES = {
     "text-list",
     "table",
     "chart",
+    "infographic",
 }
 GENERATED_TABLE_TEXT_FONT = {
     "family": "Sniglet",
@@ -849,7 +850,38 @@ def _apply_template_content_value(element: dict[str, Any], value: Any) -> dict[s
         return _apply_template_table_content(element, value)
     if element_type == "chart":
         return _apply_template_chart_content(element, value)
+    if element_type == "infographic":
+        return _apply_template_infographic_content(element, value)
     return copy.deepcopy(element)
+
+
+def _apply_template_infographic_content(
+    element: dict[str, Any],
+    value: Any,
+) -> dict[str, Any]:
+    updated = copy.deepcopy(element)
+    if not isinstance(value, dict):
+        return updated
+
+    data = value.get("data")
+    if isinstance(data, dict):
+        current_data = updated.get("data")
+        if isinstance(current_data, dict):
+            incoming_data = copy.deepcopy(data)
+            current_type = current_data.get("type")
+            if isinstance(current_type, str):
+                incoming_data["type"] = current_type
+            updated["data"] = {
+                **copy.deepcopy(current_data),
+                **incoming_data,
+            }
+        else:
+            updated["data"] = copy.deepcopy(data)
+
+    colors = value.get("colors")
+    if isinstance(colors, list) and colors:
+        updated["colors"] = copy.deepcopy(colors)
+    return updated
 
 
 def _apply_template_math_content(

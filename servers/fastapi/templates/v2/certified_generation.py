@@ -41,6 +41,8 @@ from templates.v2.models.layouts import (
     VisualChartReplacement,
     VisualDataReplacement,
     VisualDataReplacementPlan,
+    VisualInfographicReplacement,
+    VisualTextListReplacement,
     flexible_slide_plan_llm_json_schema,
     semantic_slide_manifest_llm_json_schema,
     slide_layout_llm_json_schema,
@@ -48,13 +50,14 @@ from templates.v2.models.layouts import (
     visual_data_replacement_plan_llm_json_schema,
 )
 from templates.v2.models.elements import Image as SlideImageElement
-from templates.v2.models.elements import ImageFit
+from templates.v2.models.elements import ImageFit, InfographicType
 from utils.asset_directory_utils import resolve_image_path_to_filesystem
 from utils.icon_weights import DEFAULT_ICON_TYPE
 
 DEFAULT_VALIDATION_RETRIES = 5
 MAX_PARALLEL_SLIDE_LAYOUTS = 10
 TEMPLATE_GENERATION_MAX_COMPLETION_TOKENS = 16000
+TEXT_CAPACITY_SAFETY_FACTOR = 0.85
 CONTENT_IMAGE_PLACEHOLDER_URL = "/static/images/replaceable_template_image.png"
 CONTENT_ICON_PLACEHOLDER_URL = "/static/icons/placeholder.svg"
 
@@ -139,7 +142,10 @@ Analyze the reference slide and return semantic metadata for its existing source
 - decorative=true means the value is fixed visual scaffolding and must remain unchanged.
 - Treat visible text and its apparent meaning as replaceable unless it is a logo or watermark.
 - Treat charts, tables, metrics, semantic images, and topic icons as replaceable content.
-- Only progress bars and gauges are supported as infographics; keep every other infographic or qualitative diagram as fixed visual scaffolding.
+- Treat each structured table as one atomic editable element; headers, cells, cell text, fills, borders, and grid lines are internal table data.
+- Treat each structured chart as one atomic editable element; its title, plot, labels, legend, gridlines, axes, ticks, and source are internal chart data.
+- Never split, separately name, annotate, or group a table or chart internal as another editable element; one table or chart maps to one annotation.
+- Treat supported structured infographics as replaceable content. Keep only unsupported qualitative diagrams as fixed visual scaffolding.
 - Treat connector and branching lines, rings, arcs, circle outlines, Venn-diagram circles, backgrounds, logos, frames, borders, and dividers as decorative.
 - Classify by whether the new slide's content generator should replace the value: a ring around a replaceable topic icon is decorative, while the icon is content.
 - Set is_icon for every image annotation: true for a compact symbolic icon intended for icon search, and false for a photo, screenshot, or illustration.
@@ -169,7 +175,7 @@ Identify existing visual regions that should become structured data or list elem
 
 # Steps:
 1. Compare the reference slide image with the supplied image and grouped-region candidates.
-2. Find candidates whose pixels or child elements collectively render exactly one chart, progress bar, gauge, table, or text list.
+2. Find candidates whose pixels or child elements collectively render exactly one chart, infographic, table, or text list.
 3. Extract the visible data and styling into one typed replacement for each confident match.
 4. Return one complete VisualDataReplacementPlan JSON object.
 
@@ -177,43 +183,67 @@ Identify existing visual regions that should become structured data or list elem
 - Return a VisualDataReplacementPlan JSON object only.
 - Return every replacement, including tables, with its typed fields directly on the replacement object.
 - Reference only paths listed in visual_region_candidates.
+- Return position and size for every chart, infographic, and table replacement in the same coordinate space as its selected candidate.
+- Fit those bounds tightly around the complete structured visual, including axes, labels, legends, and table cells, while excluding transparent or unrelated padding.
+- Keep those replacement bounds inside the selected candidate. Copy the candidate bounds exactly when the structured visual uses the full candidate area.
+- Do not return position or size for text-list replacements; they reuse the selected candidate's original bounds.
 - Return an empty replacements list when there is no confident match.
 - Never replace an existing structured chart, infographic, table, or text-list; those are extracted deterministically.
 - A replacement target may be an image, or a group/container whose children collectively draw one structured region.
+- Atomicity is mandatory: one recognized table or chart must become exactly one typed replacement containing all of its internal visual content.
+- For a table, include every header and body cell, all cell text, fills, borders, and row and column lines only in the single kind=table replacement.
+- Never emit table cells, rows, headers, borders, or their text as separate replacements, including text-list replacements.
+- For a chart, include its title, plot, marks, data labels, category and series labels, legend, gridlines, axes, ticks, axis titles, and source only in one kind=chart replacement.
+- Never emit or leave any chart internal listed above as a separate sibling or descendant element or replacement.
+- Select the smallest common candidate that contains the complete table or chart and no unrelated content.
+- If no candidate contains the complete table or chart without unrelated content, return no replacement for it instead of replacing only part of it.
 - Treat a candidate as a chart only when it primarily communicates quantitative values through bars, lines, areas, slices, points, bubbles, or a radar/polar plot.
 - Treat a candidate as a progress bar only when it shows one value advancing through a bounded linear track.
 - Treat a candidate as a gauge only when it shows one value on a bounded dial, arc, ring, or meter.
-- Only progress_bar and gauge replacements may produce infographic elements; never classify another visual structure as an infographic.
+- Treat an image candidate as an infographic when the whole image is one cohesive infographic and its headings, labels, descriptions, or values are baked into that same image. Replace the complete image, including all of its embedded text, as one infographic rather than extracting a separate text-list or leaving it as an ordinary image.
+- Use kind=infographic for either a complete infographic image or a standalone progress-bar/gauge image or grouped region. Other infographic types must target one image containing the complete infographic; do not use them for a group/container assembled from independently editable shapes or text.
+- For kind=infographic, choose the closest supported data.type: progress_bar, gauge, gantt, timeline, roadmap, milestone_timeline, staircase, supply_chain, stair_step_blocks, maturity_model, pillar_framework, transformation_hub, diagonal_circles, risk_matrix, chevron_process, radial_cycle, conversion_funnel, vertical_funnel, pyramid, segmented_wheel, customer_journey, before_after, impact_effort_matrix, comparison_matrix, org_chart, decision_tree, or mind_map. Extract all legible embedded text into the selected data shape. Use vertical_funnel for vertically stacked, value-proportional funnel bands; preserve conversion_funnel for the horizontal staged funnel.
 - Treat a candidate as a table only when its content forms a clear rectangular row-and-column grid. Use the first visible row as columns and preserve every remaining row in rows.
 - Treat a candidate as a text-list only when it contains a coherent sequence of list items. Use marker=bullet for unordered/bulleted lists, marker=number for ordered/numbered lists, and marker=none only for a visibly unmarked list.
-- Do not replace timelines, process diagrams, org charts, maps, decorative geometry, photos, logos, screenshots of whole dashboards, or regions containing multiple independent structures.
+- Do not replace maps, decorative geometry, photos, logos, screenshots of whole dashboards, or regions containing multiple independent structures. A timeline, process diagram, org chart, or other supported infographic is replaceable only when one image contains the whole infographic and its text.
 - Prefer the smallest complete candidate that contains the visualization, including its internal axes, legend, and labels.
 - Do not return both a parent region and one of its descendants.
 - Transcribe visible titles, category labels, series names, numeric values, range bounds, and source text faithfully when legible.
 - When exact chart values are not printed but relative values are visually clear, use simple normalized numeric values that preserve the visible proportions; do not invent factual precision.
 - Use short generic category or series labels only when the source labels are illegible; generated slide content will replace them later.
-- Extract chart_type, palette colors, title and legend colors, axis presence and titles, axis color, gridline visibility and color, data-label position, legend visibility, categories, series, and source.
+- Extract chart_type, renderer-ordered palette colors, title, title color, legend color, general/data-label text color, axis presence and titles, axis color, gridline visibility and color, data-label position, legend visibility, categories, series, and source.
 - For pie and donut charts, return exactly one series with one value per category.
 - For every chart, each series values array must have exactly one value per category.
 - Set x_axis and y_axis false for pie, donut, polar_area, and radar charts unless explicit axes are visible.
 - Set grid colors to null when no gridlines are visible and text colors to null when they cannot be determined confidently.
-- Return colors as six-digit hexadecimal RGB strings sampled from the visible visualization, in series or slice order.
-- Preserve the visible progress/gauge minimum, maximum, value, and foreground/background palette. Use 0 and 100 only when the display is clearly percentage-based or no other scale is visible.
+- Return every color as a six-digit hexadecimal RGB string sampled from the visible visualization. Treat each colors array as renderer slots, never as an unordered palette.
+- For chart colors: pie and donut colors[i] is category/slice i. In any other multi-series chart, colors[i] is series i. In a single-series bar, horizontal bar, stacked bar, horizontal stacked bar, polar-area, scatter, or bubble chart, colors[i] is category/data point i. For a single-series line or area chart, colors[0] controls the line and area fill and later colors, when present, control successive point fills. Colors repeat cyclically only when fewer slots are returned than visible categories or series.
+- For chart text and strokes: title_color controls the chart title; legend_color controls legend labels; text_color controls data labels and general chart text; axis_color controls axis lines, ticks, tick labels, and axis-title text; grid_color controls gridlines. Return null for a role only when it is not visible or cannot be sampled confidently.
+- For infographic data.type=progress_bar or data.type=gauge, preserve the visible minimum, maximum, and value. colors[0] is the inactive track/base arc and colors[1] is the filled progress/value arc. For gauges, text_color is the center value-label color; use null for progress bars. Use 0 and 100 only when the display is clearly percentage-based or no other scale is visible.
+- For qualitative infographics, preserve visible item order and hierarchy and always order colors as [base, accent_1, accent_2, ...]. colors[0] is the visual's background/base surface; colors[1:] is the palette applied to visible items in order and cycled when necessary. For org_chart and decision_tree, colors[1 + depth] is the node color for that hierarchy depth. text_color controls shared external headings, body copy, and labels where supported; text placed inside colored nodes may use renderer-selected black or white contrast. Use null only when a shared text color cannot be determined confidently.
 - For tables, transcribe every visible cell and preserve styling through color, font_family, font_size, font_color, bold, italic, underline, and alignment. Keep rows rectangular and use null for styling that cannot be determined.
 - For text lists, transcribe each visible item without its bullet or number. Preserve the shared font styling when confidently visible and use the marker field for the list marker itself.
+- For text lists, estimate gap as the vertical empty space in pixels between consecutive item content boxes, excluding line spacing within a wrapped item.
+- Estimate marker_gap as the horizontal empty space in pixels from the visible right edge of each bullet or number to the left edge of its item text. Use 0 when marker=none.
+- Use the representative shared spacing when measurements vary slightly across items; both gap and marker_gap must be non-negative pixel values.
 """
 
 GEMINI_VISUAL_DATA_TABLE_ENCODING_PROMPT = """
-# Gemini table response encoding:
-- This section overrides the table response shape above for Gemini only. Chart, progress_bar, gauge, and text-list replacements still use their typed fields directly.
-- For a table replacement, return exactly `kind`, `path`, and `data_json`. Do not return `columns` or `rows` beside `data_json`.
+# Gemini complex visual-data response encoding:
+- This section overrides the table and infographic response shapes above for Gemini only. Chart and text-list replacements still use their typed fields directly.
+- For a table replacement, return exactly `kind`, `path`, `position`, `size`, and `data_json`. Do not return `columns` or `rows` beside `data_json`.
 - `data_json` is a JSON string whose decoded value has this exact shape:
   `{"columns": [CELL, ...], "rows": [[CELL, ...], ...]}`
 - Every `CELL` has this exact shape:
   `{"text": string, "color": null | {"color": "#RRGGBB", "opacity": number | null}, "font": null | {"size": number | null, "family": string | null, "color": "#RRGGBB" | null, "bold": boolean | null, "italic": boolean | null, "underline": boolean | null, "line_height": number | null, "letter_spacing": number | null, "ellipsis": boolean | null, "opacity": number | null}, "alignment": null | "left" | "center" | "right" | "justify"}`
 - `columns` is the first visible table row. Each entry in `rows` is one remaining visible row and must contain exactly the same number of cells as `columns`.
 - Because `data_json` is itself a string inside the response JSON, escape its inner double quotes correctly. Do not wrap it in Markdown fences.
-- Do not include `kind` or `path` inside the decoded `data_json` object.
+- Do not include `kind`, `path`, `position`, or `size` inside the decoded `data_json` object.
+- For an infographic replacement, return exactly `kind`, `path`, `position`, `size`, and `data_json`.
+- For kind=infographic, `data_json` is a JSON string whose decoded value has this exact outer shape:
+  `{"data": INFOGRAPHIC_DATA, "colors": ["#RRGGBB", ...], "text_color": "#RRGGBB" | null}`
+- INFOGRAPHIC_DATA must follow the exact selected infographic data.type schema from the response contract and include all text visible inside the source image.
+- Do not include `kind`, `path`, `position`, or `size` inside the decoded infographic `data_json` object.
 """
 
 GENERATE_FLEXIBLE_REGIONS_SYSTEM_PROMPT = """
@@ -242,6 +272,8 @@ Identify meaningful fixed flow groups and repeatable dynamic regions inside the 
 - Declare only flows referenced by the root tree. Delete orphan, superseded, and exploratory helper flows before returning.
 - Use fixed flow for semantically bound but different items whose spacing or alignment should survive content changes.
 - Put an aligned title, subtitle or badge, and description in one fixed column when shared alignment and spacing make them one visible block.
+- A fixed text column must reserve enough height for every child's declared text capacity.
+- A flex wrapper does not make an undersized title or subtitle safe; preserve enough total stack height to prevent text overlap.
 - When a badge or label background overlaps its text, nest that inseparable pair in a group and use the group as one row or column item.
 - Name compact background-and-text groups by their visible structural role; text alignment is decided in the text-layout pass.
 - Model a shared footer as one outer row containing nested rows for its independent label/value pairs.
@@ -250,6 +282,8 @@ Identify meaningful fixed flow groups and repeatable dynamic regions inside the 
 - Use a repeatable region only when every item has the same semantic field hierarchy and substantially similar visual geometry.
 - Include each repeatable item's fixed card surface, local connector, icon frame, local marker or node, and editable content together.
 - A connector is shared only when one line spans or branches across multiple items; otherwise attach it to the item whose frame, marker, or node it terminates at.
+- For a sequence separated as `A | B | C`, attach each divider to the upcoming item: B owns the first divider and C owns the second. The first item has no leading divider.
+- Never collect one-to-one item dividers in a separate scaffold; only a line that genuinely spans or branches across multiple items is shared.
 - When icons hang from separate lines, create one child group per icon node containing that node's connector, circular frame, and replaceable content icon.
 - Keep those hanging icon child groups in one parent group flow so irregular positions and overlaps remain fixed while the nodes retain one repeated item structure.
 - Connector direction or length, frame rotation, and decorative container/group wrapper differences do not prevent grouping when every node has the same connector-frame-icon roles.
@@ -321,6 +355,8 @@ Decide safe capacity growth and alignment for editable text boxes without changi
 - Expand dates and other metadata values horizontally through clear aligned space; use zero top_lines and bottom_lines to preserve their line count.
 - Give aligned metadata fields compatible horizontal expansion when they share a visual block and safe edge.
 - Allow titles, subtitles, body text, and card descriptions to expand when unused aligned space exists.
+- Count the lines required by the current text at its actual font size and width.
+- If a title or subtitle needs more lines than its declared height can hold, request missing vertical capacity; a later flex wrapper will not contain overflow.
 - Preserve width when widening would change intentional wrapping, gutters, columns, or alignment; vertical growth may still be safe.
 - Let a final body or description in a vertical content region expand downward through clear aligned space for longer content.
 - Do not treat clear space after a final body field as intentional merely because the reference copy is short.
@@ -952,7 +988,9 @@ _SEMANTIC_ELEMENT_TYPES = {
     "chart",
     "infographic",
 }
-_SUPPORTED_TEMPLATE_INFOGRAPHIC_TYPES = {"progress_bar", "gauge"}
+_SUPPORTED_TEMPLATE_INFOGRAPHIC_TYPES = {
+    infographic_type.value for infographic_type in InfographicType
+}
 _VISUAL_DATA_REGION_TYPES = {"container", "group", "image"}
 _SCHEMA_LIMIT_PAIRS = (
     ("min_length", "max_length"),
@@ -1048,8 +1086,40 @@ def _validate_visual_data_replacement_plan(
             raise ValueError(
                 f"visual data replacement has no usable bounds: {replacement.path}"
             )
+        if isinstance(replacement, VisualTextListReplacement):
+            replacement_bounds = bounds
+        else:
+            replacement_bounds = {
+                "x": replacement.position.x,
+                "y": replacement.position.y,
+                "width": replacement.size.width,
+                "height": replacement.size.height,
+            }
+            _require_finite_numbers(replacement_bounds, label="replacement bounds")
+            if (
+                replacement_bounds["width"] <= 0
+                or replacement_bounds["height"] <= 0
+            ):
+                raise ValueError(
+                    "visual data replacement must have positive size: "
+                    f"{replacement.path}"
+                )
+            if not _bounds_contains(bounds, replacement_bounds):
+                raise ValueError(
+                    "visual data replacement bounds must stay inside candidate: "
+                    f"{replacement.path}"
+                )
+        if (
+            isinstance(replacement, VisualInfographicReplacement)
+            and replacement.data.type not in {"progress_bar", "gauge"}
+            and target.get("type") != "image"
+        ):
+            raise ValueError(
+                "complete infographic replacements must target one image: "
+                f"{replacement.path}"
+            )
         if isinstance(replacement, VisualChartReplacement) and (
-            bounds["width"] < 80 or bounds["height"] < 60
+            replacement_bounds["width"] < 80 or replacement_bounds["height"] < 60
         ):
             raise ValueError(
                 f"chart replacement must be at least 80x60 px: {replacement.path}"
@@ -1074,13 +1144,23 @@ def _visual_data_replacement_element(
     target: dict[str, Any],
     replacement: VisualDataReplacement,
 ) -> dict[str, Any]:
-    bounds = _element_bounds(target)
-    if bounds is None:
+    target_bounds = _element_bounds(target)
+    if target_bounds is None:
         raise ValueError(f"replacement target has no bounds: {replacement.path}")
 
+    if isinstance(replacement, VisualTextListReplacement):
+        position = {"x": target_bounds["x"], "y": target_bounds["y"]}
+        size = {
+            "width": target_bounds["width"],
+            "height": target_bounds["height"],
+        }
+    else:
+        position = replacement.position.model_dump(mode="json")
+        size = replacement.size.model_dump(mode="json")
+
     common: dict[str, Any] = {
-        "position": {"x": bounds["x"], "y": bounds["y"]},
-        "size": {"width": bounds["width"], "height": bounds["height"]},
+        "position": position,
+        "size": size,
         "name": str(target.get("name") or replacement.kind),
         "decorative": False,
     }
@@ -1091,6 +1171,8 @@ def _visual_data_replacement_element(
     replacement_data = replacement.model_dump(mode="json")
     replacement_data.pop("kind", None)
     replacement_data.pop("path", None)
+    replacement_data.pop("position", None)
+    replacement_data.pop("size", None)
     if replacement.kind == "chart":
         return {
             "type": "chart",
@@ -1129,25 +1211,13 @@ def _visual_data_replacement_element(
             "min_item_length": (max_item_length + 1) // 2,
             "max_item_length": max_item_length,
         }
-
-    if replacement.kind not in _SUPPORTED_TEMPLATE_INFOGRAPHIC_TYPES:
-        raise ValueError(
-            f"unsupported infographic replacement kind: {replacement.kind}"
-        )
-    min_value = replacement_data.pop("min_value")
-    max_value = replacement_data.pop("max_value")
-    value = replacement_data.pop("value")
-    return {
-        "type": "infographic",
-        **common,
-        "data": {
-            "type": replacement.kind,
-            "min_value": min_value,
-            "max_value": max_value,
-            "value": value,
-        },
-        **replacement_data,
-    }
+    if replacement.kind == "infographic":
+        return {
+            "type": "infographic",
+            **common,
+            **replacement_data,
+        }
+    raise ValueError(f"unsupported visual data replacement kind: {replacement.kind}")
 
 
 def _visual_table_cell_element(cell: dict[str, Any]) -> dict[str, Any]:
@@ -1411,6 +1481,11 @@ def _validate_text_capacity_plan(
         and _element_at_semantic_path(source_elements, annotation.path).get("type")
         == "text"
     }
+    vertical_reflow_paths = _fixed_column_vertical_reflow_paths(
+        flexible_plan,
+        manifest,
+        source_elements,
+    )
     unsupported_growth_paths: set[str] = set()
     for adjustment in plan.adjustments:
         if adjustment.path not in editable_text_paths:
@@ -1430,6 +1505,11 @@ def _validate_text_capacity_plan(
                     adjustment=adjustment,
                 )
             except _TextCapacityGrowthNotApplicable as exc:
+                if (
+                    adjustment.path in vertical_reflow_paths
+                    and (adjustment.top_lines or adjustment.bottom_lines)
+                ):
+                    continue
                 unsupported_growth_paths.add(adjustment.path)
                 LOGGER.info(
                     "[templates.v2.generate] ignoring unsupported text-capacity "
@@ -1562,19 +1642,53 @@ def _semantic_path_sort_key(path: str) -> tuple[tuple[int, int | str], ...]:
 def _apply_text_capacity_plan(
     source_elements: list[dict[str, Any]],
     plan: TextCapacityPlan,
-) -> None:
+    *,
+    vertical_reflow_paths: set[str] | None = None,
+) -> set[str]:
+    vertical_reflow_paths = vertical_reflow_paths or set()
+    pending_vertical_reflow_paths: set[str] = set()
     for adjustment in plan.adjustments:
         element, siblings, boundary = _element_context_at_semantic_path(
             source_elements,
             adjustment.path,
         )
+        original_position = element.get("position") or {}
+        original_size = element.get("size") or {}
+        requested_flow_reflow = (
+            adjustment.path in vertical_reflow_paths
+            and bool(adjustment.top_lines or adjustment.bottom_lines)
+        )
+        expanded: dict[str, float] | None = None
+        max_length: int | None = None
         if _text_adjustment_requests_growth(adjustment):
-            expanded, max_length = _planned_text_capacity(
-                element,
-                siblings=siblings,
-                boundary=boundary,
-                adjustment=adjustment,
-            )
+            try:
+                expanded, max_length = _planned_text_capacity(
+                    element,
+                    siblings=siblings,
+                    boundary=boundary,
+                    adjustment=adjustment,
+                )
+            except _TextCapacityGrowthNotApplicable:
+                if not requested_flow_reflow:
+                    raise
+                geometry_adjustment = _geometry_text_capacity_adjustment(
+                    adjustment,
+                    vertical_reflow_paths=vertical_reflow_paths,
+                )
+                if _text_adjustment_requests_growth(geometry_adjustment):
+                    try:
+                        expanded, max_length = _planned_text_capacity(
+                            element,
+                            siblings=siblings,
+                            boundary=boundary,
+                            adjustment=geometry_adjustment,
+                        )
+                    except _TextCapacityGrowthNotApplicable:
+                        expanded = None
+                        max_length = None
+                pending_vertical_reflow_paths.add(adjustment.path)
+
+        if expanded is not None and max_length is not None:
             element["position"] = {"x": expanded["x"], "y": expanded["y"]}
             element["size"] = {
                 "width": expanded["width"],
@@ -1587,7 +1701,17 @@ def _apply_text_capacity_plan(
                 element,
                 max_lines=_existing_text_box_line_capacity(element),
             )
+            if requested_flow_reflow:
+                vertical_growth_applied = (
+                    expanded["height"]
+                    > float(original_size.get("height") or 0) + 0.5
+                    or expanded["y"]
+                    < float(original_position.get("y") or 0) - 0.5
+                )
+                if not vertical_growth_applied:
+                    pending_vertical_reflow_paths.add(adjustment.path)
         _apply_text_alignment_adjustment(element, adjustment)
+    return pending_vertical_reflow_paths
 
 
 def _text_adjustment_requests_growth(
@@ -1956,7 +2080,10 @@ def _estimated_text_capacity(element: dict[str, Any], *, max_lines: int) -> int:
         for run in element.get("runs", [])
         if isinstance(run, dict)
     )
-    return max(len(current_text), math.floor(capacity_units * 0.85))
+    return max(
+        len(current_text),
+        math.floor(capacity_units * TEXT_CAPACITY_SAFETY_FACTOR),
+    )
 
 
 def _normalize_existing_text_box_limits(elements: list[dict[str, Any]]) -> None:
@@ -2150,6 +2277,8 @@ def _repeat_item_structure_signature(
         element_type = element.get("type")
         if isinstance(element_type, str):
             decorative = bool(element.get("decorative", True))
+            if decorative and _is_straight_divider_vector(element):
+                return
             name = str(element.get("name") or "")
             normalized_name = _repeatable_base_name(name) if not decorative else ""
             fields.append(f"{element_type}:{decorative}:{normalized_name}")
@@ -2431,12 +2560,41 @@ def _compile_semantic_layout(
                 element["color"] = annotation.color
             if annotation.is_icon and annotation.icon_type is not None:
                 element["icon_type"] = annotation.icon_type
+    _reserve_single_line_text_overflow_space(
+        source_elements,
+        manifest,
+        text_capacity_plan,
+    )
     _normalize_existing_text_box_limits(source_elements)
     geometry_elements = copy.deepcopy(source_elements)
-    _apply_text_capacity_plan(source_elements, text_capacity_plan)
+    vertical_reflow_paths = _fixed_column_vertical_reflow_paths(
+        flexible_plan,
+        manifest,
+        source_elements,
+    )
+    pending_vertical_reflow_paths = _apply_text_capacity_plan(
+        source_elements,
+        text_capacity_plan,
+        vertical_reflow_paths=vertical_reflow_paths,
+    )
+    vertical_growth_lines = {
+        int(adjustment.path.split(".")[1]): (
+            adjustment.top_lines + adjustment.bottom_lines
+        )
+        for adjustment in text_capacity_plan.adjustments
+        if adjustment.path in pending_vertical_reflow_paths
+        and (adjustment.top_lines or adjustment.bottom_lines)
+    }
 
     regions = {region.component_id: region for region in flexible_plan.regions}
     components: list[Component] = []
+    original_component_bounds = {
+        component.id: _bounds_for_indices(
+            geometry_elements,
+            component.element_indices,
+        )
+        for component in manifest.components
+    }
     # Components render as atomic groups in list order. The semantic model may
     # return those groups in visual-reading order (for example, a title before
     # an image panel), which can move an early full-slide background above the
@@ -2468,6 +2626,7 @@ def _compile_semantic_layout(
                     source_elements,
                     component_bounds=component_bounds,
                     geometry_elements=geometry_elements,
+                    vertical_growth_lines=vertical_growth_lines,
                 )
             ]
 
@@ -2486,6 +2645,15 @@ def _compile_semantic_layout(
             )
         )
 
+    _reflow_components_after_vertical_capacity(
+        components,
+        original_bounds=original_component_bounds,
+        vertically_growing_component_ids={
+            component.id
+            for component in manifest.components
+            if set(component.element_indices).intersection(vertical_growth_lines)
+        },
+    )
     layout = SlideLayout(
         id=manifest.id,
         description=manifest.description,
@@ -2545,6 +2713,7 @@ def _compile_flexible_region(
     *,
     component_bounds: dict[str, float],
     geometry_elements: list[dict[str, Any]] | None = None,
+    vertical_growth_lines: dict[int, int] | None = None,
 ) -> dict[str, Any]:
     flow_by_id = {flow.id: flow for flow in region.flows}
     return _compile_flow_node(
@@ -2553,6 +2722,7 @@ def _compile_flexible_region(
         source_elements,
         node_bounds=component_bounds,
         geometry_elements=geometry_elements or source_elements,
+        vertical_growth_lines=vertical_growth_lines or {},
     )
 
 
@@ -2563,8 +2733,10 @@ def _compile_flow_node(
     *,
     node_bounds: dict[str, float],
     geometry_elements: list[dict[str, Any]] | None = None,
+    vertical_growth_lines: dict[int, int] | None = None,
 ) -> dict[str, Any]:
     geometry_elements = geometry_elements or source_elements
+    vertical_growth_lines = vertical_growth_lines or {}
     flow_items = _flow_node_item_indices(flow, flow_by_id)
     repeatable = _region_items_are_structurally_equivalent(
         flow_items,
@@ -2604,6 +2776,10 @@ def _compile_flow_node(
     ordered_plans = [flow.items[index] for index in item_order]
     ordered_items = [flow_items[index] for index in item_order]
     ordered_bounds = [item_bounds[index] for index in item_order]
+    geometry_item_bounds = [
+        _bounds_for_indices(geometry_elements, item) for item in flow_items
+    ]
+    ordered_geometry_bounds = [geometry_item_bounds[index] for index in item_order]
     children: list[dict[str, Any]] = []
     fluid_capable: list[bool] = []
     first_editable_names: list[str] | None = None
@@ -2620,6 +2796,7 @@ def _compile_flow_node(
                 source_elements,
                 node_bounds=bounds,
                 geometry_elements=geometry_elements,
+                vertical_growth_lines=vertical_growth_lines,
             )
             if mode == "group":
                 child["position"] = {
@@ -2708,7 +2885,9 @@ def _compile_flow_node(
             ordered_bounds,
             fluid_capable,
             mode=mode,
-            cross_size=node_bounds["width"] if mode == "column" else node_bounds["height"],
+            cross_size=node_bounds["width"]
+            if mode == "column"
+            else node_bounds["height"],
             align_items=align_items,
         )
         if (
@@ -2718,6 +2897,34 @@ def _compile_flow_node(
         ):
             align_items = "stretch"
 
+    main_axis_gap = (
+        _axis_gap(
+            ordered_bounds,
+            axis="x" if mode == "row" else "y",
+        )
+        if mode in {"row", "column"}
+        else 0.0
+    )
+    compiled_height = node_bounds["height"]
+    if not repeatable and mode == "column":
+        _apply_requested_fixed_column_vertical_growth(
+            children,
+            ordered_plans,
+            ordered_geometry_bounds,
+            vertical_growth_lines=vertical_growth_lines,
+        )
+        child_heights = [
+            float(size["height"])
+            for child in children
+            if isinstance((size := child.get("size")), dict)
+            and isinstance(size.get("height"), (int, float))
+        ]
+        if len(child_heights) == len(children):
+            compiled_height = max(
+                compiled_height,
+                sum(child_heights) + main_axis_gap * max(0, len(children) - 1),
+            )
+
     min_children = max(1, (len(children) + 1) // 2) if repeatable else len(children)
     base: dict[str, Any] = {
         "type": "group" if mode == "group" else "grid" if mode == "grid" else "flex",
@@ -2725,7 +2932,7 @@ def _compile_flow_node(
         "position": {"x": 0.0, "y": 0.0},
         "size": {
             "width": node_bounds["width"],
-            "height": node_bounds["height"],
+            "height": round(compiled_height, 2),
         },
         "children": children,
     }
@@ -2747,10 +2954,7 @@ def _compile_flow_node(
         base.update(
             {
                 "direction": mode,
-                "gap": _axis_gap(
-                    ordered_bounds,
-                    axis="x" if mode == "row" else "y",
-                ),
+                "gap": main_axis_gap,
             }
         )
         if align_items is not None:
@@ -3318,6 +3522,265 @@ def _strip_decorative_fields(value: Any) -> Any:
     if isinstance(value, list):
         return [_strip_decorative_fields(item) for item in value]
     return value
+
+
+def _is_straight_divider_vector(element: dict[str, Any]) -> bool:
+    if element.get("type") != "vector" or element.get("closed") is True:
+        return False
+    points = element.get("points")
+    if not isinstance(points, list) or len(points) != 2:
+        return False
+    if any(not isinstance(point, dict) for point in points):
+        return False
+    try:
+        delta_x = abs(float(points[1]["x"]) - float(points[0]["x"]))
+        delta_y = abs(float(points[1]["y"]) - float(points[0]["y"]))
+    except (KeyError, TypeError, ValueError):
+        return False
+    return (delta_x <= 1.0 < delta_y) or (delta_y <= 1.0 < delta_x)
+
+
+def _apply_requested_fixed_column_vertical_growth(
+    children: list[dict[str, Any]],
+    plans: list[FlexibleFlowItemPlan],
+    original_bounds: list[dict[str, float]],
+    *,
+    vertical_growth_lines: dict[int, int],
+) -> None:
+    """Grow only text leaves with explicit vertical capacity instructions."""
+    for child, plan, bounds in zip(children, plans, original_bounds):
+        if child.get("type") != "text" or plan.indices is None:
+            continue
+        requested_lines = max(
+            (vertical_growth_lines.get(index, 0) for index in plan.indices),
+            default=0,
+        )
+        if requested_lines < 1:
+            continue
+        size = child.get("size")
+        if not isinstance(size, dict):
+            continue
+
+        original = copy.deepcopy(child)
+        original["size"] = {
+            "width": float(size.get("width") or bounds["width"]),
+            "height": bounds["height"],
+        }
+        original_lines = _existing_text_box_line_capacity(original)
+        _width, height, _font_size, line_height = _text_capacity_geometry(child)
+        target_lines = min(12, original_lines + requested_lines)
+        requested_height = target_lines * line_height
+        if requested_height > height + 0.5:
+            size["height"] = round(requested_height, 2)
+        _raise_text_limits_for_geometry(child, max_lines=target_lines)
+
+
+def _component_rendered_bounds(component: Component) -> dict[str, float]:
+    elements = [
+        element.model_dump(mode="json", exclude_none=True)
+        for element in component.elements
+    ]
+    bounds = _bounds_for_indices(elements, list(range(len(elements))))
+    return {
+        "x": component.position.x + bounds["x"],
+        "y": component.position.y + bounds["y"],
+        "width": bounds["width"],
+        "height": bounds["height"],
+    }
+
+
+def _fixed_column_vertical_reflow_paths(
+    flexible_plan: FlexibleSlidePlan,
+    manifest: SemanticSlideManifest,
+    source_elements: list[dict[str, Any]],
+) -> set[str]:
+    """Return top-level text leaves whose column can absorb vertical growth."""
+    editable_paths = {
+        annotation.path
+        for annotation in manifest.annotations
+        if not annotation.decorative
+    }
+    paths: set[str] = set()
+    for region in flexible_plan.regions:
+        for flow in region.flows:
+            if flow.mode != "column":
+                continue
+            for item in flow.items:
+                if item.indices is None or len(item.indices) != 1:
+                    continue
+                index = item.indices[0]
+                path = f"elements.{index}"
+                if (
+                    path in editable_paths
+                    and source_elements[index].get("type") == "text"
+                ):
+                    paths.add(path)
+    return paths
+
+
+def _geometry_text_capacity_adjustment(
+    adjustment: TextCapacityAdjustment,
+    *,
+    vertical_reflow_paths: set[str],
+) -> TextCapacityAdjustment:
+    if (
+        adjustment.path not in vertical_reflow_paths
+        or not (adjustment.top_lines or adjustment.bottom_lines)
+    ):
+        return adjustment
+    return adjustment.model_copy(
+        update={
+            "top_lines": 0,
+            "bottom_lines": 0,
+        }
+    )
+
+
+def _reflow_components_after_vertical_capacity(
+    components: list[Component],
+    *,
+    original_bounds: dict[str, dict[str, float]],
+    vertically_growing_component_ids: set[str],
+) -> None:
+    """Preserve spacing below wrappers enlarged by explicit vertical requests."""
+    if not vertically_growing_component_ids:
+        return
+
+    components_by_id = {component.id: component for component in components}
+    affected_component_ids = set(vertically_growing_component_ids)
+    ordered_ids = sorted(
+        vertically_growing_component_ids,
+        key=lambda component_id: original_bounds[component_id]["y"],
+    )
+    for component_id in ordered_ids:
+        component = components_by_id[component_id]
+        current = _component_rendered_bounds(component)
+        original = original_bounds[component_id]
+        growth = current["height"] - original["height"]
+        if growth <= 0.5:
+            continue
+        original_bottom = original["y"] + original["height"]
+        for other in components:
+            if other.id == component_id:
+                continue
+            other_original = original_bounds[other.id]
+            if other_original["y"] < original_bottom - 0.5:
+                continue
+            other_current = _component_rendered_bounds(other)
+            if not _ranges_overlap(
+                current["x"],
+                current["x"] + current["width"],
+                other_current["x"],
+                other_current["x"] + other_current["width"],
+            ):
+                continue
+            other.position.y = round(other.position.y + growth, 2)
+            affected_component_ids.add(other.id)
+
+    for component_id in affected_component_ids:
+        component = components_by_id[component_id]
+        bounds = _component_rendered_bounds(component)
+        if bounds["y"] < -0.5 or bounds["y"] + bounds["height"] > 720.5:
+            raise ValueError(
+                "explicit vertical text-capacity growth moves a component "
+                f"outside the slide: {component.id}"
+            )
+
+
+def _reserve_single_line_text_overflow_space(
+    elements: list[dict[str, Any]],
+    manifest: SemanticSlideManifest,
+    text_capacity_plan: TextCapacityPlan,
+) -> None:
+    """Give compact metric values physical substitution headroom."""
+    growth_adjusted_paths = {
+        adjustment.path
+        for adjustment in text_capacity_plan.adjustments
+        if _text_adjustment_requests_growth(adjustment)
+    }
+    for annotation in manifest.annotations:
+        name_tokens = set(annotation.name.lower().split("_"))
+        if (
+            annotation.decorative
+            or annotation.path in growth_adjusted_paths
+            or not {"metric", "value"}.issubset(name_tokens)
+        ):
+            continue
+        element, siblings, boundary = _element_context_at_semantic_path(
+            elements,
+            annotation.path,
+        )
+        if (
+            element.get("type") != "text"
+            or _existing_text_box_line_capacity(element) != 1
+            or abs(float(element.get("rotation") or 0)) > 0.1
+        ):
+            continue
+
+        position = element.get("position")
+        size = element.get("size")
+        if not isinstance(position, dict) or not isinstance(size, dict):
+            continue
+        width = float(size.get("width") or 0)
+        height = float(size.get("height") or 0)
+        if width <= 0 or height <= 0:
+            continue
+
+        horizontal_alignment = (element.get("alignment") or {}).get("horizontal")
+        if horizontal_alignment == "right":
+            directions = {"left"}
+        elif horizontal_alignment in {"center", "justify"}:
+            directions = {"left", "right"}
+        else:
+            directions = {"right"}
+
+        original = {
+            "x": float(position.get("x") or 0),
+            "y": float(position.get("y") or 0),
+            "width": width,
+            "height": height,
+        }
+        available = _expand_text_bounds(
+            original,
+            siblings=siblings,
+            boundary=boundary,
+            directions=directions,
+            target=element,
+        )
+        desired_width = width / TEXT_CAPACITY_SAFETY_FACTOR
+        extra_width = desired_width - width
+        if extra_width <= 0:
+            continue
+
+        original_right = original["x"] + width
+        if directions == {"left"}:
+            left = max(available["x"], original["x"] - extra_width)
+            right = original_right
+        elif directions == {"left", "right"}:
+            half_extra = extra_width / 2
+            left = max(available["x"], original["x"] - half_extra)
+            right = min(
+                available["x"] + available["width"],
+                original_right + half_extra,
+            )
+        else:
+            left = original["x"]
+            right = min(
+                available["x"] + available["width"],
+                original_right + extra_width,
+            )
+
+        expanded_width = right - left
+        if expanded_width <= width + 0.5:
+            continue
+        element["position"] = {
+            **position,
+            "x": round(left, 2),
+        }
+        element["size"] = {
+            **size,
+            "width": round(expanded_width, 2),
+        }
 
 
 def _openai_image_part(slide_image_url: str) -> ImageContentPart:

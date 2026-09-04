@@ -35,6 +35,7 @@ from utils.asset_directory_utils import (
     normalize_slide_asset_url,
 )
 from utils.icon_weights import DEFAULT_ICON_WEIGHT, extract_icon_type_from_settings
+from utils.infographic_catalog import normalize_infographic_data
 from utils.latex_text import normalize_latex, replace_text_runs, text_runs_to_tagged_text
 from utils.outline_utils import get_presentation_title_from_presentation_outline
 from utils.outline_limits import normalize_outline_content
@@ -4064,14 +4065,20 @@ class PresentationChatMemoryLayer:
         value: dict[str, Any],
     ) -> None:
         data = value.get("data")
-        if isinstance(data, dict) and data.get("type") in {"progress_bar", "gauge"}:
-            next_data: dict[str, Any] = {"type": data["type"]}
-            for key in ("min_value", "max_value", "value"):
-                raw = data.get(key)
-                if isinstance(raw, (int, float)):
-                    next_data[key] = float(raw)
-            if {"min_value", "max_value", "value"}.issubset(next_data):
-                element["data"] = next_data
+        if isinstance(data, dict):
+            current_data = element.get("data")
+            if isinstance(current_data, dict):
+                incoming_data = copy.deepcopy(data)
+                current_type = current_data.get("type")
+                if isinstance(current_type, str):
+                    incoming_data["type"] = current_type
+                data = {**copy.deepcopy(current_data), **incoming_data}
+            infographic_type = data.get("type")
+            if isinstance(infographic_type, str):
+                element["data"] = normalize_infographic_data(
+                    infographic_type,
+                    data,
+                )
 
         colors = value.get("colors")
         if isinstance(colors, list):
@@ -4080,6 +4087,9 @@ class PresentationChatMemoryLayer:
                 for color in colors
                 if isinstance(color, str) and color.strip()
             ]
+        text_color = value.get("text_color")
+        if isinstance(text_color, str) and text_color.strip():
+            element["text_color"] = text_color
 
     @classmethod
     def _set_template_runs_text(cls, element: dict[str, Any], text: str) -> None:

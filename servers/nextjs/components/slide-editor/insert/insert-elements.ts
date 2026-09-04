@@ -656,6 +656,9 @@ function infographicTypeFromPaletteId(id?: string): InfographicType | null {
     case "conversion_funnel":
     case "conversion-funnel":
       return "conversion_funnel";
+    case "vertical_funnel":
+    case "vertical-funnel":
+      return "vertical_funnel";
     case "pyramid":
       return "pyramid";
     case "segmented_wheel":
@@ -1157,6 +1160,43 @@ function makeInfographicElement(infographicType: InfographicType): SlideElement 
       text_color: null,
       decorative: false,
       name: "conversion_funnel",
+    };
+  }
+
+  if (infographicType === "vertical_funnel") {
+    return {
+      type: "infographic",
+      position: { ...DEFAULT_INFOGRAPHIC_INSERT_POSITION },
+      size: { width: 720, height: 480 },
+      data: {
+        type: "vertical_funnel",
+        items: [
+          {
+            value: 100,
+            heading: "Awareness",
+            description: "The full audience entering the funnel.",
+          },
+          {
+            value: 60,
+            heading: "Interest",
+            description: "People engaging with the offering.",
+          },
+          {
+            value: 35,
+            heading: "Consideration",
+            description: "Prospects evaluating the solution.",
+          },
+          {
+            value: 20,
+            heading: "Conversion",
+            description: "People completing the target action.",
+          },
+        ],
+      },
+      colors: ["FFFFFF", "102E79", "24468E", "4D73BE", "7CA2E5"],
+      text_color: null,
+      decorative: false,
+      name: "vertical_funnel",
     };
   }
 

@@ -13,8 +13,10 @@ from .elements import (
     Fill,
     Font,
     HorizontalAlignment,
+    InfographicData,
     Marker,
     Position,
+    Size,
     SlideElement,
 )
 
@@ -137,7 +139,16 @@ class SemanticElementAnnotation(BaseModel):
     )
 
 
-class VisualChartReplacement(BaseModel):
+class VisualReplacementGeometry(BaseModel):
+    """Detected structured-content bounds in the candidate's coordinate space."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    position: Position
+    size: Size
+
+
+class VisualChartReplacement(VisualReplacementGeometry):
     """One image or grouped visual region recognized as a quantitative chart."""
 
     model_config = ConfigDict(extra="forbid")
@@ -148,7 +159,17 @@ class VisualChartReplacement(BaseModel):
     title: str | None
     title_color: HexColor | None
     legend_color: HexColor | None
-    colors: list[HexColor] = Field(min_length=1, max_length=24)
+    text_color: HexColor | None = Field(
+        description="Data-label and general chart text color."
+    )
+    colors: list[HexColor] = Field(
+        min_length=1,
+        max_length=24,
+        description=(
+            "Renderer-ordered mark palette: slices/categories for category-colored "
+            "single-series charts, otherwise series order."
+        ),
+    )
     x_axis: bool
     y_axis: bool
     x_axis_title: str | None
@@ -175,45 +196,34 @@ class VisualChartReplacement(BaseModel):
         return self
 
 
-class VisualProgressBarReplacement(BaseModel):
-    """One image or grouped visual region recognized as a progress bar."""
+class VisualInfographicReplacement(VisualReplacementGeometry):
+    """One complete infographic image or grouped bounded metric region."""
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["progress_bar"]
+    kind: Literal["infographic"]
     path: SemanticElementPath
-    min_value: float
-    max_value: float
-    value: float
-    colors: list[HexColor] = Field(min_length=1, max_length=4)
+    data: InfographicData
+    colors: list[HexColor] = Field(
+        min_length=2,
+        max_length=24,
+        description=(
+            "Renderer order: metric inactive/fill slots or qualitative "
+            "base/background followed by ordered accents."
+        ),
+    )
+    text_color: HexColor | None = Field(
+        description="Shared external, heading, body, and label text color."
+    )
 
     @model_validator(mode="after")
-    def _value_must_fit_range(self) -> "VisualProgressBarReplacement":
-        if self.max_value <= self.min_value:
-            raise ValueError("progress bar max_value must exceed min_value")
-        if not self.min_value <= self.value <= self.max_value:
-            raise ValueError("progress bar value must fit its declared range")
-        return self
-
-
-class VisualGaugeReplacement(BaseModel):
-    """One image or grouped visual region recognized as a quantitative gauge."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    kind: Literal["gauge"]
-    path: SemanticElementPath
-    min_value: float
-    max_value: float
-    value: float
-    colors: list[HexColor] = Field(min_length=1, max_length=8)
-
-    @model_validator(mode="after")
-    def _value_must_fit_range(self) -> "VisualGaugeReplacement":
-        if self.max_value <= self.min_value:
-            raise ValueError("gauge max_value must exceed min_value")
-        if not self.min_value <= self.value <= self.max_value:
-            raise ValueError("gauge value must fit its declared range")
+    def _metric_fields_must_be_valid(self) -> "VisualInfographicReplacement":
+        if self.data.type not in {"progress_bar", "gauge"}:
+            return self
+        if not self.data.min_value <= self.data.value <= self.data.max_value:
+            raise ValueError("metric value must fit its declared range")
+        if len(self.colors) > 8:
+            raise ValueError("metric infographic colors cannot exceed eight slots")
         return self
 
 
@@ -228,7 +238,7 @@ class VisualTableCell(BaseModel):
     alignment: HorizontalAlignment | None
 
 
-class VisualTableReplacement(BaseModel):
+class VisualTableReplacement(VisualReplacementGeometry):
     """One image or grouped visual region recognized as a table."""
 
     model_config = ConfigDict(extra="forbid")
@@ -254,16 +264,31 @@ class VisualTextListReplacement(BaseModel):
     path: SemanticElementPath
     marker: Marker
     font: Font | None
+    gap: float = Field(
+        ge=0,
+        le=720,
+        description="Vertical pixel gap between consecutive list items.",
+    )
+    marker_gap: float = Field(
+        ge=0,
+        le=1280,
+        description="Horizontal pixel gap between each marker and its item text.",
+    )
     items: list[Annotated[str, Field(min_length=1, max_length=2000)]] = Field(
         min_length=1,
         max_length=40,
     )
 
+    @model_validator(mode="after")
+    def _unmarked_list_has_no_marker_gap(self) -> "VisualTextListReplacement":
+        if self.marker == Marker.NONE and self.marker_gap != 0:
+            raise ValueError("an unmarked text list must have marker_gap=0")
+        return self
+
 
 VisualDataReplacement = Annotated[
     VisualChartReplacement
-    | VisualProgressBarReplacement
-    | VisualGaugeReplacement
+    | VisualInfographicReplacement
     | VisualTableReplacement
     | VisualTextListReplacement,
     Field(discriminator="kind"),
@@ -578,19 +603,18 @@ def semantic_slide_manifest_llm_json_schema() -> dict:
 
 
 def visual_data_replacement_plan_llm_json_schema() -> dict:
-    """Return a Gemini-safe schema with only tables using a JSON envelope."""
+    """Return a Gemini-safe schema with complex payloads in JSON envelopes."""
     schema = VisualDataReplacementPlan.model_json_schema()
     definitions = schema["$defs"]
     typed_definition_names = [
         "VisualChartReplacement",
-        "VisualProgressBarReplacement",
-        "VisualGaugeReplacement",
         "VisualTextListReplacement",
     ]
     alternatives = []
     for definition_name in typed_definition_names:
         kind_schema = definitions[definition_name]["properties"]["kind"]
-        kind_schema["enum"] = [kind_schema.pop("const")]
+        if "const" in kind_schema:
+            kind_schema["enum"] = [kind_schema.pop("const")]
         alternatives.append({"$ref": f"#/$defs/{definition_name}"})
 
     alternatives.append(
@@ -604,24 +628,77 @@ def visual_data_replacement_plan_llm_json_schema() -> dict:
                     "minLength": 10,
                     "maxLength": 240,
                 },
+                "position": {"$ref": "#/$defs/Position"},
+                "size": {"$ref": "#/$defs/Size"},
                 "data_json": {
                     "type": "string",
                     "minLength": 2,
                     "maxLength": 120000,
                 },
             },
-            "required": ["kind", "path", "data_json"],
+            "required": ["kind", "path", "position", "size", "data_json"],
+        }
+    )
+    alternatives.append(
+        {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "kind": {"type": "string", "enum": ["infographic"]},
+                "path": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 240,
+                },
+                "position": {"$ref": "#/$defs/Position"},
+                "size": {"$ref": "#/$defs/Size"},
+                "data_json": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120000,
+                },
+            },
+            "required": ["kind", "path", "position", "size", "data_json"],
         }
     )
     schema["properties"]["replacements"]["items"] = {"anyOf": alternatives}
-    for definition_name in (
-        "VisualTableReplacement",
-        "VisualTableCell",
-        "Fill",
-        "HorizontalAlignment",
-    ):
-        definitions.pop(definition_name, None)
+    _prune_unused_schema_definitions(schema)
     return schema
+
+
+def _prune_unused_schema_definitions(schema: dict[str, Any]) -> None:
+    definitions = schema.get("$defs")
+    if not isinstance(definitions, dict):
+        return
+
+    referenced: set[str] = set()
+
+    def collect(value: Any) -> None:
+        if isinstance(value, dict):
+            reference = value.get("$ref")
+            if isinstance(reference, str) and reference.startswith("#/$defs/"):
+                referenced.add(reference.removeprefix("#/$defs/"))
+            for key, child in value.items():
+                if key != "$defs":
+                    collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    collect(schema)
+    pending = list(referenced)
+    while pending:
+        definition_name = pending.pop()
+        definition = definitions.get(definition_name)
+        before = set(referenced)
+        collect(definition)
+        pending.extend(referenced - before)
+
+    schema["$defs"] = {
+        name: definition
+        for name, definition in definitions.items()
+        if name in referenced
+    }
 
 
 def flexible_slide_plan_llm_json_schema() -> dict:

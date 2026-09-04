@@ -795,14 +795,55 @@ def test_visual_data_llm_schema_uses_table_envelope_only_for_gemini():
 
     assert "discriminator" not in replacement_schema
     assert "oneOf" not in replacement_schema
-    assert len(replacement_schema["anyOf"]) == 5
-    table_schema = replacement_schema["anyOf"][-1]
+    assert len(replacement_schema["anyOf"]) == 4
+    table_schema = next(
+        alternative
+        for alternative in replacement_schema["anyOf"]
+        if alternative.get("properties", {}).get("kind", {}).get("enum") == ["table"]
+    )
     assert table_schema["properties"]["kind"]["enum"] == ["table"]
-    assert table_schema["required"] == ["kind", "path", "data_json"]
+    assert table_schema["required"] == [
+        "kind",
+        "path",
+        "position",
+        "size",
+        "data_json",
+    ]
+    assert table_schema["properties"]["position"] == {"$ref": "#/$defs/Position"}
+    assert table_schema["properties"]["size"] == {"$ref": "#/$defs/Size"}
+    infographic_schema = next(
+        alternative
+        for alternative in replacement_schema["anyOf"]
+        if alternative.get("properties", {}).get("kind", {}).get("enum")
+        == ["infographic"]
+    )
+    assert infographic_schema["required"] == [
+        "kind",
+        "path",
+        "position",
+        "size",
+        "data_json",
+    ]
+    assert "VisualInfographicReplacement" not in schema["$defs"]
 
     runtime_items = canonical_schema["properties"]["replacements"]["items"]
     assert "discriminator" in runtime_items
     assert "oneOf" in runtime_items
+    runtime_definition_names = {
+        alternative["$ref"].rsplit("/", 1)[-1]
+        for alternative in runtime_items["oneOf"]
+    }
+    assert runtime_definition_names == {
+        "VisualChartReplacement",
+        "VisualInfographicReplacement",
+        "VisualTableReplacement",
+        "VisualTextListReplacement",
+    }
+    infographic_runtime_schema = canonical_schema["$defs"][
+        "VisualInfographicReplacement"
+    ]
+    assert infographic_runtime_schema["properties"]["colors"]["minItems"] == 2
+    assert "track_height" not in str(infographic_runtime_schema)
 
     assert generation._response_schema_for_model(
         model="gpt-5.4",
@@ -826,7 +867,7 @@ def test_visual_data_table_encoding_prompt_is_only_added_for_gemini():
     )
     gemini_system_prompt = gemini_messages[0].content
     assert isinstance(gemini_system_prompt, str)
-    assert "# Gemini table response encoding:" in gemini_system_prompt
+    assert "# Gemini complex visual-data response encoding:" in gemini_system_prompt
     assert '`data_json` is a JSON string' in gemini_system_prompt
     assert '"columns": [CELL, ...]' in gemini_system_prompt
     assert '"alignment": null | "left" | "center" | "right" | "justify"' in (
@@ -850,6 +891,8 @@ def test_visual_data_table_cells_are_normalized_before_runtime_validation():
             {
                 "kind": "table",
                 "path": "elements.1",
+                "position": {"x": 120, "y": 160},
+                "size": {"width": 640, "height": 320},
                 "data_json": json.dumps(
                     {
                         "columns": [
@@ -975,3 +1018,242 @@ def test_text_capacity_retry_prompt_forbids_no_op_adjustments():
     assert "never split fields across array entries" in prompt
     assert "Omit every no-op adjustment" in prompt
     assert "Return an empty adjustments list" in prompt
+
+
+def test_repeat_signature_allows_leading_divider_on_upcoming_items():
+    source_elements = [
+        {
+            "type": "text",
+            "position": {"x": 0, "y": 0},
+            "size": {"width": 80, "height": 30},
+            "runs": [{"text": "42%"}],
+            "decorative": False,
+            "name": "metric_value_1",
+        },
+        {
+            "type": "vector",
+            "points": [{"x": 100, "y": 0}, {"x": 100, "y": 60}],
+            "closed": False,
+            "stroke": {"color": "#000000", "width": 1},
+            "decorative": True,
+        },
+        {
+            "type": "text",
+            "position": {"x": 120, "y": 0},
+            "size": {"width": 80, "height": 30},
+            "runs": [{"text": "74K"}],
+            "decorative": False,
+            "name": "metric_value_2",
+        },
+    ]
+
+    assert generation._region_items_are_structurally_equivalent(
+        [[0], [1, 2]],
+        source_elements,
+    )
+
+
+def test_layout_compilation_reserves_single_line_text_overflow_space():
+    raw_layout = generation.RawSlideLayout.model_validate(
+        {
+            "id": "metric_card",
+            "description": "A compact metric card with a one-line editable value.",
+            "elements": [
+                {
+                    "type": "group",
+                    "name": "source_metric_card",
+                    "position": {"x": 40, "y": 100},
+                    "size": {"width": 222.64, "height": 121.37},
+                    "children": [
+                        {
+                            "type": "container",
+                            "position": {"x": 0, "y": 0},
+                            "size": {"width": 222.64, "height": 121.37},
+                            "fill": {"color": "#FFFFFF"},
+                            "decorative": True,
+                        },
+                        {
+                            "type": "text",
+                            "position": {"x": 18.93, "y": 33.05},
+                            "size": {"width": 142.63, "height": 38.8},
+                            "font": {"size": 38.04, "line_height": 0.98},
+                            "runs": [{"text": "2.40M"}],
+                            "decorative": True,
+                            "name": "source_metric",
+                            "min_length": 2,
+                            "max_length": 5,
+                        },
+                    ],
+                }
+            ],
+        }
+    )
+    manifest = generation.SemanticSlideManifest.model_validate(
+        {
+            "id": "metric_card",
+            "description": "A compact metric card with a one-line editable value.",
+            "components": [
+                {
+                    "id": "metric_card",
+                    "description": "A card containing one prominent metric value.",
+                    "element_indices": [0],
+                    "repeated_items": None,
+                }
+            ],
+            "annotations": [
+                {
+                    "path": "elements.0.children.1",
+                    "name": "metric_value",
+                    "decorative": False,
+                }
+            ],
+        }
+    )
+
+    layout = generation._compile_semantic_layout(
+        raw_layout,
+        manifest,
+        generation.FlexibleSlidePlan(regions=[]),
+        generation.TextCapacityPlan(adjustments=[]),
+    )
+    metric = layout.components[0].elements[0].children[1]
+
+    assert metric.size.width == pytest.approx(
+        142.63 / generation.TEXT_CAPACITY_SAFETY_FACTOR,
+        abs=0.01,
+    )
+    assert metric.max_length == 5
+
+
+def test_visual_data_plan_rejects_bounds_outside_candidate():
+    raw_layout = generation.RawSlideLayout.model_validate(
+        {
+            "id": "padded_table_image",
+            "description": "A table inside a larger padded source image.",
+            "elements": [
+                {
+                    "type": "image",
+                    "position": {"x": 100, "y": 120},
+                    "size": {"width": 400, "height": 240},
+                    "data": "https://example.com/list.png",
+                    "decorative": True,
+                    "name": "table_image",
+                    "is_icon": False,
+                }
+            ],
+        }
+    )
+    plan = generation.VisualDataReplacementPlan.model_validate(
+        {
+            "replacements": [
+                {
+                    "kind": "table",
+                    "path": "elements.0",
+                    "position": {"x": 90, "y": 140},
+                    "size": {"width": 300, "height": 180},
+                    "columns": [
+                        {
+                            "text": "Heading",
+                            "color": None,
+                            "font": None,
+                            "alignment": None,
+                        }
+                    ],
+                    "rows": [],
+                }
+            ]
+        }
+    )
+    _, candidate_paths = generation._visual_data_generation_payload(raw_layout)
+
+    with pytest.raises(ValueError, match="bounds must stay inside candidate"):
+        generation._validate_visual_data_replacement_plan(
+            plan,
+            candidate_paths=candidate_paths,
+            source_elements=raw_layout.model_dump(mode="json")["elements"],
+        )
+
+
+def test_visual_data_plan_rejects_marker_gap_for_unmarked_text_list():
+    with pytest.raises(ValueError, match="unmarked text list must have marker_gap=0"):
+        generation.VisualDataReplacementPlan.model_validate(
+            {
+                "replacements": [
+                    {
+                        "kind": "text-list",
+                        "path": "elements.0",
+                        "marker": "none",
+                        "font": None,
+                        "gap": 12,
+                        "marker_gap": 6,
+                        "items": ["First", "Second"],
+                    }
+                ]
+            }
+        )
+
+
+@pytest.mark.parametrize("kind", ["progress_bar", "gauge"])
+def test_visual_data_pass_converts_group_to_infographic(kind):
+    raw_layout = generation.RawSlideLayout.model_validate(
+        {
+            "id": f"{kind}_group",
+            "description": "A grouped shape-based quantitative status indicator.",
+            "elements": [
+                {
+                    "type": "group",
+                    "position": {"x": 200, "y": 220},
+                    "size": {"width": 360, "height": 140},
+                    "name": "status_visual",
+                    "children": [
+                        {
+                            "type": "vector",
+                            "points": [
+                                {"x": 0, "y": 0},
+                                {"x": 300, "y": 0},
+                                {"x": 300, "y": 24},
+                                {"x": 0, "y": 24},
+                            ],
+                            "closed": True,
+                            "fill": {"color": "#2563EB"},
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    plan = generation.VisualDataReplacementPlan.model_validate(
+        {
+            "replacements": [
+                {
+                    "kind": "infographic",
+                    "path": "elements.0",
+                    "position": {"x": 200, "y": 220},
+                    "size": {"width": 360, "height": 140},
+                    "data": {
+                        "type": kind,
+                        "min_value": 0,
+                        "max_value": 100,
+                        "value": 64,
+                    },
+                    "colors": ["#E5E7EB", "#2563EB"],
+                    "text_color": "#111827" if kind == "gauge" else None,
+                }
+            ]
+        }
+    )
+
+    _, candidate_paths = generation._visual_data_generation_payload(raw_layout)
+    generation._validate_visual_data_replacement_plan(
+        plan,
+        candidate_paths=candidate_paths,
+        source_elements=raw_layout.model_dump(mode="json")["elements"],
+    )
+    converted = generation._apply_visual_data_replacement_plan(raw_layout, plan)
+
+    infographic = converted.elements[0]
+    assert infographic.type == "infographic"
+    assert infographic.data.type == kind
+    assert infographic.data.value == 64
+    assert infographic.colors == ["#E5E7EB", "#2563EB"]
+    assert infographic.text_color == ("#111827" if kind == "gauge" else None)

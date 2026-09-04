@@ -590,6 +590,7 @@ function createInfographicToolbarItem(
       };
     }
     case "conversion_funnel":
+    case "vertical_funnel":
       return {
         value: Math.max(0, readInfographicNumber(previous?.value, 60) - 10),
         heading: `Stage ${index + 1}`,
@@ -629,7 +630,7 @@ function toolbarItemHeading(
   }
   if (type === "pillar_framework") return `Pillar ${index + 1}`;
   if (type === "transformation_hub") return `Capability ${index + 1}`;
-  if (type === "conversion_funnel") return `Stage ${index + 1}`;
+  if (type === "conversion_funnel" || type === "vertical_funnel") return `Stage ${index + 1}`;
   if (type === "roadmap") return `Stop ${index + 1}`;
   if (type === "pyramid") return `Level ${index + 1}`;
   if (type === "segmented_wheel") return `Segment ${index + 1}`;
@@ -647,6 +648,7 @@ function typeUsesToolbarIcons(type: InfographicType) {
     type === "chevron_process" ||
     type === "radial_cycle" ||
     type === "conversion_funnel" ||
+    type === "vertical_funnel" ||
     type === "transformation_hub"
   );
 }
@@ -700,7 +702,7 @@ function infographicType(value: unknown): InfographicType | null {
       "milestone_timeline", "staircase", "supply_chain",
       "stair_step_blocks", "maturity_model", "diagonal_circles",
       "pillar_framework", "transformation_hub", "risk_matrix",
-      "chevron_process", "radial_cycle", "conversion_funnel", "pyramid",
+      "chevron_process", "radial_cycle", "conversion_funnel", "vertical_funnel", "pyramid",
       "segmented_wheel", "customer_journey", "before_after",
       "impact_effort_matrix", "comparison_matrix", "org_chart",
       "decision_tree", "mind_map",

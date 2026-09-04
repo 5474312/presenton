@@ -3593,6 +3593,20 @@ function RawInfographicElement({
     );
   }
 
+  if (infographicType === "vertical_funnel") {
+    return (
+      <RawVerticalFunnelInfographic
+        data={data}
+        width={width}
+        height={height}
+        interactive={interactive}
+        baseColor={baseColor}
+        palette={palette}
+        textColor={customTextColor}
+      />
+    );
+  }
+
   if (infographicType === "pyramid") {
     return (
       <RawPyramidInfographic
@@ -3675,11 +3689,6 @@ function RawInfographicElement({
     );
   }
 
-  const value =
-    readNumber(data?.value) ??
-    readNumber(element.value) ??
-    0;
-
   if (infographicType === "progress_bar") {
     const radius = Math.min(height / 2, 8);
     return (
@@ -3738,19 +3747,6 @@ function RawInfographicElement({
           <Circle x={end.x} y={end.y} radius={capRadius} fill={highlightColor} />
         </>
       ) : null}
-      <Text
-        x={0}
-        y={height * 0.5}
-        width={width}
-        height={height * 0.3}
-        text={String(Math.round(value))}
-        fontFamily="Arial, Helvetica, sans-serif"
-        fontSize={Math.max(10, Math.min(width, height) * 0.22)}
-        fontStyle="bold"
-        align="center"
-        verticalAlign="middle"
-        fill={customTextColor ?? "#172033"}
-      />
     </Group>
   );
 }
@@ -5270,6 +5266,111 @@ function RawConversionFunnelInfographic({
               fontFamily="Arial, Helvetica, sans-serif"
               fontSize={Math.max(8, Math.min(11, height * 0.033))}
               lineHeight={1.15}
+              fill={textColor}
+            />
+          </InfographicItemGroup>
+        );
+      })}
+    </Group>
+  );
+}
+
+function RawVerticalFunnelInfographic({
+  baseColor,
+  data,
+  height,
+  interactive,
+  palette,
+  textColor: customTextColor,
+  width,
+}: {
+  baseColor: string;
+  data: RawElement | null;
+  height: number;
+  interactive: boolean;
+  palette: string[];
+  textColor: string | null;
+  width: number;
+}) {
+  const items = readArray(data?.items).map(asRecord).filter(Boolean).slice(0, 8);
+  const safeItems = items.length > 0 ? items : [{ value: 50, heading: "Stage" }];
+  const darkBackground = isDarkInfographicColor(baseColor);
+  const textColor = customTextColor ?? (darkBackground ? "#F0F1F4" : "#111111");
+  const top = height * 0.08;
+  const bottom = height * 0.08;
+  const stageHeight = (height - top - bottom) / safeItems.length;
+  const centerX = width * 0.5;
+  const maxFunnelWidth = width * 0.42;
+  const valueAt = (index: number) =>
+    clamp(readNumber(safeItems[index]?.value) ?? 0, 0, 100);
+  const widthAt = (value: number) => Math.max(4, (value / 100) * maxFunnelWidth);
+
+  return (
+    <Group listening={interactive}>
+      {safeItems.map((item, index) => {
+        const y0 = top + index * stageHeight;
+        const y1 = y0 + stageHeight;
+        const topWidth = widthAt(valueAt(index));
+        const bottomWidth = widthAt(valueAt(Math.min(index + 1, safeItems.length - 1)));
+        const heading = readString(item?.heading) ?? `Stage ${index + 1}`;
+        const description = readString(item?.description) ?? "";
+        return (
+          <InfographicItemGroup
+            key={`vertical-funnel-stage-${index}`}
+            interactive={interactive}
+            item={item}
+            itemPath={[index]}
+          >
+            <Line
+              points={[width * 0.19, y0, width * 0.855, y0]}
+              stroke="#D1D5DB"
+              strokeWidth={1}
+            />
+            <Line
+              closed
+              points={[
+                centerX - topWidth / 2,
+                y0,
+                centerX + topWidth / 2,
+                y0,
+                centerX + bottomWidth / 2,
+                y1,
+                centerX - bottomWidth / 2,
+                y1,
+              ]}
+              fill={palette[index % palette.length] ?? "#2563EB"}
+            />
+            <Text
+              x={width * 0.025}
+              y={y0 - height * 0.026}
+              width={width * 0.255}
+              text={heading}
+              fontFamily="Arial, Helvetica, sans-serif"
+              fontSize={Math.max(11, Math.min(17, height * 0.032))}
+              fontStyle="bold"
+              fill={textColor}
+            />
+            {description ? (
+              <Text
+                x={width * 0.025}
+                y={y0 + height * 0.012}
+                width={width * 0.255}
+                height={stageHeight * 0.45}
+                text={description}
+                fontFamily="Arial, Helvetica, sans-serif"
+                fontSize={Math.max(8, Math.min(11, height * 0.021))}
+                lineHeight={1.15}
+                fill={textColor}
+              />
+            ) : null}
+            <Text
+              x={width * 0.872}
+              y={y0 - height * 0.026}
+              width={width * 0.105}
+              text={`${Math.round(valueAt(index) * 10) / 10}%`}
+              fontFamily="Arial, Helvetica, sans-serif"
+              fontSize={Math.max(11, Math.min(17, height * 0.032))}
+              fontStyle="bold"
               fill={textColor}
             />
           </InfographicItemGroup>
