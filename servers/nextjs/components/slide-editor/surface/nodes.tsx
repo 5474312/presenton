@@ -3689,11 +3689,6 @@ function RawInfographicElement({
     );
   }
 
-  const value =
-    readNumber(data?.value) ??
-    readNumber(element.value) ??
-    0;
-
   if (infographicType === "progress_bar") {
     const radius = Math.min(height / 2, 8);
     return (
@@ -3752,19 +3747,6 @@ function RawInfographicElement({
           <Circle x={end.x} y={end.y} radius={capRadius} fill={highlightColor} />
         </>
       ) : null}
-      <Text
-        x={0}
-        y={height * 0.5}
-        width={width}
-        height={height * 0.3}
-        text={String(Math.round(value))}
-        fontFamily="Arial, Helvetica, sans-serif"
-        fontSize={Math.max(10, Math.min(width, height) * 0.22)}
-        fontStyle="bold"
-        align="center"
-        verticalAlign="middle"
-        fill={customTextColor ?? "#172033"}
-      />
     </Group>
   );
 }

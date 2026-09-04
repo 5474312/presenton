@@ -142,7 +142,10 @@ Analyze the reference slide and return semantic metadata for its existing source
 - decorative=true means the value is fixed visual scaffolding and must remain unchanged.
 - Treat visible text and its apparent meaning as replaceable unless it is a logo or watermark.
 - Treat charts, tables, metrics, semantic images, and topic icons as replaceable content.
-- Only progress bars and gauges are supported as infographics; keep every other infographic or qualitative diagram as fixed visual scaffolding.
+- Treat each structured table as one atomic editable element; headers, cells, cell text, fills, borders, and grid lines are internal table data.
+- Treat each structured chart as one atomic editable element; its title, plot, labels, legend, gridlines, axes, ticks, and source are internal chart data.
+- Never split, separately name, annotate, or group a table or chart internal as another editable element; one table or chart maps to one annotation.
+- Treat supported structured infographics as replaceable content. Keep only unsupported qualitative diagrams as fixed visual scaffolding.
 - Treat connector and branching lines, rings, arcs, circle outlines, Venn-diagram circles, backgrounds, logos, frames, borders, and dividers as decorative.
 - Classify by whether the new slide's content generator should replace the value: a ring around a replaceable topic icon is decorative, while the icon is content.
 - Set is_icon for every image annotation: true for a compact symbolic icon intended for icon search, and false for a photo, screenshot, or illustration.
@@ -187,6 +190,13 @@ Identify existing visual regions that should become structured data or list elem
 - Return an empty replacements list when there is no confident match.
 - Never replace an existing structured chart, infographic, table, or text-list; those are extracted deterministically.
 - A replacement target may be an image, or a group/container whose children collectively draw one structured region.
+- Atomicity is mandatory: one recognized table or chart must become exactly one typed replacement containing all of its internal visual content.
+- For a table, include every header and body cell, all cell text, fills, borders, and row and column lines only in the single kind=table replacement.
+- Never emit table cells, rows, headers, borders, or their text as separate replacements, including text-list replacements.
+- For a chart, include its title, plot, marks, data labels, category and series labels, legend, gridlines, axes, ticks, axis titles, and source only in one kind=chart replacement.
+- Never emit or leave any chart internal listed above as a separate sibling or descendant element or replacement.
+- Select the smallest common candidate that contains the complete table or chart and no unrelated content.
+- If no candidate contains the complete table or chart without unrelated content, return no replacement for it instead of replacing only part of it.
 - Treat a candidate as a chart only when it primarily communicates quantitative values through bars, lines, areas, slices, points, bubbles, or a radar/polar plot.
 - Treat a candidate as a progress bar only when it shows one value advancing through a bounded linear track.
 - Treat a candidate as a gauge only when it shows one value on a bounded dial, arc, ring, or meter.

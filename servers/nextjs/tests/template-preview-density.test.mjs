@@ -205,6 +205,67 @@ test("uses schema min, midpoint, and max counts for text-list arrays", () => {
   }
 });
 
+test("infers table text limits and applies row and column density", () => {
+  const layout = {
+    elements: [
+      {
+        type: "table",
+        name: "metrics",
+        decorative: false,
+        min_columns: 1,
+        max_columns: 3,
+        min_rows: 1,
+        max_rows: 3,
+        size: { width: 600, height: 300 },
+        columns: [
+          { runs: [{ text: "Metric", font: { size: 14 } }] },
+          { runs: [{ text: "Value", font: { size: 14 } }] },
+        ],
+        rows: [
+          [
+            { runs: [{ text: "Activation", font: { size: 14 } }] },
+            { runs: [{ text: "71%", font: { size: 14 } }] },
+          ],
+          [
+            { runs: [{ text: "Retention", font: { size: 14 } }] },
+            { runs: [{ text: "58%", font: { size: 14 } }] },
+          ],
+        ],
+      },
+    ],
+  };
+
+  assert.equal(densityUtils.hasLayoutContentDensityTargets(layout), true);
+
+  const previews = ["Low", "Medium", "High"].map((density) =>
+    densityUtils.applyTemplateContentDensity(layout, density),
+  );
+  assert.deepEqual(
+    previews.map((preview) => preview.elements[0].columns.length),
+    [1, 2, 3],
+  );
+  assert.deepEqual(
+    previews.map((preview) => preview.elements[0].rows.length),
+    [1, 2, 3],
+  );
+  for (const preview of previews) {
+    const table = preview.elements[0];
+    assert.equal(
+      table.rows.every((row) => row.length === table.columns.length),
+      true,
+    );
+  }
+
+  const headerLengths = previews.map(
+    (preview) => preview.elements[0].columns[0].runs[0].text.length,
+  );
+  const cellLengths = previews.map(
+    (preview) => preview.elements[0].rows[0][0].runs[0].text.length,
+  );
+  assert.equal(headerLengths[0] < headerLengths[2], true);
+  assert.equal(cellLengths[0] < cellLengths[2], true);
+});
+
 test("uses min_children and max_children for repeatable flex arrays", () => {
   const layout = {
     components: [
@@ -539,4 +600,3 @@ test("recognizes repeatable non-text arrays as density targets", () => {
   const high = densityUtils.applyTemplateContentDensity(layout, "High");
   assert.equal(high.components[0].elements[0].children.length, 3);
 });
-

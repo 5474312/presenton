@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import re
 from typing import Any
 
@@ -43,10 +44,140 @@ COMPONENT_SCHEMA_METADATA_KEYS = {
     "x-element-type",
     "x-element-path",
 }
+TABLE_CELL_HORIZONTAL_PADDING = 12.0
+TABLE_CELL_VERTICAL_PADDING = 6.0
+TABLE_DEFAULT_FONT_SIZE = 14.0
+TABLE_TEXT_CAPACITY_SAFETY_FACTOR = 0.85
 
 
 def _is_editable_element(element: dict[str, Any]) -> bool:
     return element.get("decorative") is False
+
+
+def _table_text_limits(
+    element: dict[str, Any],
+) -> tuple[tuple[int | None, int | None], tuple[int | None, int | None]]:
+    size = element.get("size")
+    if not isinstance(size, dict):
+        return (None, None), (None, None)
+
+    width = _positive_number(size.get("width"))
+    height = _positive_number(size.get("height"))
+    if width is None or height is None:
+        return (None, None), (None, None)
+
+    columns = [cell for cell in element.get("columns", []) if isinstance(cell, dict)]
+    rows = [row for row in element.get("rows", []) if isinstance(row, list)]
+    body_cells = [cell for row in rows for cell in row if isinstance(cell, dict)]
+
+    column_count = element.get("max_columns")
+    if not isinstance(column_count, int) or isinstance(column_count, bool):
+        column_count = len(columns)
+    column_count = max(1, column_count)
+
+    row_count = element.get("max_rows")
+    if not isinstance(row_count, int) or isinstance(row_count, bool):
+        row_count = len(rows)
+    row_count = max(0, row_count)
+
+    cell_width = max(
+        1.0,
+        width / column_count - 2 * TABLE_CELL_HORIZONTAL_PADDING,
+    )
+    cell_height = max(
+        1.0,
+        height / (row_count + 1) - 2 * TABLE_CELL_VERTICAL_PADDING,
+    )
+    return (
+        _table_section_text_limits(
+            columns,
+            cell_width=cell_width,
+            cell_height=cell_height,
+        ),
+        _table_section_text_limits(
+            body_cells,
+            cell_width=cell_width,
+            cell_height=cell_height,
+            fallback_cells=columns,
+        ),
+    )
+
+
+def _table_section_text_limits(
+    cells: list[dict[str, Any]],
+    *,
+    cell_width: float,
+    cell_height: float,
+    fallback_cells: list[dict[str, Any]] | None = None,
+) -> tuple[int, int]:
+    glyph_width, line_height = _table_cell_typography(cells or fallback_cells or [])
+    characters_per_line = max(1, math.floor(cell_width / glyph_width))
+    line_count = max(1, math.floor(cell_height / line_height + 0.15))
+    estimated_maximum = max(
+        1,
+        math.floor(
+            characters_per_line * line_count * TABLE_TEXT_CAPACITY_SAFETY_FACTOR
+        ),
+    )
+    texts = [_table_cell_text(cell) for cell in cells]
+    observed_maximum = max((len(text) for text in texts), default=0)
+    minimum = 1 if texts and all(text.strip() for text in texts) else 0
+    return minimum, max(estimated_maximum, observed_maximum)
+
+
+def _table_cell_typography(cells: list[dict[str, Any]]) -> tuple[float, float]:
+    fonts: list[dict[str, Any]] = []
+    for cell in cells:
+        cell_font = cell.get("font")
+        if isinstance(cell_font, dict):
+            fonts.append(cell_font)
+        for run in cell.get("runs", []):
+            if not isinstance(run, dict):
+                continue
+            run_font = run.get("font")
+            if isinstance(run_font, dict):
+                fonts.append(run_font)
+
+    if not fonts:
+        fonts = [{}]
+
+    glyph_widths: list[float] = []
+    line_heights: list[float] = []
+    for font in fonts:
+        font_size = _positive_number(font.get("size")) or TABLE_DEFAULT_FONT_SIZE
+        width_factor = 0.62 if font.get("bold") is True else 0.58
+        letter_spacing = _nonnegative_number(font.get("letter_spacing")) or 0.0
+        glyph_widths.append(font_size * width_factor + letter_spacing)
+
+        raw_line_height = _positive_number(font.get("line_height"))
+        if raw_line_height is None:
+            line_heights.append(font_size * 1.2)
+        elif raw_line_height > 2:
+            line_heights.append(raw_line_height)
+        else:
+            line_heights.append(font_size * raw_line_height)
+
+    return max(glyph_widths), max(line_heights)
+
+
+def _table_cell_text(cell: dict[str, Any]) -> str:
+    return "".join(
+        str(run.get("text") or run.get("latex") or "")
+        for run in cell.get("runs", [])
+        if isinstance(run, dict)
+    )
+
+
+def _positive_number(value: Any) -> float | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+        return float(value)
+    return None
+
+
+def _nonnegative_number(value: Any) -> float | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+        return float(value)
+    return None
 
 
 def extract_slide_schema_from_layout(layout: RawSlideLayout) -> dict[str, Any]:
@@ -260,6 +391,7 @@ def _content_schema_for_element(element: dict[str, Any]) -> dict[str, Any]:
         )
 
     if element_type == "table":
+        _, body_limits = _table_text_limits(element)
         return _compact(
             {
                 "type": "array",
@@ -270,14 +402,20 @@ def _content_schema_for_element(element: dict[str, Any]) -> dict[str, Any]:
                         "type": "array",
                         "minItems": element.get("min_columns"),
                         "maxItems": element.get("max_columns"),
-                        "items": {"type": "string"},
+                        "items": _compact(
+                            {
+                                "type": "string",
+                                "minLength": body_limits[0],
+                                "maxLength": body_limits[1],
+                            }
+                        ),
                     }
                 ),
             }
         )
 
     if element_type == "chart":
-        return _chart_content_schema()
+        return _chart_content_schema(element)
 
     if element_type == "infographic":
         return _infographic_content_schema(element)
@@ -1095,13 +1233,18 @@ def _component_content_field_schema(field: dict[str, Any]) -> dict[str, Any]:
             "maxItems": element.get("max_items"),
         }
     elif element_type == "table":
+        header_limits, body_limits = _table_text_limits(element)
         schema = {
             "type": "object",
             "additionalProperties": False,
             "properties": {
                 "columns": {
                     "type": "array",
-                    "items": {"type": "string"},
+                    "items": {
+                        "type": "string",
+                        "minLength": header_limits[0],
+                        "maxLength": header_limits[1],
+                    },
                     "minItems": element.get("min_columns"),
                     "maxItems": element.get("max_columns"),
                 },
@@ -1109,7 +1252,11 @@ def _component_content_field_schema(field: dict[str, Any]) -> dict[str, Any]:
                     "type": "array",
                     "items": {
                         "type": "array",
-                        "items": {"type": "string"},
+                        "items": {
+                            "type": "string",
+                            "minLength": body_limits[0],
+                            "maxLength": body_limits[1],
+                        },
                         "minItems": element.get("min_columns"),
                         "maxItems": element.get("max_columns"),
                     },
@@ -1120,7 +1267,7 @@ def _component_content_field_schema(field: dict[str, Any]) -> dict[str, Any]:
             "required": ["columns", "rows"],
         }
     elif element_type == "chart":
-        schema = _chart_content_schema()
+        schema = _chart_content_schema(element)
     elif element_type == "infographic":
         schema = _infographic_content_schema(element)
     else:
@@ -1338,16 +1485,20 @@ def _without_none_values(value: Any) -> Any:
     return value
 
 
-def _chart_content_schema() -> dict[str, Any]:
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "chart_type": {
-                "type": "string",
-                "enum": CHART_TYPE_VALUES,
-            },
-            "title": {"type": ["string", "null"]},
+def _chart_content_schema(element: dict[str, Any]) -> dict[str, Any]:
+    properties: dict[str, Any] = {
+        "chart_type": {
+            "type": "string",
+            "enum": CHART_TYPE_VALUES,
+        }
+    }
+
+    title = element.get("title")
+    if isinstance(title, str) and title.strip():
+        properties["title"] = {"type": "string"}
+
+    properties.update(
+        {
             "categories": {
                 "type": "array",
                 "items": {"type": "string"},
@@ -1370,8 +1521,14 @@ def _chart_content_schema() -> dict[str, Any]:
                 },
                 "maxItems": 12,
             },
-        },
-        "required": ["chart_type", "categories", "series"],
+        }
+    )
+
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": properties,
+        "required": list(properties),
     }
 
 

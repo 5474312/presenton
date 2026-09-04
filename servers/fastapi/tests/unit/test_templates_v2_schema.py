@@ -139,7 +139,6 @@ def test_extract_slide_schema_from_layout_extracts_editable_content():
                                     "stacked_bar",
                                 ],
                             },
-                            "title": {"type": ["string", "null"]},
                             "categories": {
                                 "type": "array",
                                 "items": {"type": "string"},
@@ -386,7 +385,6 @@ def test_get_component_schema_extracts_generated_component_content():
                             "stacked_bar",
                         ],
                     },
-                    "title": {"type": ["string", "null"]},
                     "categories": {
                         "type": "array",
                         "items": {"type": "string"},
@@ -487,6 +485,73 @@ def test_get_component_schema_preserves_vertical_funnel_type_and_item_limits():
     assert data_schema["properties"]["type"] == {"const": "vertical_funnel"}
     assert data_schema["properties"]["items"]["minItems"] == 1
     assert data_schema["properties"]["items"]["maxItems"] == 8
+
+
+def test_component_table_schema_derives_header_and_body_text_limits():
+    def cell(text: str, *, size: int = 14) -> dict:
+        font = {"size": size, "color": "#111111"}
+        return {"font": font, "runs": [{"text": text, "font": font}]}
+
+    component = {
+        "id": "comparison",
+        "elements": [
+            {
+                "type": "table",
+                "decorative": False,
+                "name": "metrics",
+                "min_columns": 2,
+                "max_columns": 3,
+                "min_rows": 1,
+                "max_rows": 4,
+                "size": {"width": 600, "height": 300},
+                "columns": [cell("Metric"), cell("Value")],
+                "rows": [[cell("Activation"), cell("71%")]],
+            }
+        ],
+    }
+
+    schema = get_component_schema(component)
+    table_schema = schema["properties"]["metrics"]
+    header_schema = table_schema["properties"]["columns"]["items"]
+    body_schema = table_schema["properties"]["rows"]["items"]["items"]
+
+    assert header_schema["minLength"] == body_schema["minLength"] == 1
+    assert header_schema["maxLength"] >= len("Metric")
+    assert body_schema["maxLength"] >= len("Activation")
+
+
+def test_chart_content_schema_tracks_layout_title_presence():
+    without_title = get_component_schema(
+        {
+            "id": "chart_component",
+            "elements": [
+                {
+                    "type": "chart",
+                    "title": None,
+                    "decorative": False,
+                    "name": "proportion_chart",
+                }
+            ],
+        }
+    )["properties"]["proportion_chart"]
+    assert "title" not in without_title["properties"]
+    assert without_title["required"] == list(without_title["properties"])
+
+    with_title = get_component_schema(
+        {
+            "id": "chart_component",
+            "elements": [
+                {
+                    "type": "chart",
+                    "title": "Revenue by quarter",
+                    "decorative": False,
+                    "name": "revenue_chart",
+                }
+            ],
+        }
+    )["properties"]["revenue_chart"]
+    assert with_title["properties"]["title"] == {"type": "string"}
+    assert with_title["required"] == list(with_title["properties"])
 
 
 def test_get_component_schema_collapses_repeated_component_children_to_array():

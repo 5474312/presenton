@@ -41,6 +41,11 @@ export type SchemaField = {
   maxItems?: number;
 };
 
+type DensityLengthField = Pick<
+  SchemaField,
+  "label" | "minChars" | "maxChars"
+>;
+
 const CONTENT_ELEMENT_TYPES = new Set([
   "text",
   "image",
@@ -150,6 +155,8 @@ function applyDensityToElement(
     setElementRunsText(element, exactDensityText(name, targetLength, density));
   } else if (isEditableContent && type === "text-list") {
     applyTextListDensity(element, name, density);
+  } else if (isEditableContent && type === "table") {
+    Object.assign(element, applyTableDensity(element, density));
   }
 
   resizeRepeatedChildren(element, density);
@@ -209,6 +216,69 @@ function densityTargetCount(
   return clampCount(minCount + (maxCount - minCount) / 2);
 }
 
+function densityTargetLength(
+  field: DensityLengthField,
+  density: Exclude<Density, "">,
+  currentLength: number,
+) {
+  const clampPreviewLength = (length: number) =>
+    Math.min(2_000, Math.max(1, Math.round(length)));
+  const contentLength = Math.max(1, currentLength || field.label.length);
+  const hasMin = typeof field.minChars === "number";
+  const hasMax = typeof field.maxChars === "number";
+
+  if (!hasMin && !hasMax) {
+    if (density === "Low") {
+      return clampPreviewLength(Math.max(12, contentLength * 0.55));
+    }
+    if (density === "Medium") {
+      return clampPreviewLength(Math.max(24, contentLength * 1.2));
+    }
+    return clampPreviewLength(Math.max(48, contentLength * 1.8));
+  }
+
+  const minLength = Math.max(
+    1,
+    field.minChars ??
+      Math.min(field.maxChars ?? contentLength, Math.max(12, contentLength)),
+  );
+  const maxLength = Math.max(
+    minLength,
+    field.maxChars ??
+      Math.max(minLength * 2, Math.round(contentLength * 1.6)),
+  );
+
+  if (density === "Low") return clampPreviewLength(minLength);
+  if (density === "High") return clampPreviewLength(maxLength);
+  return clampPreviewLength(minLength + (maxLength - minLength) / 2);
+}
+
+function textAtTargetLength(
+  value: string,
+  label: string,
+  targetLength: number,
+) {
+  const normalizedValue = value.replace(/\s+/g, " ").trim();
+  const fallback = `${label} provides a clear supporting point.`;
+  const source = normalizedValue || fallback;
+  const supportingDetail =
+    "This supporting detail adds useful context and helps explain the key message clearly.";
+  let expanded = source;
+
+  while (expanded.length < targetLength) {
+    expanded = `${expanded} ${supportingDetail}`;
+  }
+
+  if (expanded.length <= targetLength) return expanded;
+
+  const clipped = expanded.slice(0, targetLength).trimEnd();
+  const finalSpace = clipped.lastIndexOf(" ");
+  if (finalSpace >= Math.floor(targetLength * 0.72)) {
+    return clipped.slice(0, finalSpace).trimEnd();
+  }
+  return clipped;
+}
+
 function comparableContentSchema(element: UnknownRecord): UnknownRecord {
   const type = readString(element.type);
 
@@ -241,12 +311,17 @@ function comparableContentSchema(element: UnknownRecord): UnknownRecord {
   }
 
   if (type === "table") {
+    const limits = tableTextLimits(element);
     return {
       type: "table",
       minRows: readNumber(element.min_rows),
       maxRows: readNumber(element.max_rows),
       minColumns: readNumber(element.min_columns),
       maxColumns: readNumber(element.max_columns),
+      headerMinimum: limits.header.minimum,
+      headerMaximum: limits.header.maximum,
+      bodyMinimum: limits.body.minimum,
+      bodyMaximum: limits.body.maximum,
     };
   }
 
@@ -527,8 +602,244 @@ function repeatedItemsAtDensity(
   });
 }
 
+function tableCellAtDensity(
+  value: unknown,
+  density: Exclude<Density, "">,
+  label: string,
+  minChars?: number,
+  maxChars?: number,
+) {
+  const cell = isRecord(value) ? cloneLayout(value) : { runs: [] };
+  const currentText = textRunsToString(cell.runs);
+  const targetLength = densityTargetLength(
+    { label, minChars, maxChars },
+    density,
+    currentText.length,
+  );
+  updateTextRuns(
+    cell,
+    textAtTargetLength(currentText, label, targetLength),
+  );
+  return cell;
+}
+
+function tableCellsAtDensity(
+  values: unknown[],
+  targetCount: number,
+  fallbackValues: unknown[],
+) {
+  if (targetCount === 0) return [];
+  const source =
+    values.length > 0
+      ? values
+      : fallbackValues.length > 0
+        ? [fallbackValues[0]]
+        : [{ runs: [{ text: "" }] }];
+  return repeatedItemsAtDensity(source, targetCount, false);
+}
+
+type TableTextLimit = { minimum?: number; maximum?: number };
+
+function tableTextLimits(value: UnknownRecord): {
+  header: TableTextLimit;
+  body: TableTextLimit;
+} {
+  const size = isRecord(value.size) ? value.size : {};
+  const width = readNumber(size.width);
+  const height = readNumber(size.height);
+  if (!width || width <= 0 || !height || height <= 0) {
+    return { header: {}, body: {} };
+  }
+
+  const columns = readArray(value.columns).filter(isRecord);
+  const rows = readArray(value.rows).map(readArray);
+  const bodyCells = rows.flat().filter(isRecord);
+  const columnCount = Math.max(
+    1,
+    Math.round((readNumber(value.max_columns) ?? columns.length) || 1),
+  );
+  const rowCount = Math.max(
+    0,
+    Math.round(readNumber(value.max_rows) ?? rows.length),
+  );
+  const cellWidth = Math.max(1, width / columnCount - 24);
+  const cellHeight = Math.max(1, height / (rowCount + 1) - 12);
+
+  return {
+    header: tableSectionTextLimit(columns, cellWidth, cellHeight),
+    body: tableSectionTextLimit(
+      bodyCells,
+      cellWidth,
+      cellHeight,
+      columns,
+    ),
+  };
+}
+
+function tableSectionTextLimit(
+  cells: UnknownRecord[],
+  cellWidth: number,
+  cellHeight: number,
+  fallbackCells: UnknownRecord[] = [],
+): TableTextLimit {
+  const { glyphWidth, lineHeight } = tableCellTypography(
+    cells.length > 0 ? cells : fallbackCells,
+  );
+  const charactersPerLine = Math.max(1, Math.floor(cellWidth / glyphWidth));
+  const lineCount = Math.max(1, Math.floor(cellHeight / lineHeight + 0.15));
+  const estimatedMaximum = Math.max(
+    1,
+    Math.floor(charactersPerLine * lineCount * 0.85),
+  );
+  const texts = cells.map((cell) => textRunsToString(cell.runs));
+  const observedMaximum = texts.reduce(
+    (maximum, text) => Math.max(maximum, text.length),
+    0,
+  );
+  return {
+    minimum: texts.length > 0 && texts.every((text) => text.trim()) ? 1 : 0,
+    maximum: Math.max(estimatedMaximum, observedMaximum),
+  };
+}
+
+function tableCellTypography(cells: UnknownRecord[]) {
+  const fonts: UnknownRecord[] = [];
+  cells.forEach((cell) => {
+    if (isRecord(cell.font)) fonts.push(cell.font);
+    readArray(cell.runs).filter(isRecord).forEach((run) => {
+      if (isRecord(run.font)) fonts.push(run.font);
+    });
+  });
+  if (fonts.length === 0) fonts.push({});
+
+  const glyphWidths = fonts.map((font) => {
+    const fontSize = readNumber(font.size) ?? 14;
+    const widthFactor = font.bold === true ? 0.62 : 0.58;
+    return fontSize * widthFactor + Math.max(0, readNumber(font.letter_spacing) ?? 0);
+  });
+  const lineHeights = fonts.map((font) => {
+    const fontSize = readNumber(font.size) ?? 14;
+    const lineHeight = readNumber(font.line_height);
+    if (!lineHeight || lineHeight <= 0) return fontSize * 1.2;
+    return lineHeight > 2 ? lineHeight : fontSize * lineHeight;
+  });
+  return {
+    glyphWidth: Math.max(...glyphWidths),
+    lineHeight: Math.max(...lineHeights),
+  };
+}
+
+function applyTableDensity(
+  value: UnknownRecord,
+  density: Exclude<Density, "">,
+) {
+  const next = cloneLayout(value);
+  if (next.decorative !== false) return next;
+
+  const sourceColumns = readArray(next.columns);
+  const sourceRows = readArray(next.rows);
+  const targetColumnCount = Math.max(
+    1,
+    densityTargetCount(
+      density,
+      sourceColumns.length,
+      readNumber(next.min_columns),
+      readNumber(next.max_columns),
+    ),
+  );
+  const targetRowCount = densityTargetCount(
+    density,
+    sourceRows.length,
+    readNumber(next.min_rows),
+    readNumber(next.max_rows),
+  );
+  const limits = tableTextLimits(next);
+  const hasHeaderLengthLimits =
+    limits.header.minimum !== undefined || limits.header.maximum !== undefined;
+  const hasCellLengthLimits =
+    limits.body.minimum !== undefined || limits.body.maximum !== undefined;
+
+  const columns = tableCellsAtDensity(
+    sourceColumns,
+    targetColumnCount,
+    [],
+  ).map((cell, columnIndex) =>
+    hasHeaderLengthLimits
+      ? tableCellAtDensity(
+          cell,
+          density,
+          `Column ${columnIndex + 1}`,
+          limits.header.minimum,
+          limits.header.maximum,
+        )
+      : cloneLayout(cell),
+  );
+  next.columns = columns;
+
+  const fallbackRow = columns.map((column) => {
+    const cell = cloneLayout(column);
+    if (isRecord(cell)) updateTextRuns(cell, "");
+    return cell;
+  });
+  const rowSource = sourceRows.length > 0 ? sourceRows : [fallbackRow];
+  next.rows = repeatedItemsAtDensity(rowSource, targetRowCount, false).map(
+    (row, rowIndex) =>
+      tableCellsAtDensity(readArray(row), targetColumnCount, fallbackRow).map(
+        (cell, columnIndex) =>
+          hasCellLengthLimits
+            ? tableCellAtDensity(
+                cell,
+                density,
+                `Cell ${rowIndex + 1}-${columnIndex + 1}`,
+                limits.body.minimum,
+                limits.body.maximum,
+              )
+            : cloneLayout(cell),
+      ),
+  );
+  return next;
+}
+
+function tableDensityCanChange(value: UnknownRecord) {
+  if (readString(value.type) !== "table" || value.decorative !== false) {
+    return false;
+  }
+
+  const currentColumns = readArray(value.columns).length;
+  const currentRows = readArray(value.rows).length;
+  const columnMinimum = readNumber(value.min_columns);
+  const columnMaximum = readNumber(value.max_columns);
+  const rowMinimum = readNumber(value.min_rows);
+  const rowMaximum = readNumber(value.max_rows);
+  if (
+    densityTargetCount(
+      "Low",
+      currentColumns,
+      columnMinimum,
+      columnMaximum,
+    ) !==
+      densityTargetCount(
+        "High",
+        currentColumns,
+        columnMinimum,
+        columnMaximum,
+      ) ||
+    densityTargetCount("Low", currentRows, rowMinimum, rowMaximum) !==
+      densityTargetCount("High", currentRows, rowMinimum, rowMaximum)
+  ) {
+    return true;
+  }
+
+  const limits = tableTextLimits(value);
+  return (
+    limits.header.minimum !== limits.header.maximum ||
+    limits.body.minimum !== limits.body.maximum
+  );
+}
+
 function structuralArrayCanChange(value: unknown): boolean {
   if (!isRecord(value)) return false;
+  if (tableDensityCanChange(value)) return true;
   const type = readString(value.type);
   const children = readArray(value.children);
 
