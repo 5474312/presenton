@@ -220,6 +220,8 @@ class VisualInfographicReplacement(VisualReplacementGeometry):
     def _metric_fields_must_be_valid(self) -> "VisualInfographicReplacement":
         if self.data.type not in {"progress_bar", "gauge"}:
             return self
+        if self.text_color is not None:
+            raise ValueError("metric infographic text_color must be null")
         if not self.data.min_value <= self.data.value <= self.data.max_value:
             raise ValueError("metric value must fit its declared range")
         if len(self.colors) > 8:

@@ -1237,7 +1237,7 @@ def test_visual_data_pass_converts_group_to_infographic(kind):
                         "value": 64,
                     },
                     "colors": ["#E5E7EB", "#2563EB"],
-                    "text_color": "#111827" if kind == "gauge" else None,
+                    "text_color": None,
                 }
             ]
         }
@@ -1256,4 +1256,29 @@ def test_visual_data_pass_converts_group_to_infographic(kind):
     assert infographic.data.type == kind
     assert infographic.data.value == 64
     assert infographic.colors == ["#E5E7EB", "#2563EB"]
-    assert infographic.text_color == ("#111827" if kind == "gauge" else None)
+    assert infographic.text_color is None
+
+
+@pytest.mark.parametrize("kind", ["progress_bar", "gauge"])
+def test_visual_data_plan_rejects_text_color_for_metric_infographic(kind):
+    with pytest.raises(ValueError, match="text_color must be null"):
+        generation.VisualDataReplacementPlan.model_validate(
+            {
+                "replacements": [
+                    {
+                        "kind": "infographic",
+                        "path": "elements.0",
+                        "position": {"x": 200, "y": 220},
+                        "size": {"width": 360, "height": 140},
+                        "data": {
+                            "type": kind,
+                            "min_value": 0,
+                            "max_value": 100,
+                            "value": 64,
+                        },
+                        "colors": ["#E5E7EB", "#2563EB"],
+                        "text_color": "#111827",
+                    }
+                ]
+            }
+        )

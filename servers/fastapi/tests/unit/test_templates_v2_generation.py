@@ -666,6 +666,8 @@ def test_certified_generation_prompts_split_flexible_and_visual_decisions():
     assert "chart, infographic, table, or text list" in visual_prompt
     assert "Use kind=infographic for either a complete infographic image" in visual_prompt
     assert "data.type=progress_bar or data.type=gauge" in visual_prompt
+    assert "metric renderers draw no text" in visual_prompt
+    assert "center value-label color" not in visual_prompt
     assert "Atomicity is mandatory" in visual_prompt
     assert "exactly one typed replacement" in visual_prompt
     assert "Never emit table cells, rows, headers, borders" in visual_prompt

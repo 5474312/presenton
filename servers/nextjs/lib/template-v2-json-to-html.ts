@@ -1097,7 +1097,6 @@ function renderGaugeInfographic(item: JsonRecord, mode: RenderMode): string {
   const highlightColor = infographicHighlightColor(item);
   const baseColor = infographicBaseColor(item);
   const fallbackSize = { width: 160, height: 96 };
-  const textColor = infographicTextColor(item, "#111827");
   const progressPath =
     metrics.ratio > 0
       ? `<path d="${escapeAttribute(
@@ -1111,9 +1110,7 @@ function renderGaugeInfographic(item: JsonRecord, mode: RenderMode): string {
     item
   )}overflow:hidden"><svg width="100%" height="100%" viewBox="0 0 120 72" preserveAspectRatio="xMidYMid meet" style="display:block"><path d="M 12 60 A 48 48 0 0 1 108 60" fill="none" stroke="${escapeAttribute(
     escapeCssColor(baseColor)
-  )}" stroke-width="12" stroke-linecap="round"/>${progressPath}<text x="60" y="52" text-anchor="middle" fill="${escapeAttribute(textColor)}" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">${escapeHtml(
-    metrics.label
-  )}</text></svg></div>`;
+  )}" stroke-width="12" stroke-linecap="round"/>${progressPath}</svg></div>`;
 }
 
 function renderGanttInfographic(item: JsonRecord, mode: RenderMode): string {
