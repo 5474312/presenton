@@ -220,5 +220,8 @@ test("keeps progress and gauge exports on their native meter renderers", () => {
   assert.match(progress, /width:65%/);
   assert.doesNotMatch(progress, /data-presenton-infographic-surface/);
   assert.match(gauge, /<svg/);
+  assert.equal([...gauge.matchAll(/<path\b/g)].length, 2);
+  assert.doesNotMatch(gauge, /<text\b/);
+  assert.doesNotMatch(gauge, />75<\//);
   assert.doesNotMatch(gauge, /data-presenton-infographic-surface/);
 });
