@@ -639,12 +639,12 @@ def test_semantic_generation_prompt_uses_reference_only_metadata():
     assert "return semantic metadata for its existing source elements" in (
         GENERATE_SLIDE_LAYOUT_SYSTEM_PROMPT
     )
-    assert "Assign every source index exactly once" in GENERATE_SLIDE_LAYOUT_SYSTEM_PROMPT
+    assert "Assign every source index once" in GENERATE_SLIDE_LAYOUT_SYSTEM_PROMPT
     assert "decorative=true" in GENERATE_SLIDE_LAYOUT_SYSTEM_PROMPT
     assert "decorative=false" in GENERATE_SLIDE_LAYOUT_SYSTEM_PROMPT
     assert "fixed visual scaffolding" in GENERATE_SLIDE_LAYOUT_SYSTEM_PROMPT
     assert "connector and branching lines" in GENERATE_SLIDE_LAYOUT_SYSTEM_PROMPT
-    assert "Give every component a unique id" in GENERATE_SLIDE_LAYOUT_SYSTEM_PROMPT
+    assert "Component ids must be unique" in GENERATE_SLIDE_LAYOUT_SYSTEM_PROMPT
     assert "a ring around a replaceable topic icon is decorative" in (
         GENERATE_SLIDE_LAYOUT_SYSTEM_PROMPT
     )
@@ -657,21 +657,35 @@ def test_certified_generation_prompts_split_flexible_and_visual_decisions():
     visual_prompt = certified_generation.DETECT_VISUAL_DATA_REGIONS_SYSTEM_PROMPT
     capacity_prompt = certified_generation.GENERATE_TEXT_CAPACITY_SYSTEM_PROMPT
 
-    assert "repeatable dynamic regions" in flexible_prompt
+    assert "repeatable regions" in flexible_prompt
     assert "one source index per leaf" in flexible_prompt
-    assert "Every flow must contain at least two items" in flexible_prompt
-    assert "Collapse unary nesting" in flexible_prompt
-    assert "exactly the component's element_indices, once each" in flexible_prompt
-    assert "Always invalid" in flexible_prompt
+    assert "Every flow needs at least two items" in flexible_prompt
+    assert "Collapse one-child helper flows" in flexible_prompt
+    assert "cover component element_indices exactly once" in flexible_prompt
+    assert "Treat group as a fallback only after" in flexible_prompt
+    assert "Never use group merely because items are semantically related" in flexible_prompt
+    assert "If homogeneous direct items share one row or column rule" in flexible_prompt
+    assert "wrapper mode collectively across all sibling items" in flexible_prompt
+    assert "child subflows swap order, mirror sides, or use different offsets" in (
+        flexible_prompt
+    )
+    assert "copy column beside a card or visual cluster" in flexible_prompt
+    assert "complete item group preserve the fixed relation" in flexible_prompt
+    assert "an aligned subsection" in flexible_prompt
+    assert "vertically aligned title and description in a column flow" in flexible_prompt
+    assert "use group only when none fits" in flexible_prompt
     assert "chart, infographic, table, or text list" in visual_prompt
     assert "Use kind=infographic for either a complete infographic image" in visual_prompt
     assert "data.type=progress_bar or data.type=gauge" in visual_prompt
     assert "metric renderers draw no text" in visual_prompt
     assert "center value-label color" not in visual_prompt
     assert "Atomicity is mandatory" in visual_prompt
-    assert "exactly one typed replacement" in visual_prompt
+    assert "one table or chart becomes exactly one typed replacement" in visual_prompt
     assert "Never emit table cells, rows, headers, borders" in visual_prompt
     assert "Never emit or leave any chart internal" in visual_prompt
+    assert "geometrically enclosed sibling elements" in visual_prompt
+    assert "preserve clear padding on all four sides" in visual_prompt
+    assert "derive each value from filled length" in visual_prompt
     assert "structured table as one atomic editable element" in (
         certified_generation.GENERATE_SLIDE_LAYOUT_SYSTEM_PROMPT
     )
@@ -679,7 +693,14 @@ def test_certified_generation_prompts_split_flexible_and_visual_decisions():
         certified_generation.GENERATE_SLIDE_LAYOUT_SYSTEM_PROMPT
     )
     assert "capacity growth" in capacity_prompt.lower()
-    assert "Never return a no-op adjustment" in capacity_prompt
+    assert "Omit a full no-op" in capacity_prompt
+    assert "left-aligned slide or section title" in capacity_prompt
+    assert "Items entirely below its span do not block" in capacity_prompt
+    assert "callout description should normally get positive bottom_lines" in (
+        capacity_prompt
+    )
+    assert "intersection of safe directions" in capacity_prompt
+    assert "smallest shared positive bottom_lines value" in capacity_prompt
     assert "previewSlide" not in flexible_prompt
 
 

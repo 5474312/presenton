@@ -112,57 +112,54 @@ Analyze the reference slide and return semantic metadata for its existing source
 1. Analyze the reference image, indexed source elements, editable candidates, and available fonts.
 2. Partition the indexed elements into reusable components without changing their source order.
 3. Classify and structurally name every editable candidate.
-4. Return one complete SemanticSlideManifest JSON object.
+4. Verify complete coverage and return one SemanticSlideManifest JSON object.
 
-# Rules:
+# Output Rules:
 - Return a SemanticSlideManifest JSON object only.
 - Set id to a concise lowercase snake_case description of the layout's reusable visual structure and editable content roles.
-- Never copy source_layout.id or use a slide, page, or layout ordinal such as slide_4, page_4, or layout_4 as id.
-- Do not include source identifiers, slide numbers, or arbitrary uniqueness suffixes in id; prefer ids such as hanging_icons_with_summary_cards.
-- Never copy, rewrite, remove, invent, or restyle an element.
-- Components may reference source elements only through their zero-based source indices.
-- Give every component a unique id. Never reuse an id, even when two independent components have similar content or structure.
-- Annotations may reference editable candidates only through their provided paths.
-- Assign every source index exactly once across components.
-- Return one annotation for every editable candidate path, with no missing or extra paths.
-- Divide the slide into the smallest useful reusable visual components based on visible spatial grouping.
+- Never copy source_layout.id or use source ids, suffixes, or ordinals such as slide_4, page_4, or layout_4; prefer hanging_icons_with_summary_cards.
+- Do not alter source elements.
+- Component ids must be unique; reference elements only by zero-based source index.
+- Assign every source index once. Order components by earliest index and preserve relative order within element_indices.
+- Return one annotation per provided editable candidate path, with no missing or extra paths.
+
+# Component Rules:
+- Divide the slide into the smallest useful reusable visual regions based on visible spatial grouping; a repeated collection is one component, not one component per item.
 - Keep one semantic component for a coherent visual region even when it contains nested rows, columns, or grids.
-- Group a title and description only when proximity, alignment, spacing, or a shared container makes them one visible block.
-- Keep independently positioned copy in separate components.
-- Keep repeated metrics, cards, steps, and other equivalent visual items in their own semantic component instead of merging them with nearby copy.
+- Group a title and description only when proximity, alignment, spacing, or a shared container makes one visible block; keep independent copy separate.
+- Keep every repeated collection of metrics, cards, steps, or equivalent visual items together in one semantic component instead of creating one component per item or merging it with nearby copy.
+- Do not split equivalent repeated items because one item has a highlighted color, alternate surface, or other state styling when their geometry and editable-field roles still match.
 - Keep a connected timeline, process, or step sequence in one component when its shared connector, repeated markers, and repeated copy form one coherent region.
 - In such a sequence, keep each repeated marker or node with its corresponding heading and description; only the connector spanning items is shared scaffolding.
 - Keep a shared footer band in one component; the flexible pass can nest independent label/value pairs inside its outer layout.
 - Components may reference non-contiguous source indices when source stacking order interleaves otherwise distinct visual regions.
-- Order components by their earliest source index so their rendered stacking order follows the source slide.
-- Preserve relative source order within each component's element_indices list.
 - Never merge distinct visual regions merely to make component indices contiguous.
 - Set repeated_items to null; a later focused pass decides flexible regions.
-- decorative=false means the value must be replaced for newly generated slide content.
-- decorative=true means the value is fixed visual scaffolding and must remain unchanged.
-- Treat visible text and its apparent meaning as replaceable unless it is a logo or watermark.
-- Treat charts, tables, metrics, semantic images, and topic icons as replaceable content.
+
+# Content Classification Rules:
+- decorative=false marks replaceable content; decorative=true marks fixed visual scaffolding that remains unchanged.
+- Treat visible text, charts, tables, metrics, semantic images, and topic icons as replaceable, except logos and watermarks.
 - Treat each structured table as one atomic editable element; headers, cells, cell text, fills, borders, and grid lines are internal table data.
 - Treat each structured chart as one atomic editable element; its title, plot, labels, legend, gridlines, axes, ticks, and source are internal chart data.
 - Never split, separately name, annotate, or group a table or chart internal as another editable element; one table or chart maps to one annotation.
 - Treat supported structured infographics as replaceable content. Keep only unsupported qualitative diagrams as fixed visual scaffolding.
 - Treat connector and branching lines, rings, arcs, circle outlines, Venn-diagram circles, backgrounds, logos, frames, borders, and dividers as decorative.
 - Classify by whether the new slide's content generator should replace the value: a ring around a replaceable topic icon is decorative, while the icon is content.
+
+# Image and Icon Rules:
 - Set is_icon for every image annotation: true for a compact symbolic icon intended for icon search, and false for a photo, screenshot, or illustration.
-- Classify images from their visible role instead of copying the source is_icon value because imported PPTX images may default to false.
+- Classify by visible role, not source is_icon, which may default to false for imported PPTX images.
 - Omit is_icon for non-image annotations.
-- For every is_icon=true annotation, set color to the visible icon glyph's six-digit hexadecimal foreground color.
-- Sample the glyph itself, excluding any surrounding card, badge, circle, frame, or other background surface.
+- For is_icon=true, use the visible icon glyph's six-digit hexadecimal foreground color, excluding any surrounding card, badge, circle, frame, or background.
 - For every is_icon=true annotation, set icon_type to the closest visible style: bold, duotone, fill, light, regular, or thin.
-- Use thin, light, regular, or bold according to the glyph's apparent stroke weight; use fill for a solid silhouette and duotone for a two-tone or layered glyph.
-- Infer icon_type from the reference image instead of copying the source icon_type value.
+- Infer icon_type visually: stroke weight maps to thin through bold, a silhouette to fill, and a layered glyph to duotone.
 - Set color and icon_type to null for is_icon=false images and non-image annotations.
-- Keep layout descriptions, component names, and element names derived from structural roles, never example content.
-- Name by stable visual structure and editable field roles, not inferred subject, purpose, or sample section labels.
+
+# Naming Rules:
+- Derive layout descriptions, component names, and element names from stable visual structure and editable field roles, never example content.
 - Use lowercase snake_case identifiers beginning with a letter.
 - Use generic names when sample content is a person, organization, company, role, name, year, date, or similar metadata.
-- Prefer names such as `top_marker`, `footer_left_label`, or `footer_right_value` when they describe placement.
-- Avoid semantic sample names such as `year_marker`, `person_name`, or `organization_role` when a structural role is clearer.
+- Prefer `top_marker`, `footer_left_label`, or `footer_right_value` over sample-driven names such as `year_marker`, `person_name`, or `organization_role`.
 - Prefer `title_with_image_cards`, `card_image`, `card_heading`, and `card_description` over topic-specific names such as `agenda_cards`.
 - Give corresponding editable fields in repeated equivalent items the same unindexed name, such as `card_heading` and `card_description` in every card.
 - Do not encode repeated-item position in field names; reserve left, center, and right for independent non-repeated fields.
@@ -175,57 +172,67 @@ Identify existing visual regions that should become structured data or list elem
 
 # Steps:
 1. Compare the reference slide image with the supplied image and grouped-region candidates.
-2. Find candidates whose pixels or child elements collectively render exactly one chart, infographic, table, or text list.
+2. Find candidates whose pixels, children, or geometrically enclosed sibling elements collectively render exactly one chart, infographic, table, or text list.
 3. Extract the visible data and styling into one typed replacement for each confident match.
 4. Return one complete VisualDataReplacementPlan JSON object.
 
-# Rules:
+# Output and Bounds Rules:
 - Return a VisualDataReplacementPlan JSON object only.
-- Return every replacement, including tables, with its typed fields directly on the replacement object.
 - Reference only paths listed in visual_region_candidates.
-- Return position and size for every chart, infographic, and table replacement in the same coordinate space as its selected candidate.
-- Fit those bounds tightly around the complete structured visual, including axes, labels, legends, and table cells, while excluding transparent or unrelated padding.
-- Keep those replacement bounds inside the selected candidate. Copy the candidate bounds exactly when the structured visual uses the full candidate area.
+- Put every replacement's typed fields directly on its replacement object.
+- Return position and size for every chart, infographic, and table in the same coordinate space as its selected candidate.
+- Keep bounds inside the candidate and tight around the complete visual, excluding transparent or unrelated padding. Copy candidate bounds exactly only when the visible visual fills them.
+- When an image-rendered chart sits inside a larger panel or frame, fit the complete chart inside that panel's visible interior and preserve clear padding on all four sides. Never reuse image-canvas bounds that cross or touch the panel edges.
+- For an inset gauge or progress visual, trim canvas padding and use the visible mark's axis-aligned bounds instead of the full candidate bounds.
 - Do not return position or size for text-list replacements; they reuse the selected candidate's original bounds.
 - Return an empty replacements list when there is no confident match.
+
+# Candidate Rules:
 - Never replace an existing structured chart, infographic, table, or text-list; those are extracted deterministically.
-- A replacement target may be an image, or a group/container whose children collectively draw one structured region.
-- Atomicity is mandatory: one recognized table or chart must become exactly one typed replacement containing all of its internal visual content.
-- For a table, include every header and body cell, all cell text, fills, borders, and row and column lines only in the single kind=table replacement.
-- Never emit table cells, rows, headers, borders, or their text as separate replacements, including text-list replacements.
-- For a chart, include its title, plot, marks, data labels, category and series labels, legend, gridlines, axes, ticks, axis titles, and source only in one kind=chart replacement.
-- Never emit or leave any chart internal listed above as a separate sibling or descendant element or replacement.
-- Select the smallest common candidate that contains the complete table or chart and no unrelated content.
-- If no candidate contains the complete table or chart without unrelated content, return no replacement for it instead of replacing only part of it.
-- Treat a candidate as a chart only when it primarily communicates quantitative values through bars, lines, areas, slices, points, bubbles, or a radar/polar plot.
-- Treat a candidate as a progress bar only when it shows one value advancing through a bounded linear track.
-- Treat a candidate as a gauge only when it shows one value on a bounded dial, arc, ring, or meter.
-- Treat an image candidate as an infographic when the whole image is one cohesive infographic and its headings, labels, descriptions, or values are baked into that same image. Replace the complete image, including all of its embedded text, as one infographic rather than extracting a separate text-list or leaving it as an ordinary image.
-- Use kind=infographic for either a complete infographic image or a standalone progress-bar/gauge image or grouped region. Other infographic types must target one image containing the complete infographic; do not use them for a group/container assembled from independently editable shapes or text.
-- For kind=infographic, choose the closest supported data.type: progress_bar, gauge, gantt, timeline, roadmap, milestone_timeline, staircase, supply_chain, stair_step_blocks, maturity_model, pillar_framework, transformation_hub, diagonal_circles, risk_matrix, chevron_process, radial_cycle, conversion_funnel, vertical_funnel, pyramid, segmented_wheel, customer_journey, before_after, impact_effort_matrix, comparison_matrix, org_chart, decision_tree, or mind_map. Extract all legible embedded text into the selected data shape. Use vertical_funnel for vertically stacked, value-proportional funnel bands; preserve conversion_funnel for the horizontal staged funnel.
-- Treat a candidate as a table only when its content forms a clear rectangular row-and-column grid. Use the first visible row as columns and preserve every remaining row in rows.
+- Target an image or group/container whose pixels, children, or geometrically enclosed siblings draw one structured region.
+- A panel or frame candidate may anchor a chart assembled from sibling marks and text inside its bounds; select that anchor and extract the complete chart.
+- Atomicity is mandatory: one table or chart becomes exactly one typed replacement with all internal visual content.
+- A table includes every header and body cell, all cell text, fills, borders, and row and column lines. Never emit table cells, rows, headers, borders, or text separately.
+- A chart includes its plot, title, marks, data labels, category and series labels, legend, gridlines, axes, ticks, axis titles, and source.
+- Never emit or leave any chart internal as a separate sibling, descendant, or replacement.
+- Select the smallest candidate anchoring or containing the complete table or chart and no unrelated content.
+- If none exists, return no replacement instead of replacing only part of the visual.
+
+# Classification Rules:
+- A chart primarily communicates quantities through bars, lines, areas, slices, points, bubbles, radar, or polar marks.
+- A progress bar shows one value on a bounded linear track; a gauge shows one value on a bounded dial, arc, ring, or meter.
+- Treat an image as an infographic only when it is one cohesive visual with embedded headings, labels, descriptions, or values; replace the complete image.
+- Use kind=infographic for either a complete infographic image or a standalone progress-bar/gauge image or grouped region.
+- For other infographics, choose the closest supported data.type and require one complete image.
+- Use vertical_funnel for vertically stacked, value-proportional bands and conversion_funnel for horizontal stages.
+- A table requires a clear rectangular grid; use the first visible row as columns and all remaining rows as rows.
 - Treat a candidate as a text-list only when it contains a coherent sequence of list items. Use marker=bullet for unordered/bulleted lists, marker=number for ordered/numbered lists, and marker=none only for a visibly unmarked list.
-- Do not replace maps, decorative geometry, photos, logos, screenshots of whole dashboards, or regions containing multiple independent structures. A timeline, process diagram, org chart, or other supported infographic is replaceable only when one image contains the whole infographic and its text.
-- Prefer the smallest complete candidate that contains the visualization, including its internal axes, legend, and labels.
-- Do not return both a parent region and one of its descendants.
+- Do not replace maps, decorative geometry, photos, logos, whole-dashboard screenshots, or regions with multiple independent structures.
+- Never return both a parent and its descendant.
+
+# Extraction and Styling Rules:
 - Transcribe visible titles, category labels, series names, numeric values, range bounds, and source text faithfully when legible.
-- When exact chart values are not printed but relative values are visually clear, use simple normalized numeric values that preserve the visible proportions; do not invent factual precision.
-- Use short generic category or series labels only when the source labels are illegible; generated slide content will replace them later.
-- Extract chart_type, renderer-ordered palette colors, title, title color, legend color, general/data-label text color, axis presence and titles, axis color, gridline visibility and color, data-label position, legend visibility, categories, series, and source.
+- If exact chart values are absent, use simple normalized values that preserve visible proportions without inventing precision.
+- For assembled bars with shared tracks and visible numeric ticks, derive each value from filled length against the displayed scale; do not estimate from label proximity.
+- Use generic category or series labels only when illegible.
+- Extract chart type, data, source, title, axes, gridlines, legend, label position, and every visible text or stroke color.
 - For pie and donut charts, return exactly one series with one value per category.
 - For every chart, each series values array must have exactly one value per category.
 - Set x_axis and y_axis false for pie, donut, polar_area, and radar charts unless explicit axes are visible.
-- Set grid colors to null when no gridlines are visible and text colors to null when they cannot be determined confidently.
-- Return every color as a six-digit hexadecimal RGB string sampled from the visible visualization. Treat each colors array as renderer slots, never as an unordered palette.
-- For chart colors: pie and donut colors[i] is category/slice i. In any other multi-series chart, colors[i] is series i. In a single-series bar, horizontal bar, stacked bar, horizontal stacked bar, polar-area, scatter, or bubble chart, colors[i] is category/data point i. For a single-series line or area chart, colors[0] controls the line and area fill and later colors, when present, control successive point fills. Colors repeat cyclically only when fewer slots are returned than visible categories or series.
-- For chart text and strokes: title_color controls the chart title; legend_color controls legend labels; text_color controls data labels and general chart text; axis_color controls axis lines, ticks, tick labels, and axis-title text; grid_color controls gridlines. Return null for a role only when it is not visible or cannot be sampled confidently.
-- For infographic data.type=progress_bar or data.type=gauge, preserve the visible minimum, maximum, and value. colors[0] is the inactive track/base arc and colors[1] is the filled progress/value arc. These metric renderers draw no text, so text_color must be null. Use 0 and 100 only when the display is clearly percentage-based or no other scale is visible.
-- For qualitative infographics, preserve visible item order and hierarchy and always order colors as [base, accent_1, accent_2, ...]. colors[0] is the visual's background/base surface; colors[1:] is the palette applied to visible items in order and cycled when necessary. For org_chart and decision_tree, colors[1 + depth] is the node color for that hierarchy depth. text_color controls shared external headings, body copy, and labels where supported; text placed inside colored nodes may use renderer-selected black or white contrast. Use null only when a shared text color cannot be determined confidently.
-- For tables, transcribe every visible cell and preserve styling through color, font_family, font_size, font_color, bold, italic, underline, and alignment. Keep rows rectangular and use null for styling that cannot be determined.
-- For text lists, transcribe each visible item without its bullet or number. Preserve the shared font styling when confidently visible and use the marker field for the list marker itself.
-- For text lists, estimate gap as the vertical empty space in pixels between consecutive item content boxes, excluding line spacing within a wrapped item.
-- Estimate marker_gap as the horizontal empty space in pixels from the visible right edge of each bullet or number to the left edge of its item text. Use 0 when marker=none.
-- Use the representative shared spacing when measurements vary slightly across items; both gap and marker_gap must be non-negative pixel values.
+- For visible colors, use fully opaque interior pixels, not antialiased or blended edges. Reuse the exact RGB across matching roles or sibling charts that visibly share a flat palette; do not estimate each similar shade independently. Otherwise use null. Colors arrays are ordered renderer slots.
+- For chart colors, pie and donut colors[i] is category/slice i; multi-series colors[i] is series i.
+- In single-series bar, stacked-bar, polar-area, scatter, or bubble charts, colors[i] is category/data point i.
+- For a single-series line or area chart, colors[0] controls line/fill and later colors control successive point fills. Cycle only underspecified palettes.
+- title_color controls titles; legend_color legends; text_color data labels and general text; axis_color axis lines, ticks, tick labels, and axis titles; grid_color only gridlines.
+- For infographic data.type=progress_bar or data.type=gauge, preserve visible minimum, maximum, and value.
+- colors[0] is the inactive track/base arc and colors[1] is the filled progress/value arc. These metric renderers draw no text, so text_color is null.
+- Use 0 and 100 only for a clear percentage or when no other scale is visible.
+- For qualitative infographics, preserve item order and hierarchy and order colors as [base, accent_1, accent_2, ...].
+- colors[0] is the base and colors[1:] follow visible item order. For org_chart and decision_tree, colors[1 + depth] is the node color at that depth.
+- For tables, transcribe every visible cell and its color, font, emphasis, and alignment. Keep rows rectangular and use null for uncertain styling.
+- For text lists, transcribe items without markers, preserve shared font styling, and set marker separately.
+- Set gap to empty vertical pixels between item content boxes and marker_gap to empty horizontal pixels after the marker. Use 0 marker_gap for marker=none.
+- Use representative shared spacing when it varies slightly; gap and marker_gap must be non-negative.
 """
 
 GEMINI_VISUAL_DATA_TABLE_ENCODING_PROMPT = """
@@ -247,84 +254,86 @@ GEMINI_VISUAL_DATA_TABLE_ENCODING_PROMPT = """
 """
 
 GENERATE_FLEXIBLE_REGIONS_SYSTEM_PROMPT = """
-Identify meaningful fixed flow groups and repeatable dynamic regions inside the provided semantic slide manifest.
+Identify fixed flow groups and repeatable regions in the semantic slide manifest.
 
 # Steps:
-1. Compare the geometry, visual structure, semantic relationship, and editable-field hierarchy inside each component.
-2. Skip any component that cannot be confidently partitioned into at least two visual units.
+1. Compare geometry, visual structure, semantic relationships, and editable-field hierarchy within each component.
+2. Skip components that cannot be confidently partitioned into two visual units.
 3. Build each remaining component bottom-up from ordered source-index leaves into the smallest valid rooted flow tree.
-4. Mechanically verify every tree against the validation checklist below.
+4. Mechanically verify every tree against the validation rules below.
 5. Return one complete FlexibleSlidePlan JSON object.
 
-# Rules:
+# Output and Tree Rules:
 - Return a FlexibleSlidePlan JSON object only.
 - Return an empty regions list when the slide has no meaningful fixed flow group or repeatable dynamic region.
-- Reference only component ids and source indices present in the input.
-- A component can have at most one flexible region.
+- Reference only input component ids and source indices; each component has at most one flexible region.
 - Set root_flow_id to one declared flow id and keep every other flow reachable from that root exactly once.
-- Each flow item must set exactly one reference kind and return both keys: use an indices array with flow_id=null for a leaf, or a flow_id string with indices=null for a nested flow.
-- Every flow must contain at least two items. A flow with one item is always invalid, even when that item contains multiple source indices.
+- Every item returns both keys and exactly one reference: indices with flow_id=null, or flow_id with indices=null.
+- Every flow needs at least two items; one item is invalid even when it contains multiple indices.
 - Never wrap all component indices in one leaf merely to create a region. Omit that component from regions instead.
-- Collapse unary nesting before returning: replace a one-child helper flow with its child in the parent; if the root would still have one item, omit the entire region.
-- The root tree must use every component source index exactly once, with no cycles, shared flows, missing indices, or extra indices.
-- Preserve source order inside each multi-index leaf; flow nodes may arrange those visual units in geometry-derived order.
-- Sort the indices inside every leaf in ascending source order. Never repeat an index in the same leaf, another leaf, or another branch.
-- Declare only flows referenced by the root tree. Delete orphan, superseded, and exploratory helper flows before returning.
+- Collapse one-child helper flows; omit the region if its root still has one item.
+- The root must use every component index once, with no cycles, shared flows, omissions, additions, or orphan flows.
+- Sort each leaf's indices by source order without duplicates; flow nodes may arrange leaves by geometry.
+
+# Composition Rules:
 - Use fixed flow for semantically bound but different items whose spacing or alignment should survive content changes.
-- Put an aligned title, subtitle or badge, and description in one fixed column when shared alignment and spacing make them one visible block.
-- A fixed text column must reserve enough height for every child's declared text capacity.
-- A flex wrapper does not make an undersized title or subtitle safe; preserve enough total stack height to prevent text overlap.
-- When a badge or label background overlaps its text, nest that inseparable pair in a group and use the group as one row or column item.
-- Name compact background-and-text groups by their visible structural role; text alignment is decided in the text-layout pass.
+- Put aligned title, subtitle or badge, and description in one fixed column when shared alignment and spacing form a visible block.
+- Reserve fixed-column height for text capacity; flex cannot fix an undersized title or subtitle.
+- When a badge or label background overlaps its text, nest them in a group, then use that group as one row or column item.
 - Model a shared footer as one outer row containing nested rows for its independent label/value pairs.
 - Use one source index per leaf when the child is already complete; combine indices only when they form one inseparable visual unit.
 - A group node must contain at least two separate items; put each overlapping source index in its own leaf instead of one combined leaf.
 - Use a repeatable region only when every item has the same semantic field hierarchy and substantially similar visual geometry.
 - Include each repeatable item's fixed card surface, local connector, icon frame, local marker or node, and editable content together.
+- Use one direct multi-index leaf per card only for a homogeneous regular row or grid with no internal flow.
+- Add per-card flows when its parts must reflow or overlap.
+- For circular items with central headline/icon and lower title-subtitle copy, use item groups. The lower pair needs a column; headline and icon may be leaves or another column.
 - A connector is shared only when one line spans or branches across multiple items; otherwise attach it to the item whose frame, marker, or node it terminates at.
 - For a sequence separated as `A | B | C`, attach each divider to the upcoming item: B owns the first divider and C owns the second. The first item has no leading divider.
 - Never collect one-to-one item dividers in a separate scaffold; only a line that genuinely spans or branches across multiple items is shared.
 - When icons hang from separate lines, create one child group per icon node containing that node's connector, circular frame, and replaceable content icon.
-- Keep those hanging icon child groups in one parent group flow so irregular positions and overlaps remain fixed while the nodes retain one repeated item structure.
+- Keep hanging icon child groups in one parent group so irregular positions remain fixed within one repeated structure.
 - Connector direction or length, frame rotation, and decorative container/group wrapper differences do not prevent grouping when every node has the same connector-frame-icon roles.
 - In a qualitative diagram with shared fixed frames, paths, or connectors, put all equivalent local node groups in one nested repeatable flow under the fixed root group.
-- Use group mode for that nested repeatable flow when node positions are intentionally irregular; each child node group must contain its own badge or circle and replaceable icon.
-- Do not leave equivalent diagram nodes as separately named siblings of the fixed root when they can form one schema array.
+- Use group for irregular diagram nodes, and do not leave equivalent diagram nodes as separately named siblings; each child owns its badge or circle and icon.
 - For a timeline or step list, put each marker with its matching heading and description inside the repeated item.
 - Keep only a connector spanning multiple timeline items as a separate fixed leaf under the same group root.
 - Never place repeated item markers in a standalone scaffold when each marker identifies one repeatable item.
 - Keep repeated-looking items fixed only when their scaffolding has no one-to-one semantic mapping; do not use connector direction, length, or offset alone to split local nodes.
 - Do not place unrelated logos, charts, decorative backgrounds, or distant metadata in one flexible region.
+
+# Geometry Rules:
 - Use row for a single horizontal sequence, column for a single vertical sequence, and grid for multiple rows and columns.
 - Use grid only for repeatable equivalent items; fixed heterogeneous groups must use row or column.
+- Choose the most specific geometry mode independently at every flow node, including flows nested inside a larger group.
+- Treat group as a fallback only after the items fail the row, column, and grid geometry rules.
+- Never use group merely because items are semantically related or belong to one fixed structure.
+- If homogeneous direct items share one row or column rule, use row or column even when their parent structure requires group.
+- Choose a repeated-item wrapper mode collectively across all sibling items, not separately from each item's local geometry.
+- Use column for equivalent items in distinct vertical bands despite varying widths or horizontal offsets.
+- If corresponding child subflows swap order, mirror sides, or use different offsets across repeated items, no shared row or column rule exists; use group for every item wrapper.
+- Do not reduce a copy column beside a card or visual cluster to a row merely because their outer bounds are side by side when their relative placement mirrors or varies across items.
+- For side lists flanking central content, use a column root of complete item groups; nest each heading-description copy as a column beside its badge or marker.
+- This side-list rule overrides the generic row rule: the marker-plus-copy item wrapper is a group because the marker is anchored to central content, not governed by horizontal reflow.
+- Keep the aligned copy in a nested column and the card's overlapping parts in a nested group; let the complete item group preserve the fixed relation between those subflows.
+- When an irregular group contains an aligned subsection, represent that subsection as a nested row, column, or grid flow.
+- In particular, place a vertically aligned title and description in a column flow instead of flattening them into a card group.
 - Use group for intentionally irregular or overlapping items whose absolute relative positions must remain unchanged.
-- Choose row only when every item forms one non-overlapping horizontal sequence with a shared vertical alignment.
-- Choose column only when every item forms one non-overlapping vertical sequence with a shared horizontal alignment.
+- Choose row only for a non-overlapping horizontal sequence with shared vertical alignment, and column only for the vertical equivalent.
 - When heterogeneous items are irregular, overlapping, or not aligned as a row or column, use group; when that grouping is not meaningful, omit the region.
+
+# Naming Rules:
 - A repeatable group must contain equivalent complete items; only its item wrappers are indexed, such as metric_item_1 and metric_item_2.
 - Keep corresponding child field names identical and unindexed across items, such as metric_icon, metric_value, and metric_label.
 - Give each complete repeated-item flow a singular numbered wrapper name such as `text_card_1`, `text_card_2`, or `metric_item_1`.
 - Do not concatenate child field names into wrappers, and do not use left, center, or right in repeated item or child names.
-- Give every flow a unique structural id and name, such as title_stack, footer_metadata, footer_left_pair, cards, steps, or callouts.
-- Name flows by visible structure and child field types, not inferred subject matter; prefer image_cards over agenda_cards when either fits.
+- Give every flow a unique structural id and name based on visible structure and child fields; prefer image_cards over agenda_cards.
 - Prefer no region over a low-confidence or visually irregular grouping.
 
-# Validation checklist:
-- Each flow has two or more items.
-- Each item contains both keys with exactly one non-null: indices or flow_id.
-- Indices in each leaf are ascending.
-- The leaves under one root contain exactly the component's element_indices, once each.
-- Every declared flow is reachable exactly once from root_flow_id; there are no orphan or shared flows.
-- row, column, and grid match the supplied element geometry; otherwise the mode is group or the region is omitted.
-
-# Minimal valid example:
-{"regions":[{"component_id":"feature_cards","root_flow_id":"cards","flows":[{"id":"cards","name":"cards","mode":"row","items":[{"indices":[4,5],"flow_id":null},{"indices":[6,7],"flow_id":null}]}]}]}
-
-# Always invalid:
-- A flow whose items array contains only one item.
-- A leaf such as {"indices":[7,4]} whose indices are out of source order.
-- A flow that is declared but not reachable from root_flow_id.
-- A tree that omits, duplicates, or adds any component source index.
+# Validation Rules:
+- Confirm each flow has at least two items and each item has exactly one non-null reference.
+- Confirm sorted leaves cover component element_indices exactly once and every flow is reachable once from root_flow_id.
+- Confirm row, column, and grid match geometry; use group only when none fits, or omit the region.
 """
 
 GENERATE_TEXT_CAPACITY_SYSTEM_PROMPT = """
@@ -332,43 +341,62 @@ Decide safe capacity growth and alignment for editable text boxes without changi
 
 # Steps:
 1. Compare each editable text box with its parent bounds, nearby content, flow role, and the reference image.
-2. Evaluate unused horizontal and vertical space independently, then choose a precise expansion amount in every direction.
+2. Evaluate horizontal and vertical space independently and choose precise expansion amounts.
 3. Decide the text's horizontal and vertical alignment from the reference image and visible structural role.
-4. Express horizontal growth as additional character capacity and vertical growth as additional text lines.
-5. Return one complete TextCapacityPlan JSON object.
+4. Express growth as extra characters or lines and return one TextCapacityPlan JSON object.
 
-# Rules:
+# Output and Alignment Rules:
 - Return a TextCapacityPlan JSON object only.
 - Reference only non-decorative text candidate paths from the semantic manifest.
 - Return an empty adjustments list when every text box already uses its intended design region.
-- Set left_characters and right_characters to the additional character capacity requested on each horizontal side.
-- Set top_lines and bottom_lines to the additional line capacity requested on each vertical side.
+- left_characters and right_characters add horizontal capacity; top_lines and bottom_lines add vertical capacity.
 - Set horizontal_alignment to preserve, left, center, right, or justify and vertical_alignment to preserve, top, middle, or bottom.
 - Use justify only when the reference text visibly aligns to both left and right edges across multiple lines; do not justify short labels, titles, metrics, or single-line text.
-- Use preserve when the source alignment is already correct; an alignment-only adjustment may use zero for all growth amounts.
-- Never return a no-op adjustment with all four growth amounts set to zero and both alignments set to preserve. Omit that adjustment entirely.
+- Use preserve for correct source alignment. Omit a full no-op, but allow zero growth for an alignment-only adjustment.
 - Return all four amounts and both alignments for every adjustment; never return coordinates, pixel sizes, or font values.
 - Infer alignment from the reference image and visible geometry, never from semantic names such as badge, pill, chip, or tag.
 - For text visibly centered inside a compact surface, return center and middle even when imported text-box bounds or source alignment metadata disagree with the rendered pixels.
 - Preserve visibly intentional asymmetric padding; use the surrounding surface only to recognize genuinely centered overlay text.
-- Keep short labels, page markers, footers, and metric values compact unless the design clearly provides more room.
-- Expand dates and other metadata values horizontally through clear aligned space; use zero top_lines and bottom_lines to preserve their line count.
-- Give aligned metadata fields compatible horizontal expansion when they share a visual block and safe edge.
+
+# Horizontal Growth Rules:
+- Keep short labels, page markers, footers, and metric values single-line and visually compact, but do not confuse compactness with tight source bounds.
+- Test proportional-font capacity with the widest plausible replacement, such as 100% instead of 96%.
+- When unobstructed same-row space exists, request enough horizontal growth for that widest plausible replacement instead of leaving usable space unclaimed.
+- Grow left-aligned text to the right, right-aligned text to the left, and centered text on both sides unless a nearby obstacle or boundary requires a safer direction.
+- For a left-aligned slide or section title, request right growth only when its full-height corridor and required gap are clear.
+- A single-line title whose glyphs begin at its left edge is left-aligned even when metadata says justify.
+- If clear space extends right through the title's full vertical span, request positive right growth even when current text fits. Items entirely below its span do not block.
+- Nearby items or columns block that growth even when a small source gap remains.
+- Preserve the visible gap to a progress bar or neighboring text, and never grow a primary value across an adjacent change indicator or other sibling.
+- For a percentage displayed after a progress bar with clear room on its right, request positive right_characters and zero vertical growth.
+- Expand dates and other metadata values horizontally with zero vertical growth; give aligned metadata fields compatible horizontal expansion when they share a safe edge.
 - Allow titles, subtitles, body text, and card descriptions to expand when unused aligned space exists.
+
+# Vertical Growth Rules:
 - Count the lines required by the current text at its actual font size and width.
 - If a title or subtitle needs more lines than its declared height can hold, request missing vertical capacity; a later flex wrapper will not contain overflow.
 - Preserve width when widening would change intentional wrapping, gutters, columns, or alignment; vertical growth may still be safe.
 - Let a final body or description in a vertical content region expand downward through clear aligned space for longer content.
-- Do not treat clear space after a final body field as intentional merely because the reference copy is short.
-- When substantial unobstructed same-column whitespace exists below a final description, request a positive bottom_lines value up to 12.
+- Do not assume clear space after short body copy is intentional. Substantial same-column space below a final description requires a positive bottom_lines value up to 12.
+- In a title-description block above later content, grow the final description downward through its clear corridor toward the next region.
+- A final heading-description callout description should normally get positive bottom_lines; use zero only when foreground content or a hard edge immediately blocks it.
+- Decorative backgrounds, corner accents, and surfaces behind a text region are not foreground obstacles and do not block safe text-capacity growth.
 - Stop downward growth at the nearest parent, slide edge, or obstacle, and keep horizontal growth at zero unless side space is independently safe.
-- Apply the same adjustment to corresponding fields in every item of a repeatable flow node; fixed heterogeneous flow items may differ.
-- For a repeatable field, use the most constrained item's safe adjustment and copy all four amounts and both alignments exactly to every item.
-- Before returning, verify that every corresponding repeatable field has identical six-setting tuples, including zero amounts and preserve alignments.
-- Corresponding text fields in repeatable items share one safe capacity range so the compiled content schema can expose one array item shape.
+
+# Repeatable Field Rules:
+- For each repeated row, column, or grid, match fields by annotation name and structural role across sibling items before choosing any adjustment.
+- Compute the most constrained item's safe adjustment from the intersection of safe directions, then copy identical six-setting tuples to every occurrence.
+- In repeated metric cards with a label above a value and clear space, grow every label downward and every left-aligned value rightward.
+- If horizontal clearance differs but every final repeated description has clear room below, set horizontal growth to zero and use the smallest shared positive bottom_lines value.
+- Do not omit one repeated description or give it zero bottom_lines when positive downward growth is safe for every corresponding description.
+- Apply that same tuple across mirrored lists when corresponding descriptions all have safe downward space.
+- In repeated cards with clear interior space to the right and below, give every title and description positive right_characters and bottom_lines.
+- Use identical settings across items while preserving left and top anchors and card padding.
+- Corresponding repeated fields share one safe capacity range so the compiled schema exposes one array item shape.
+
+# Safety Rules:
 - Preserve deliberate whitespace and do not expand across another content element, card boundary, divider, image, or visual column.
-- Prefer growing body or description fields over compact titles and labels when they share a vertical flow.
-- Keep the requested character and line growth consistent with the field's intended hierarchy; do not turn a label into body text or a title into a paragraph.
+- In a vertical flow, prefer growing body or description fields over compact titles and labels without changing their content hierarchy.
 """
 
 CLUSTER_SIMILAR_COMPONENTS_SYSTEM_PROMPT = """
