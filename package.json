@@ -1,7 +1,7 @@
 {
   "name": "presenton",
   "version": "0.9.9-beta",
-  "presentationExportVersion": "v1.0.26",
+  "presentationExportVersion": "v1.0.28",
   "type": "module",
   "description": "Open-source AI presentation generator",
   "scripts": {
