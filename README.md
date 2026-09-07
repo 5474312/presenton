@@ -419,6 +419,7 @@ Other optional variables exist in code (for example advanced Mem0 paths, LitePar
 - **EXTENDED_REASONING**=[true/false]: Enables extended reasoning where supported by the configured stack.
 - **LLM_GENERATION_PROFILE**=[fast/balanced/deep/model_max]: Optional global generation profile (default: `balanced`).
 - **LLM_MAX_OUTPUT_TOKENS**: Optional positive output-token override for every text provider.
+- **MAX_OUTLINE_WORDS**: Maximum words allowed in each generated or edited slide outline (default: `100`). Must be a positive integer.
 - **LLM_REASONING_MODE**=[auto/enabled/disabled]: Optional global reasoning-mode override.
 - **LLM_REASONING_EFFORT**=[default/none/minimal/low/medium/high/xhigh/max]: Optional reasoning-effort override.
 - **LLM_REASONING_BUDGET_TOKENS**: Optional non-negative reasoning token budget.
