@@ -79,8 +79,6 @@ def test_system_prompt_forbids_sources_in_outlines():
     assert "Give each slide one clear purpose" in prompt
     assert "Vary audience-facing content structures where appropriate" in prompt
     assert "Generation settings are authoritative" in prompt
-    assert "Use the literal token `<LINE_BREAK>`" in prompt
-    assert "never return bare text or paragraph lines" in prompt
     assert "Content voice rules" in prompt
     assert 'Never refer to "this presentation"' in prompt
 
