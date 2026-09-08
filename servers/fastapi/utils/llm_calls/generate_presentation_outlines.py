@@ -20,7 +20,6 @@ from utils.llm_calls.generate_web_search_query import generate_web_search_query
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model
-from utils.outline_limits import LINE_BREAK_TOKEN
 from utils.llm_utils import (
     DisconnectChecker,
     get_generate_kwargs,
@@ -93,18 +92,10 @@ def get_system_prompt(
     toc_block = f"{toc_instruction}\n" if toc_instruction else ""
 
     slide_outline_structure = (
-        "Each slide content must be a complete multiline Markdown document.\n"
-        f"Use the literal token `{LINE_BREAK_TOKEN}` wherever the final Markdown requires a line break.\n"
-        "Do not replace the token with spaces or another separator.\n"
-        "After line-break tokens are decoded, each slide content must follow these rules:\n"
-        "   - Its first line must be exactly `## <title>` and contain only the slide title.\n"
-        "   - It must contain at least one non-empty body line after the title.\n"
-        "   - Never put the title and body content in the same segment.\n"
-        f"   - Put `{LINE_BREAK_TOKEN}` between every Markdown block.\n"
-        "   - Every non-empty body line must use explicit Markdown syntax; never return bare text or paragraph lines.\n"
-        "   - Use a suitable Markdown structure: bullet lists, numbered lists, tables, blockquotes, or level-three-or-lower subheadings.\n"
-        "   - The title slide must put presenter, date, and overview below the title rather than appending them to the title line.\n"
-        f"   - Before responding, verify that every slide content contains `{LINE_BREAK_TOKEN}` immediately after its title segment.\n"
+        "Each slide content:\n"
+        "   - Must have a ## title.\n"
+        # "   - Must have content either in multiple bullet points or table or both.\n"
+        "   - Must be in Markdown format.\n"
         "   - Don't use **bold** and __italic__ text.\n"
         "   - First slide title must be the same as the presentation title."
     )
