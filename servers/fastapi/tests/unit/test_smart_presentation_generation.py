@@ -9,6 +9,8 @@ from enums.llm_provider import LLMProvider
 from services.community_presentations import (
     CommunityPresentationReference,
     build_community_design_context,
+    community_upstream_http_error,
+    extract_community_upstream_message,
     list_community_presentations,
     merge_reference_fonts,
     normalize_community_ids,
@@ -500,6 +502,48 @@ def test_disabled_community_is_rejected_before_network_access(monkeypatch):
         require_community_enabled()
 
     assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == {
+        "code": "community_disabled",
+        "message": "Community is disabled for this deployment.",
+        "retryable": False,
+    }
+
+
+def test_community_upstream_validation_message_is_preserved():
+    error = community_upstream_http_error(
+        422,
+        {"detail": {"message": "The selected filter is not supported."}},
+    )
+
+    assert error.status_code == 422
+    assert error.detail == {
+        "code": "community_request_rejected",
+        "message": "The selected filter is not supported.",
+        "retryable": False,
+    }
+
+
+def test_community_upstream_outage_is_specific_and_retryable():
+    error = community_upstream_http_error(
+        503,
+        {"detail": "Internal database connection failed"},
+    )
+
+    assert error.status_code == 503
+    assert error.detail == {
+        "code": "community_service_unavailable",
+        "message": (
+            "The Community service is temporarily unavailable "
+            "(upstream status 503). Please try again later."
+        ),
+        "retryable": True,
+    }
+
+
+def test_community_upstream_message_ignores_html_error_pages():
+    assert extract_community_upstream_message(
+        b"<!doctype html><title>Proxy failure</title>"
+    ) is None
 
 
 def test_community_context_is_style_only_and_round_robins_decks():
