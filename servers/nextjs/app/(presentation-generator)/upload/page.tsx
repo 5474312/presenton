@@ -4,6 +4,7 @@ import UploadPage from "./components/UploadPage";
 import Header from "@/app/(presentation-generator)/(dashboard)/dashboard/components/Header";
 import { Metadata } from "next";
 import { normalizePresentationGenerationMode } from "@/utils/presentationGenerationMode";
+import { isCommunityEnabled } from "@/utils/community";
 
 export const metadata: Metadata = {
   title: "Presenton | Open Source AI presentation generator",
@@ -69,7 +70,10 @@ const page = () => {
           <p className="mt-2 max-w-2xl font-manrope text-base text-[#101323CC] sm:text-lg lg:text-xl min-[1920px]:text-2xl">Turn prompts or documents into presentations with AI</p>
         </div>
 
-        <UploadPage presentationGenerationMode={presentationGenerationMode} />
+        <UploadPage
+          communityEnabled={isCommunityEnabled(process.env.PRESENTON_COMMUNITY_ENABLED)}
+          presentationGenerationMode={presentationGenerationMode}
+        />
       </main>
     </div>
   );
