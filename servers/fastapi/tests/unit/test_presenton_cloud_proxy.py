@@ -119,6 +119,30 @@ def test_cloud_template_generation_supports_mutations_and_task_tracking():
     )
 
 
+def test_disabled_community_never_reaches_cloud_proxy(monkeypatch):
+    monkeypatch.setenv("PRESENTON_COMMUNITY_ENABLED", "false")
+
+    async def unexpected_settings(*_args, **_kwargs):
+        raise AssertionError("Provider settings must not be read")
+
+    monkeypatch.setattr(
+        presenton_cloud_proxy,
+        "get_provider_settings",
+        unexpected_settings,
+    )
+
+    response = asyncio.run(
+        presenton_cloud_proxy.maybe_proxy_presenton_cloud_request(
+            _request("/api/v1/ppt/community/presentations", method="GET"),
+            SimpleNamespace(),
+            SimpleNamespace(id=uuid.uuid4()),
+        )
+    )
+
+    assert response.status_code == 404
+    assert response.body == b'{"detail":"Community is disabled"}'
+
+
 def test_cloud_template_task_list_is_forwarded_to_v3(monkeypatch):
     captured = {}
     provider = SimpleNamespace(

@@ -28,7 +28,7 @@ from services.presenton_cloud_persistence import (
     persist_cloud_presentation_created,
 )
 from services.provider_settings import get_provider_settings
-from utils.get_env import get_presenton_oauth_issuer
+from utils.get_env import get_presenton_oauth_issuer, is_community_enabled
 
 
 logger = logging.getLogger(__name__)
@@ -411,6 +411,14 @@ async def maybe_proxy_presenton_cloud_request(
         or not _request_method_is_supported(path, request.method)
     ):
         return None
+
+    if path.startswith(
+        "/api/v1/ppt/community/presentations"
+    ) and not is_community_enabled():
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "Community is disabled"},
+        )
 
     owner_id = user.id if user is not None else None
 
