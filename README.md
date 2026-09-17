@@ -348,6 +348,21 @@ The tables below match the environment variables forwarded in this repository’
 
 Other optional variables exist in code (for example advanced Mem0 paths, LiteParse runners, or `FAST_API_INTERNAL_URL` when Next.js and FastAPI are not same-origin); they are **not** wired in `docker-compose.yml`. Supported names are discoverable from `servers/fastapi/utils/get_env.py` and the Next.js server utilities under `servers/nextjs/`.
 
+#### Air-gapped deployments
+
+The Community gallery is enabled by default and reads presentation designs from
+the Presenton community service. Air-gapped deployments must disable it:
+
+```env
+PRESENTON_COMMUNITY_ENABLED=false
+```
+
+For Docker Compose, add the value to the `.env` file next to
+`docker-compose.yml` before starting Presenton. For `docker run`, pass
+`-e PRESENTON_COMMUNITY_ENABLED=false`. This removes Community from the UI and
+prevents the backend from sending Community gallery or design-reference
+requests.
+
 #### LLM and API keys
 
 | Variable | Values / default | Purpose |
