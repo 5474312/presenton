@@ -143,6 +143,7 @@ function LinuxInPageSmartHtmlSlide({
       <div
         ref={slideRef}
         data-smart-slide-instance={instanceId}
+        data-tailwind-runtime-scope
         className="pointer-events-none absolute left-1/2 top-0 h-[720px] w-[1280px] select-none overflow-hidden bg-white"
         aria-label={title}
         style={{

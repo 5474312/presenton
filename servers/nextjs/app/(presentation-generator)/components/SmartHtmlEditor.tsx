@@ -532,6 +532,7 @@ export default function SmartHtmlEditor({
       <div
         ref={containerRef}
         data-smart-slide-instance={instanceId}
+        data-tailwind-runtime-scope
         data-smart-selecting={enableHtmlSelector ? "true" : undefined}
         className="smart-html-editor relative h-full w-full overflow-hidden bg-white"
         aria-label={title}

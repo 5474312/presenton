@@ -4,7 +4,10 @@ import Script from "next/script";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { TAILWIND_BROWSER_SCRIPT_URL } from "@/lib/tailwind-browser";
+import {
+  TAILWIND_BROWSER_SCRIPT_URL,
+  TAILWIND_BROWSER_STYLE_CONTENT,
+} from "@/lib/tailwind-browser";
 
 export const TAILWIND_RUNTIME_READY_EVENT =
   "presenton:tailwind-runtime-ready";
@@ -37,13 +40,20 @@ export default function TailwindBrowserRuntime() {
   if (deferUntilRequested && !loadRequested) return null;
 
   return (
-    <Script
-      id="presenton-shared-tailwind-runtime"
-      onLoad={notifyRuntimeReady}
-      onReady={notifyRuntimeReady}
-      src={TAILWIND_BROWSER_SCRIPT_URL}
-      strategy="afterInteractive"
-    />
+    <>
+      <style
+        data-presenton-tailwind-browser-style="true"
+        dangerouslySetInnerHTML={{ __html: TAILWIND_BROWSER_STYLE_CONTENT }}
+        type="text/tailwindcss"
+      />
+      <Script
+        id="presenton-shared-tailwind-runtime"
+        onLoad={notifyRuntimeReady}
+        onReady={notifyRuntimeReady}
+        src={TAILWIND_BROWSER_SCRIPT_URL}
+        strategy="afterInteractive"
+      />
+    </>
   );
 }
 
