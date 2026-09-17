@@ -451,6 +451,15 @@ async def maybe_proxy_presenton_cloud_request(
 
     request_body = await request.body()
     request_payload = _json_object(request_body)
+    if (
+        not is_community_enabled()
+        and request_payload
+        and request_payload.get("community_design_ids")
+    ):
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Community references are disabled"},
+        )
     presentation_id, generation_mode = await _resolve_presentation_context(
         owner_id=owner_id,
         path=path,
