@@ -348,6 +348,21 @@ The tables below match the environment variables forwarded in this repository’
 
 Other optional variables exist in code (for example advanced Mem0 paths, LiteParse runners, or `FAST_API_INTERNAL_URL` when Next.js and FastAPI are not same-origin); they are **not** wired in `docker-compose.yml`. Supported names are discoverable from `servers/fastapi/utils/get_env.py` and the Next.js server utilities under `servers/nextjs/`.
 
+#### Air-gapped deployments
+
+The Community gallery is enabled by default and reads presentation designs from
+the Presenton community service. Air-gapped deployments must disable it:
+
+```env
+PRESENTON_COMMUNITY_ENABLED=false
+```
+
+For Docker Compose, add the value to the `.env` file next to
+`docker-compose.yml` before starting Presenton. For `docker run`, pass
+`-e PRESENTON_COMMUNITY_ENABLED=false`. This removes Community from the UI and
+prevents the backend from sending Community gallery or design-reference
+requests.
+
 #### LLM and API keys
 
 | Variable | Values / default | Purpose |
@@ -355,6 +370,7 @@ Other optional variables exist in code (for example advanced Mem0 paths, LitePar
 | **CAN_CHANGE_KEYS** | `true` / `false` | Set to `false` to keep API keys hidden and unmodifiable. |
 | **PRESENTON_PUBLIC_URL** | Optional URL | Browser-reachable Presenton origin, such as `http://localhost:5001` or `https://slides.example.com`. Generated download, edit, and preview links use this origin. |
 | **PRESENTATION_GENERATION_MODE** | `both` (default), `standard`, `smart` | Controls the modes available in the UI and MCP server. A single-mode value hides the selector; `smart` also hides template features. See the **[presentation generation modes guide](docs/presentation-generation-modes.md)**. |
+| **PRESENTON_COMMUNITY_ENABLED** | `true` (default), `false` | Controls the cloud-backed Community gallery and design references. Set to `false` for air-gapped deployments to hide the feature and prevent community API requests. |
 | **LLM** | `openai`, `deepseek`, `google`, `vertex`, `azure`, `bedrock`, `openrouter`, `fireworks`, `together`, `cerebras`, `anthropic`, `litellm`, `lmstudio`, `ollama`, `custom`, `codex` | Selects the text LLM provider. |
 | **OPENAI_API_KEY** | Required for `LLM=openai` | OpenAI API key. |
 | **OPENAI_MODEL** | `gpt-4.1` (default) | OpenAI model. |

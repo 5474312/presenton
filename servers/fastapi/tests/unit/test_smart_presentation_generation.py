@@ -12,7 +12,9 @@ from services.community_presentations import (
     list_community_presentations,
     merge_reference_fonts,
     normalize_community_ids,
+    require_community_enabled,
 )
+from utils.get_env import is_community_enabled
 from utils.llm_calls.generate_smart_presentation import (
     SMART_DECK_SYSTEM_PROMPT,
     SmartSlideStreamParser,
@@ -483,6 +485,21 @@ def test_normalize_community_ids_rejects_invalid_and_excess_references():
         normalize_community_ids([0])
     with pytest.raises(HTTPException):
         normalize_community_ids([1, 2, 3, 4])
+
+
+def test_community_is_enabled_by_default(monkeypatch):
+    monkeypatch.delenv("PRESENTON_COMMUNITY_ENABLED", raising=False)
+
+    assert is_community_enabled()
+
+
+def test_disabled_community_is_rejected_before_network_access(monkeypatch):
+    monkeypatch.setenv("PRESENTON_COMMUNITY_ENABLED", "false")
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_community_enabled()
+
+    assert exc_info.value.status_code == 404
 
 
 def test_community_context_is_style_only_and_round_robins_decks():
