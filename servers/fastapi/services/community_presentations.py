@@ -7,6 +7,8 @@ from typing import Any, Sequence
 import aiohttp
 from fastapi import HTTPException
 
+from utils.get_env import is_community_enabled
+
 
 DEFAULT_COMMUNITY_API_URL = (
     "https://api.presenton.ai/api/v3/community/presentations"
@@ -14,6 +16,11 @@ DEFAULT_COMMUNITY_API_URL = (
 MAX_COMMUNITY_REFERENCES = 3
 MAX_REFERENCE_SLIDES = 6
 MAX_REFERENCE_CHARACTERS = 90_000
+
+
+def require_community_enabled() -> None:
+    if not is_community_enabled():
+        raise HTTPException(status_code=404, detail="Community is disabled")
 
 
 def get_community_api_url() -> str:
@@ -62,6 +69,7 @@ def normalize_community_ids(values: Sequence[int] | None) -> list[int]:
 
 
 async def _cloud_get(path: str, params: dict[str, Any] | None = None) -> Any:
+    require_community_enabled()
     url = f"{get_community_api_url()}{path}"
     timeout = aiohttp.ClientTimeout(total=30)
     try:
@@ -106,6 +114,7 @@ async def list_community_presentations(
     order_by: str = "priority",
     order: str = "desc",
 ) -> dict[str, Any]:
+    require_community_enabled()
     filters = {
         "created_at_gt": created_at_gt,
         "created_at_lt": created_at_lt,
@@ -135,6 +144,7 @@ async def list_community_presentations(
 
 
 async def get_community_presentation(community_id: int) -> dict[str, Any]:
+    require_community_enabled()
     if community_id <= 0:
         raise HTTPException(status_code=422, detail="Invalid community presentation ID")
     payload = await _cloud_get(f"/{community_id}")
@@ -149,6 +159,8 @@ async def get_community_presentation(community_id: int) -> dict[str, Any]:
 async def load_community_references(
     community_ids: Sequence[int] | None,
 ) -> list[CommunityPresentationReference]:
+    if community_ids:
+        require_community_enabled()
     references: list[CommunityPresentationReference] = []
     for community_id in normalize_community_ids(community_ids):
         payload = await get_community_presentation(community_id)

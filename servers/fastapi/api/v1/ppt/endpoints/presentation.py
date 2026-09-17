@@ -123,6 +123,7 @@ from utils.llm_calls.generate_smart_presentation import (
     generate_smart_presentation,
     resolve_smart_slide_count,
 )
+from utils.get_env import is_community_enabled
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -1650,6 +1651,11 @@ async def create_presentation(
     )
 
     normalized_community_ids = normalize_community_ids(community_design_ids)
+    if normalized_community_ids and not is_community_enabled():
+        raise HTTPException(
+            status_code=422,
+            detail="Community references are disabled",
+        )
     if generation_mode != "smart" and normalized_community_ids:
         raise HTTPException(
             status_code=400,

@@ -355,6 +355,7 @@ Other optional variables exist in code (for example advanced Mem0 paths, LitePar
 | **CAN_CHANGE_KEYS** | `true` / `false` | Set to `false` to keep API keys hidden and unmodifiable. |
 | **PRESENTON_PUBLIC_URL** | Optional URL | Browser-reachable Presenton origin, such as `http://localhost:5001` or `https://slides.example.com`. Generated download, edit, and preview links use this origin. |
 | **PRESENTATION_GENERATION_MODE** | `both` (default), `standard`, `smart` | Controls the modes available in the UI and MCP server. A single-mode value hides the selector; `smart` also hides template features. See the **[presentation generation modes guide](docs/presentation-generation-modes.md)**. |
+| **PRESENTON_COMMUNITY_ENABLED** | `true` (default), `false` | Controls the cloud-backed Community gallery and design references. Set to `false` for air-gapped deployments to hide the feature and prevent community API requests. |
 | **LLM** | `openai`, `deepseek`, `google`, `vertex`, `azure`, `bedrock`, `openrouter`, `fireworks`, `together`, `cerebras`, `anthropic`, `litellm`, `lmstudio`, `ollama`, `custom`, `codex` | Selects the text LLM provider. |
 | **OPENAI_API_KEY** | Required for `LLM=openai` | OpenAI API key. |
 | **OPENAI_MODEL** | `gpt-4.1` (default) | OpenAI model. |
