@@ -4,6 +4,7 @@ from templates.v2.schema import (
     get_component_schema,
     get_template_schema,
 )
+from utils.infographic_catalog import INFOGRAPHIC_BY_TYPE
 
 
 def test_extract_slide_schema_from_layout_extracts_editable_content():
@@ -455,7 +456,8 @@ def test_get_component_schema_extracts_infographic_content_without_vector_conten
     assert list(properties) == ["progress"]
     assert properties["progress"]["x-element-type"] == "infographic"
     assert properties["progress"]["properties"]["data"]["properties"]["type"] == {
-        "const": "progress_bar"
+        "type": "string",
+        "const": "progress_bar",
     }
     assert "colors" not in properties["progress"]["properties"]
     assert properties["progress"]["required"] == ["data"]
@@ -482,9 +484,39 @@ def test_get_component_schema_preserves_vertical_funnel_type_and_item_limits():
     schema = get_component_schema(component)
     data_schema = schema["properties"]["stages"]["properties"]["data"]
 
-    assert data_schema["properties"]["type"] == {"const": "vertical_funnel"}
+    assert data_schema["properties"]["type"] == {
+        "type": "string",
+        "const": "vertical_funnel",
+    }
     assert data_schema["properties"]["items"]["minItems"] == 1
     assert data_schema["properties"]["items"]["maxItems"] == 8
+
+
+def test_get_component_schema_declares_string_type_for_every_infographic_type():
+    # Strict structured outputs (OpenAI / Azure OpenAI) reject any subschema
+    # without a "type" key, so the const discriminator must declare one.
+    for infographic_type in INFOGRAPHIC_BY_TYPE:
+        component = {
+            "id": "infographic",
+            "description": "Reusable infographic component.",
+            "elements": [
+                {
+                    "type": "infographic",
+                    "decorative": False,
+                    "name": "visual",
+                    "data": {"type": infographic_type},
+                    "colors": ["FFFFFF", "102E79"],
+                }
+            ],
+        }
+
+        schema = get_component_schema(component)
+        data_schema = schema["properties"]["visual"]["properties"]["data"]
+
+        assert data_schema["properties"]["type"] == {
+            "type": "string",
+            "const": infographic_type,
+        }, infographic_type
 
 
 def test_component_table_schema_derives_header_and_body_text_limits():
