@@ -483,7 +483,7 @@ Docker images install the default spaCy model (`en_core_web_sm`) during build so
 | Variable | Values / default | Purpose |
 | --- | --- | --- |
 | **DATABASE_URL** | Optional SQLAlchemy URL | Configures the database; when unset, the app uses SQLite under app data. |
-| **MIGRATE_DATABASE_ON_STARTUP** | `true` in Compose | Runs database migrations during startup. |
+| **MIGRATE_DATABASE_ON_STARTUP** | `true` (default), `false` | Runs database migrations during startup. Set to `false` only when migrations are managed externally. |
 
 #### Image generation
 

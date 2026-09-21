@@ -450,7 +450,7 @@ def get_codex_model_env():
 
 
 def get_migrate_database_on_startup_env():
-    return os.getenv("MIGRATE_DATABASE_ON_STARTUP")
+    return os.getenv("MIGRATE_DATABASE_ON_STARTUP", "true")
 
 
 def get_sentry_dsn_env():

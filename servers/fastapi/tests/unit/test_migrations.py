@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 from alembic import command
@@ -5,6 +6,30 @@ from alembic.config import Config
 from sqlalchemy import create_engine, text
 
 import migrations
+
+
+def test_migrations_run_by_default(monkeypatch):
+    monkeypatch.delenv("MIGRATE_DATABASE_ON_STARTUP", raising=False)
+    migration_runs = []
+    monkeypatch.setattr(
+        migrations, "_run_migrations", lambda: migration_runs.append(True)
+    )
+
+    asyncio.run(migrations.migrate_database_on_startup())
+
+    assert migration_runs == [True]
+
+
+def test_migrations_can_be_disabled(monkeypatch):
+    monkeypatch.setenv("MIGRATE_DATABASE_ON_STARTUP", "false")
+    migration_runs = []
+    monkeypatch.setattr(
+        migrations, "_run_migrations", lambda: migration_runs.append(True)
+    )
+
+    asyncio.run(migrations.migrate_database_on_startup())
+
+    assert migration_runs == []
 
 
 def _alembic_config(database_url: str) -> Config:
