@@ -15,6 +15,7 @@ def test_default_templates_match_supported_builtin_groups():
         "swift",
         "civic",
         "editorial",
+        "horizon",
         "mosaic",
         "pulse",
         "verdant",
