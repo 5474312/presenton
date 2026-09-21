@@ -1,7 +1,16 @@
 import { resolveBackendAssetUrl } from "@/utils/api";
 import { markdownToPlainChartText } from "@/components/slide-editor/charts/chart-data";
-import { normalizeRawTextMarkdownElement } from "@/components/slide-editor/text/template-v2-text";
+import {
+  displayText,
+  normalizeRawTextMarkdownElement,
+  rawFont,
+  rawTextContent,
+} from "@/components/slide-editor/text/template-v2-text";
 import { isLatexTextRun } from "@/components/slide-editor/text/text-runs";
+import {
+  intrinsicFlowSize,
+  layoutFlowChildren,
+} from "@/components/slide-editor/layout/flowLayout";
 import { normalizeMathLatex, renderMathHtml } from "@/lib/math";
 import { buildSvgUpdateUrl } from "@/lib/svg-color";
 import { normalizeInfographicIcon } from "@/components/slide-editor/infographics/infographic-editing";
@@ -528,8 +537,28 @@ function renderFlex(item: JsonRecord, mode: RenderMode): string {
   const rowGap = readNumber(item.rowGap ?? item.row_gap) ?? gap;
   const columnGap = readNumber(item.columnGap ?? item.column_gap) ?? gap;
   const childrenList = readLayoutChildren(item);
-  const children = childrenList
-    .map((child) => renderItem(readRecord(child), "flow"))
+  const laidOutChildren = layoutFlowChildren(
+    item,
+    childrenList.map(readRecord),
+    completeHtmlElementBox(item),
+    htmlFlowLayoutDeps,
+  );
+  const children = laidOutChildren
+    .map(({ child, box, layoutManaged }) =>
+      renderItem(
+        layoutManaged && box
+          ? {
+              ...child,
+              size: {
+                ...readRecord(child.size),
+                width: box.width,
+                height: box.height,
+              },
+            }
+          : child,
+        "flow",
+      ),
+    )
     .join("");
   const style = `${flexFrameStyle(
     item,
@@ -549,6 +578,101 @@ function renderFlex(item: JsonRecord, mode: RenderMode): string {
     "flex-start"
   )};gap:${cssNumber(gap)}px;column-gap:${cssNumber(columnGap)}px;row-gap:${cssNumber(rowGap)}px;overflow:visible`;
   return `<div style="${style}">${children}</div>`;
+}
+
+const htmlFlowLayoutDeps = {
+  elementBox: completeHtmlElementBox,
+  elementSize: htmlElementSize,
+  isManualPositioned: (element: JsonRecord) =>
+    element.__presenton_manual_position === true,
+};
+
+function completeHtmlElementBox(item: JsonRecord) {
+  const box = readBox(item);
+  const fallback = htmlElementSize(item);
+  return {
+    x: box.x,
+    y: box.y,
+    width: box.width ?? fallback.width,
+    height: box.height ?? fallback.height,
+  };
+}
+
+function htmlElementSize(
+  item: JsonRecord,
+  fallback?: { width: number; height: number },
+): { width: number; height: number } {
+  const box = readBox(item);
+  if (box.width != null && box.height != null) {
+    return { width: box.width, height: box.height };
+  }
+
+  const type = readString(item.type);
+  if (type === "group") {
+    return childrenBounds(readArray(item.children).map(readRecord));
+  }
+  if (type === "container") {
+    const padding = readRecord(item.padding);
+    const child = readRecordOrNull(item.child);
+    const childSize = child ? htmlElementSize(child, fallback) : fallback;
+    if (childSize) {
+      return {
+        width:
+          childSize.width +
+          (readNumber(padding.left) ?? 0) +
+          (readNumber(padding.right) ?? 0),
+        height:
+          childSize.height +
+          (readNumber(padding.top) ?? 0) +
+          (readNumber(padding.bottom) ?? 0),
+      };
+    }
+  }
+  if (type === "text") {
+    if (fallback) return fallback;
+    const font = rawFont(item);
+    const text = displayText(rawTextContent(item));
+    const longestLine = text
+      .split(/\r?\n/)
+      .reduce((longest, line) => Math.max(longest, line.length), 0);
+    const width = Math.max(
+      font.size,
+      longestLine * font.size * (font.bold ? 0.56 : 0.5),
+    );
+    const averageCharacterWidth = Math.max(1, font.size * 0.5);
+    const charactersPerLine = Math.max(
+      1,
+      Math.floor(width / averageCharacterWidth),
+    );
+    const lines = text.split(/\r?\n/).reduce(
+      (count, line) =>
+        count + Math.max(1, Math.ceil(line.length / charactersPerLine)),
+      0,
+    );
+    return {
+      width,
+      height: Math.max(
+        font.size * font.lineHeight,
+        lines * font.size * font.lineHeight,
+      ),
+    };
+  }
+  if (
+    type === "flex" ||
+    type === "grid" ||
+    type === "list-view" ||
+    type === "grid-view"
+  ) {
+    return (
+      fallback ??
+      intrinsicFlowSize(
+        item,
+        readLayoutChildren(item).map(readRecord),
+        htmlFlowLayoutDeps,
+      )
+    );
+  }
+  return fallback ?? { width: box.width ?? 1, height: box.height ?? 1 };
 }
 
 function flexFrameStyle(
@@ -749,22 +873,43 @@ function renderPolygon(item: JsonRecord, mode: RenderMode): string {
     .map(readNumber)
     .filter((value): value is number => value != null)
     .join(" ");
+  const lineCap = readString(stroke.line_cap ?? stroke.lineCap);
+  const lineJoin = readString(stroke.line_join ?? stroke.lineJoin);
+  const strokeAttributes = `${dash ? ` stroke-dasharray="${dash}"` : ""}${
+    lineCap ? ` stroke-linecap="${escapeAttribute(lineCap)}"` : ""
+  }${lineJoin ? ` stroke-linejoin="${escapeAttribute(lineJoin)}"` : ""}`;
+  const startMarkerValue = item.start_marker ?? stroke.start_marker;
+  const endMarkerValue = item.end_marker ?? stroke.end_marker;
   const startMarker = !closed
-    ? vectorMarker(readString(item.start_marker))
+    ? vectorMarker(startMarkerValue)
     : null;
-  const endMarker = !closed ? vectorMarker(readString(item.end_marker)) : null;
+  const endMarker = !closed
+    ? vectorMarker(endMarkerValue)
+    : null;
   const markerPrefix = `vector-marker-${vectorMarkerHash(
-    `${pointString}|${strokeColor}|${strokeWidth}|${startMarker}|${endMarker}`,
+    `${pointString}|${strokeColor}|${strokeWidth}|${startMarker}|${endMarker}|${JSON.stringify(startMarkerValue)}|${JSON.stringify(endMarkerValue)}`,
   )}`;
   const startMarkerId = `${markerPrefix}-start`;
   const endMarkerId = `${markerPrefix}-end`;
   const markerDefs = strokeColor && strokeWidth > 0
     ? [
         startMarker
-          ? vectorMarkerDefinition(startMarkerId, startMarker, strokeColor, strokeWidth)
+          ? vectorMarkerDefinition(
+              startMarkerId,
+              startMarker,
+              strokeColor,
+              strokeWidth,
+              startMarkerValue,
+            )
           : "",
         endMarker
-          ? vectorMarkerDefinition(endMarkerId, endMarker, strokeColor, strokeWidth)
+          ? vectorMarkerDefinition(
+              endMarkerId,
+              endMarker,
+              strokeColor,
+              strokeWidth,
+              endMarkerValue,
+            )
           : "",
       ].join("")
     : "";
@@ -776,11 +921,11 @@ function renderPolygon(item: JsonRecord, mode: RenderMode): string {
     ? `<polygon points="${escapeAttribute(pointString)}"${fillColor ? ` fill="${escapeAttribute(fillColor)}"` : ` fill="none"`}${strokeColor && strokeWidth > 0
       ? ` stroke="${escapeAttribute(strokeColor)}" stroke-width="${cssNumber(strokeWidth)}"`
       : ""
-    }${dash ? ` stroke-dasharray="${dash}"` : ""}/>`
+    }${strokeAttributes}/>`
     : `<polyline points="${escapeAttribute(pointString)}" fill="none"${strokeColor && strokeWidth > 0
       ? ` stroke="${escapeAttribute(strokeColor)}" stroke-width="${cssNumber(strokeWidth)}"`
       : ""
-    }${dash ? ` stroke-dasharray="${dash}"` : ""}${markerAttributes}/>`;
+    }${strokeAttributes}${markerAttributes}/>`;
   return `<div style="${frameStyleFromBox(box, mode)}${transformStyle(
     item
   )}overflow:visible"><svg width="100%" height="100%" viewBox="0 0 ${cssNumber(
@@ -798,14 +943,18 @@ type VectorMarkerStyle =
   | "square"
   | "diamond";
 
-function vectorMarker(value: string | null): VectorMarkerStyle | null {
-  return value === "arrow" ||
-    value === "stealth" ||
-    value === "triangle" ||
-    value === "circle" ||
-    value === "square" ||
-    value === "diamond"
-    ? value
+function vectorMarker(value: unknown): VectorMarkerStyle | null {
+  const record = readRecord(value);
+  const marker = readString(record.type) ?? readString(value);
+  if (marker === "oval") return "circle";
+  if (marker === "open") return "arrow";
+  return marker === "arrow" ||
+    marker === "stealth" ||
+    marker === "triangle" ||
+    marker === "circle" ||
+    marker === "square" ||
+    marker === "diamond"
+    ? marker
     : null;
 }
 
@@ -823,8 +972,20 @@ function vectorMarkerDefinition(
   marker: VectorMarkerStyle,
   color: string,
   strokeWidth: number,
+  markerSettings?: unknown,
 ) {
-  const size = Math.max(11, Math.min(28, 8 + strokeWidth * 2.5));
+  const markerRecord = readRecord(markerSettings);
+  const defaultSize = Math.max(11, Math.min(28, 8 + strokeWidth * 2.5));
+  const markerLength = vectorMarkerDimension(
+    markerRecord.length,
+    strokeWidth,
+    defaultSize,
+  );
+  const markerWidth = vectorMarkerDimension(
+    markerRecord.width,
+    strokeWidth,
+    defaultSize,
+  );
   const escapedColor = escapeAttribute(color);
   const content =
     marker === "arrow"
@@ -842,7 +1003,17 @@ function vectorMarkerDefinition(
     marker === "circle" || marker === "square" || marker === "diamond"
       ? 6
       : 11;
-  return `<marker id="${id}" viewBox="0 -6 12 12" refX="${refX}" refY="0" markerWidth="${cssNumber(size)}" markerHeight="${cssNumber(size)}" markerUnits="userSpaceOnUse" orient="auto-start-reverse" overflow="visible">${content}</marker>`;
+  return `<marker id="${id}" viewBox="0 -6 12 12" refX="${refX}" refY="0" markerWidth="${cssNumber(markerLength)}" markerHeight="${cssNumber(markerWidth)}" markerUnits="userSpaceOnUse" orient="auto-start-reverse" overflow="visible">${content}</marker>`;
+}
+
+function vectorMarkerDimension(
+  value: unknown,
+  strokeWidth: number,
+  fallback: number,
+) {
+  const size = readString(value);
+  const scale = size === "lg" ? 5 : size === "med" ? 3 : size === "sm" ? 2 : null;
+  return scale == null ? fallback : Math.max(strokeWidth, strokeWidth * scale);
 }
 
 function renderEllipseVector(item: JsonRecord, mode: RenderMode): string {
@@ -867,6 +1038,11 @@ function renderEllipseVector(item: JsonRecord, mode: RenderMode): string {
     .map(readNumber)
     .filter((value): value is number => value != null)
     .join(" ");
+  const lineCap = readString(stroke.line_cap ?? stroke.lineCap);
+  const lineJoin = readString(stroke.line_join ?? stroke.lineJoin);
+  const strokeAttributes = `${dash ? ` stroke-dasharray="${dash}"` : ""}${
+    lineCap ? ` stroke-linecap="${escapeAttribute(lineCap)}"` : ""
+  }${lineJoin ? ` stroke-linejoin="${escapeAttribute(lineJoin)}"` : ""}`;
   const width = box.width ?? 1;
   const height = box.height ?? 1;
   const shape = `<ellipse cx="${cssNumber(width / 2)}" cy="${cssNumber(
@@ -876,7 +1052,7 @@ function renderEllipseVector(item: JsonRecord, mode: RenderMode): string {
     : ` fill="none"`}${strokeColor && strokeWidth > 0
     ? ` stroke="${escapeAttribute(strokeColor)}" stroke-width="${cssNumber(strokeWidth)}"`
     : ""
-  }${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
+  }${strokeAttributes}/>`;
 
   return `<div style="${frameStyleFromBox(box, mode)}${transformStyle(
     item
@@ -2117,6 +2293,9 @@ function chartConfig(item: JsonRecord, height: number): JsonRecord {
     item.legend ?? item.showLegend,
     autoShowLegend
   );
+  const legendPosition = chartLegendPosition(
+    item.legend_position ?? item.legendPosition
+  );
   const dataLabelPosition = readDataLabelPosition(
     Object.prototype.hasOwnProperty.call(item, "data_labels")
       ? item.data_labels
@@ -2171,7 +2350,7 @@ function chartConfig(item: JsonRecord, height: number): JsonRecord {
       plugins: {
         legend: {
           display: showLegend,
-          position: "bottom",
+          position: legendPosition,
           labels: {
             boxWidth: Math.max(8, fontSize * 0.8),
             boxHeight: Math.max(8, fontSize * 0.8),
@@ -2236,6 +2415,16 @@ function chartConfig(item: JsonRecord, height: number): JsonRecord {
   }
 
   return config;
+}
+
+function chartLegendPosition(value: unknown): "left" | "right" | "top" | "bottom" {
+  const position = readString(value);
+  return position === "left" ||
+    position === "right" ||
+    position === "top" ||
+    position === "bottom"
+    ? position
+    : "bottom";
 }
 
 function chartDatasets(chartKind: ChartKind, data: NormalizedChartData): JsonRecord[] {
@@ -3380,25 +3569,44 @@ function tableCellStyle(
     readString(readRecord(readRecord(cell.text).alignment).horizontal);
   const fill = readRecord(cell.color ?? cell.fill);
   const stroke = readRecord(cell.stroke);
+  const borders = readRecordOrNull(cell.borders);
   const fillColor = readString(fill.color);
   const background = fillColor
     ? colorWithOpacity(fillColor, readNumber(fill.opacity))
     : "transparent";
   const forceHeaderBold = header && !tableCellHasExplicitBold(cellValue);
+  const borderStyle = borders
+    ? tableCellBordersStyle(borders)
+    : `border:${cssNumber(
+      readNumber(stroke.width) ?? 1
+    )}px solid ${escapeCssColor(
+      colorWithOpacity(readString(stroke.color) ?? "#D1D5DB", readNumber(stroke.opacity))
+    )};`;
   let style = `${fontStyle(cellFont, {
     includeTextDecoration: false,
   })}display:flex;align-items:center;justify-content:${horizontalAlign(
     alignment
-  )};border:${cssNumber(
-    readNumber(stroke.width) ?? 1
-  )}px solid ${escapeCssColor(
-    colorWithOpacity(readString(stroke.color) ?? "#D1D5DB", readNumber(stroke.opacity))
-  )};min-height:0;min-width:0;overflow:hidden;padding:4px 6px;text-align:${textAlign(
+  )};${borderStyle}min-height:0;min-width:0;overflow:hidden;padding:4px 6px;text-align:${textAlign(
     alignment
   )};vertical-align:middle;white-space:pre-wrap;word-break:break-word;`;
   if (forceHeaderBold && !readBoolean(cellFont.bold)) style += "font-weight:700;";
   style += `background:${escapeCssColor(background)};`;
   return style;
+}
+
+function tableCellBordersStyle(borders: JsonRecord): string {
+  return (["top", "right", "bottom", "left"] as const)
+    .map((side) => {
+      const stroke = readRecord(borders[side]);
+      const width = Math.max(0, readNumber(stroke.width) ?? 0);
+      const color = colorWithOpacity(
+        readString(stroke.color) ?? "transparent",
+        readNumber(stroke.opacity),
+      );
+      const style = readArray(stroke.dash).length > 0 ? "dashed" : "solid";
+      return `border-${side}:${cssNumber(width)}px ${style} ${escapeCssColor(color)};`;
+    })
+    .join("");
 }
 
 function textOverflowStyle(): string {

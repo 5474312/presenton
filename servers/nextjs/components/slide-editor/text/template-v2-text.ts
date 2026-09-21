@@ -566,7 +566,9 @@ export function textVisualLocalBox(
   const renderRuns = options.runs ?? rawRenderTextRuns(element);
   const content =
     options.content ??
-    (options.runs ? textRunsContent(options.runs) : rawTextContent(element));
+    (options.runs
+      ? options.runs.map((run) => run.text).join("")
+      : rawTextContent(element));
   const displayContent = displayText(content);
   const renderRunsDifferFromElement =
     renderRuns.length > 0 &&
@@ -866,7 +868,7 @@ export function layoutTextListRenderItems(
   const font = rawFont(element);
   const items = rawTextListRenderItems(element);
   const textRuns = rawTextListRenderTextRuns(element);
-  const content = textRunsContent(textRuns);
+  const content = textRuns.map((run) => run.text).join("");
   const align = readString(asRecord(element.alignment)?.horizontal) ?? "left";
   const verticalAlign =
     readString(asRecord(element.alignment)?.vertical) ?? "top";

@@ -190,6 +190,8 @@ function chartRenderSignature(
     legend: element.legend,
     legend_color: element.legend_color,
     legendColor: element.legendColor,
+    legend_position: element.legend_position,
+    legendPosition: element.legendPosition,
     pixelRatio,
     series: element.series,
     showLegend: element.showLegend,
@@ -306,6 +308,9 @@ function createChartJsConfig(
     readBoolean(
       "legend" in element ? element.legend : element.showLegend,
     ) ?? autoShowLegend;
+  const legendPosition = chartLegendPosition(
+    element.legend_position ?? element.legendPosition,
+  );
 
   return {
     type: kind.chartJsType,
@@ -343,7 +348,7 @@ function createChartJsConfig(
             padding: Math.max(8, fontSize),
             usePointStyle: true,
           },
-          position: "bottom",
+          position: legendPosition,
         } : {
           display: false,
         },
@@ -405,6 +410,16 @@ function createChartJsConfig(
       }),
     } as Record<string, unknown>,
   };
+}
+
+function chartLegendPosition(value: unknown): "left" | "right" | "top" | "bottom" {
+  const position = readString(value);
+  return position === "left" ||
+    position === "right" ||
+    position === "top" ||
+    position === "bottom"
+    ? position
+    : "bottom";
 }
 
 function createChartJsDatasets(
