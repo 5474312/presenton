@@ -94,6 +94,13 @@ class DataLabelPosition(str, Enum):
     OUTSIDE = "outside"
 
 
+class LegendPosition(str, Enum):
+    LEFT = "left"
+    RIGHT = "right"
+    TOP = "top"
+    BOTTOM = "bottom"
+
+
 class Position(BaseModel):
     x: float
     y: float
@@ -134,11 +141,21 @@ class Fill(BaseModel):
     opacity: Optional[float] = None
 
 
+class StrokeMarker(BaseModel):
+    type: Literal["arrow", "diamond", "open", "oval", "stealth", "triangle"]
+    length: Optional[Literal["sm", "med", "lg"]] = None
+    width: Optional[Literal["sm", "med", "lg"]] = None
+
+
 class Stroke(BaseModel):
     color: str
     opacity: Optional[float] = None
     width: float
     dash: Optional[list[float]] = None
+    line_cap: Optional[Literal["butt", "round", "square"]] = None
+    line_join: Optional[Literal["bevel", "miter", "round"]] = None
+    start_marker: Optional[StrokeMarker] = None
+    end_marker: Optional[StrokeMarker] = None
 
 
 class BorderRadius(BaseModel):
@@ -188,6 +205,8 @@ class Text(BaseModel):
     position: Optional[Position] = None
     size: Optional[Size] = None
     rotation: Optional[float] = None
+    flip_h: Optional[bool] = None
+    flip_v: Optional[bool] = None
     font: Optional[Font] = None
     alignment: Optional[Alignment] = None
     fill: Optional[Fill] = None
@@ -207,6 +226,8 @@ class Container(BaseModel):  # Konva Group
     position: Optional[Position] = None
     size: Optional[Size] = None
     rotation: Optional[float] = None
+    flip_h: Optional[bool] = None
+    flip_v: Optional[bool] = None
     alignment: Optional[Alignment] = None
     fill: Optional[Fill] = None
     stroke: Optional[Stroke] = None
@@ -246,6 +267,8 @@ class TextList(BaseModel):  # Konva Group
     position: Optional[Position] = None
     size: Optional[Size] = None
     rotation: Optional[float] = None
+    flip_h: Optional[bool] = None
+    flip_v: Optional[bool] = None
     font: Optional[Font] = None
     marker: Optional[Marker] = None
     gap: Optional[float] = None
@@ -261,10 +284,18 @@ class TextList(BaseModel):  # Konva Group
     min_item_length: int
 
 
+class TableCellBorders(BaseModel):
+    top: Optional[Stroke] = None
+    right: Optional[Stroke] = None
+    bottom: Optional[Stroke] = None
+    left: Optional[Stroke] = None
+
+
 class TableCell(BaseModel):
     color: Optional[Fill] = None
     font: Optional[Font] = None
     alignment: Optional[HorizontalAlignment] = None
+    borders: Optional[TableCellBorders] = None
     runs: List[TextRunValue]
 
 
@@ -273,6 +304,8 @@ class Table(BaseModel):
     position: Optional[Position] = None
     size: Optional[Size] = None
     rotation: Optional[float] = None
+    flip_h: Optional[bool] = None
+    flip_v: Optional[bool] = None
     columns: list[TableCell]
     rows: list[list[TableCell]]
 
@@ -308,6 +341,7 @@ class VectorCurve(BaseModel):
 
 class Vector(BaseModel):
     type: Literal["vector"]
+    name: Optional[str] = None
     shape: Optional[VectorShape] = None
     points: list[Position] = Field(min_length=2)
     closed: Optional[bool] = None
@@ -316,6 +350,8 @@ class Vector(BaseModel):
     start_marker: Optional[VectorMarker] = None
     end_marker: Optional[VectorMarker] = None
     rotation: Optional[float] = None
+    flip_h: Optional[bool] = None
+    flip_v: Optional[bool] = None
     opacity: Optional[float] = None
     fill: Optional[Fill] = None
     stroke: Optional[Stroke] = None
@@ -327,6 +363,8 @@ class Chart(BaseModel):
     position: Optional[Position] = None
     size: Optional[Size] = None
     rotation: Optional[float] = None
+    flip_h: Optional[bool] = None
+    flip_v: Optional[bool] = None
     chart_type: ChartType
     title: Optional[str] = None
     title_color: Optional[str] = None
@@ -344,6 +382,7 @@ class Chart(BaseModel):
     series: Optional[list[ChartSeries]] = None
     data_labels: Optional[DataLabelPosition] = None
     legend: Optional[bool] = None
+    legend_position: Optional[LegendPosition] = None
     x_axis_grid: Optional[bool] = None
     y_axis_grid: Optional[bool] = None
     grid_color: Optional[str] = None
@@ -413,6 +452,13 @@ class InfographicType(str, Enum):
     ORG_CHART = "org_chart"
     DECISION_TREE = "decision_tree"
     MIND_MAP = "mind_map"
+
+
+class InfographicIcon(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=1)
+    color: str = Field(default="FFFFFF", min_length=1, max_length=32)
 
 
 class ProgressBarInfographicData(BaseModel):
@@ -505,6 +551,8 @@ class Infographic(BaseModel):
     position: Optional[Position] = None
     size: Optional[Size] = None
     rotation: Optional[float] = None
+    flip_h: Optional[bool] = None
+    flip_v: Optional[bool] = None
     data: InfographicData
 
     # Design
@@ -521,6 +569,8 @@ class Flex(BaseModel):
     position: Optional[Position] = None
     size: Optional[Size] = None
     rotation: Optional[float] = None
+    flip_h: Optional[bool] = None
+    flip_v: Optional[bool] = None
     direction: FlexDirection
     wrap: Optional[bool] = None
     align_items: Optional[LayoutAlignment] = None
@@ -541,6 +591,8 @@ class Grid(BaseModel):
     position: Optional[Position] = None
     size: Optional[Size] = None
     rotation: Optional[float] = None
+    flip_h: Optional[bool] = None
+    flip_v: Optional[bool] = None
     columns: int
     rows: Optional[int] = None
     gap: Optional[float] = None
@@ -560,6 +612,9 @@ class Group(BaseModel):
     type: Literal["group"]
     position: Optional[Position] = None
     size: Optional[Size] = None
+    rotation: Optional[float] = None
+    flip_h: Optional[bool] = None
+    flip_v: Optional[bool] = None
     children: list[SlideElement]
 
     # Schema
@@ -606,9 +661,11 @@ __all__ = [
     "IconType",
     "Infographic",
     "InfographicData",
+    "InfographicIcon",
     "InfographicType",
     "GaugeInfographicData",
     "LayoutAlignment",
+    "LegendPosition",
     "LatexTextRun",
     "Marker",
     "Padding",
@@ -621,8 +678,10 @@ __all__ = [
     "SlideElement",
     "Group",
     "Stroke",
+    "StrokeMarker",
     "Table",
     "TableCell",
+    "TableCellBorders",
     "Text",
     "TextList",
     "TextRun",

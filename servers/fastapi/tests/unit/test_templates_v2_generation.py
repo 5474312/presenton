@@ -675,15 +675,20 @@ def test_certified_generation_prompts_split_flexible_and_visual_decisions():
     assert "vertically aligned title and description in a column flow" in flexible_prompt
     assert "use group only when none fits" in flexible_prompt
     assert "chart, infographic, table, or text list" in visual_prompt
-    assert "Use kind=infographic for either a complete infographic image" in visual_prompt
-    assert "data.type=progress_bar or data.type=gauge" in visual_prompt
+    assert "Use kind=infographic for a complete infographic image" in visual_prompt
+    assert "infographic data.type structures: metric, collection, graph, or matrix" in (
+        visual_prompt
+    )
+    assert "infographic data.type=metric" in visual_prompt
     assert "metric renderers draw no text" in visual_prompt
     assert "center value-label color" not in visual_prompt
     assert "Atomicity is mandatory" in visual_prompt
-    assert "one table or chart becomes exactly one typed replacement" in visual_prompt
+    assert "one table, chart, or infographic becomes exactly one typed replacement" in (
+        visual_prompt
+    )
     assert "Never emit table cells, rows, headers, borders" in visual_prompt
     assert "Never emit or leave any chart internal" in visual_prompt
-    assert "geometrically enclosed sibling elements" in visual_prompt
+    assert "nearby sibling elements" in visual_prompt
     assert "preserve clear padding on all four sides" in visual_prompt
     assert "derive each value from filled length" in visual_prompt
     assert "structured table as one atomic editable element" in (
@@ -700,7 +705,7 @@ def test_certified_generation_prompts_split_flexible_and_visual_decisions():
         capacity_prompt
     )
     assert "intersection of safe directions" in capacity_prompt
-    assert "smallest shared positive bottom_lines value" in capacity_prompt
+    assert "vertical corridor ending at the card's bottom edge" in capacity_prompt
     assert "previewSlide" not in flexible_prompt
 
 

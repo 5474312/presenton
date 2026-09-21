@@ -13,8 +13,7 @@ from .elements import (
     Fill,
     Font,
     HorizontalAlignment,
-    InfographicData,
-    Marker,
+    InfographicIcon,
     Position,
     Size,
     SlideElement,
@@ -146,6 +145,14 @@ class VisualReplacementGeometry(BaseModel):
 
     position: Position
     size: Size
+    consumed_paths: list[SemanticElementPath] = Field(
+        default_factory=list,
+        max_length=80,
+        description=(
+            "Additional top-level source elements fully represented by this "
+            "replacement and removed from the compiled layout."
+        ),
+    )
 
 
 class VisualChartReplacement(VisualReplacementGeometry):
@@ -196,6 +203,175 @@ class VisualChartReplacement(VisualReplacementGeometry):
         return self
 
 
+class VisualInfographicItem(BaseModel):
+    """Content for one item in a collection-style infographic."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    icon: str | InfographicIcon | None = None
+    heading: str | None = Field(default=None, min_length=1)
+    description: str | None = Field(default=None, min_length=1)
+    focus: str | None = Field(default=None, min_length=1)
+    value: float | None = Field(default=None, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def _must_have_visible_content(self) -> "VisualInfographicItem":
+        if not any(
+            value is not None
+            for value in (
+                self.icon,
+                self.heading,
+                self.description,
+                self.focus,
+                self.value,
+            )
+        ):
+            raise ValueError("infographic item must contain visible content")
+        return self
+
+
+class VisualMetricInfographicData(BaseModel):
+    """One scalar value rendered as a progress bar or gauge."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["metric"]
+    variant: Literal["progress_bar", "gauge"]
+    min_value: float
+    max_value: float
+    value: float
+
+    @model_validator(mode="after")
+    def _validate_range(self) -> "VisualMetricInfographicData":
+        if self.max_value <= self.min_value:
+            raise ValueError("max_value must be greater than min_value")
+        if not self.min_value <= self.value <= self.max_value:
+            raise ValueError("metric value must fit its declared range")
+        return self
+
+
+class VisualCollectionInfographicData(BaseModel):
+    """An ordered or radial collection of repeated infographic items."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["collection"]
+    variant: Literal[
+        "timeline",
+        "roadmap",
+        "milestone_timeline",
+        "staircase",
+        "supply_chain",
+        "stair_step_blocks",
+        "maturity_model",
+        "pillar_framework",
+        "transformation_hub",
+        "diagonal_circles",
+        "chevron_process",
+        "radial_cycle",
+        "conversion_funnel",
+        "vertical_funnel",
+        "pyramid",
+        "segmented_wheel",
+        "customer_journey",
+        "before_after",
+    ]
+    items: list[VisualInfographicItem] = Field(min_length=1, max_length=18)
+    title: str | None = Field(default=None, min_length=1)
+    center_label: str | None = Field(default=None, min_length=1)
+    center_image: str | None = Field(default=None, min_length=1)
+    before_label: str | None = Field(default=None, min_length=1)
+    after_label: str | None = Field(default=None, min_length=1)
+
+
+class VisualGraphInfographicNode(BaseModel):
+    """One node in a hierarchy or mind map."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=80)
+    parent_id: str | None = Field(default=None, min_length=1, max_length=80)
+    icon: str | InfographicIcon | None = None
+    heading: str | None = Field(default=None, min_length=1)
+    description: str | None = Field(default=None, min_length=1)
+
+
+class VisualGraphInfographicData(BaseModel):
+    """A hierarchy or branching infographic represented as flat nodes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["graph"]
+    variant: Literal["org_chart", "decision_tree", "mind_map"]
+    items: list[VisualGraphInfographicNode] = Field(min_length=1, max_length=24)
+
+
+class VisualMatrixPosition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    column: int = Field(ge=0)
+    offset: float = Field(default=0, ge=0, le=1)
+
+
+class VisualMatrixSpan(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    start: VisualMatrixPosition
+    end: VisualMatrixPosition
+
+
+class VisualMatrixRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str = Field(min_length=1)
+    items: list[VisualMatrixSpan] = Field(default_factory=list)
+
+
+class VisualMatrixItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    icon: str | InfographicIcon | None = None
+    heading: str | None = Field(default=None, min_length=1)
+    description: str | None = Field(default=None, min_length=1)
+    focus: str | None = Field(default=None, min_length=1)
+    values: list[str] | None = Field(default=None, min_length=1, max_length=8)
+
+
+class VisualMatrixInfographicData(BaseModel):
+    """A grid, quadrant, comparison, or schedule infographic."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["matrix"]
+    variant: Literal[
+        "gantt",
+        "risk_matrix",
+        "impact_effort_matrix",
+        "comparison_matrix",
+    ]
+    items: list[VisualMatrixItem] = Field(default_factory=list, max_length=18)
+    criteria: list[str] | None = Field(default=None, min_length=1, max_length=8)
+    columns: list[str] | None = Field(default=None, min_length=1, max_length=24)
+    rows: list[VisualMatrixRow] | None = Field(
+        default=None, min_length=1, max_length=40
+    )
+    center_label: str | None = Field(default=None, min_length=1)
+    x_axis_label: str | None = Field(default=None, min_length=1)
+    y_axis_label: str | None = Field(default=None, min_length=1)
+    low_label: str | None = Field(default=None, min_length=1)
+    high_label: str | None = Field(default=None, min_length=1)
+
+
+VisualInfographicData = Annotated[
+    VisualMetricInfographicData
+    | VisualCollectionInfographicData
+    | VisualGraphInfographicData
+    | VisualMatrixInfographicData,
+    Field(discriminator="type"),
+]
+
+
 class VisualInfographicReplacement(VisualReplacementGeometry):
     """One complete infographic image or grouped bounded metric region."""
 
@@ -203,7 +379,7 @@ class VisualInfographicReplacement(VisualReplacementGeometry):
 
     kind: Literal["infographic"]
     path: SemanticElementPath
-    data: InfographicData
+    data: VisualInfographicData
     colors: list[HexColor] = Field(
         min_length=2,
         max_length=24,
@@ -218,12 +394,10 @@ class VisualInfographicReplacement(VisualReplacementGeometry):
 
     @model_validator(mode="after")
     def _metric_fields_must_be_valid(self) -> "VisualInfographicReplacement":
-        if self.data.type not in {"progress_bar", "gauge"}:
+        if self.data.type != "metric":
             return self
         if self.text_color is not None:
             raise ValueError("metric infographic text_color must be null")
-        if not self.data.min_value <= self.data.value <= self.data.max_value:
-            raise ValueError("metric value must fit its declared range")
         if len(self.colors) > 8:
             raise ValueError("metric infographic colors cannot exceed eight slots")
         return self
@@ -258,13 +432,26 @@ class VisualTableReplacement(VisualReplacementGeometry):
 
 
 class VisualTextListReplacement(BaseModel):
-    """One image or grouped visual region recognized as an ordered or unordered list."""
+    """A list whose repeated items contain only text and optional visible markers."""
 
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["text-list"]
-    path: SemanticElementPath
-    marker: Marker
+    path: SemanticElementPath = Field(
+        description=(
+            "Primary container, group, or raster candidate anchoring the standalone "
+            "plain text list."
+        )
+    )
+    consumed_paths: list[SemanticElementPath] = Field(
+        default_factory=list,
+        max_length=80,
+        description=(
+            "Additional top-level text or marker source elements represented by "
+            "this standalone plain text list."
+        ),
+    )
+    marker: Literal["bullet", "number", "none"]
     font: Font | None
     gap: float = Field(
         ge=0,
@@ -283,7 +470,7 @@ class VisualTextListReplacement(BaseModel):
 
     @model_validator(mode="after")
     def _unmarked_list_has_no_marker_gap(self) -> "VisualTextListReplacement":
-        if self.marker == Marker.NONE and self.marker_gap != 0:
+        if self.marker == "none" and self.marker_gap != 0:
             raise ValueError("an unmarked text list must have marker_gap=0")
         return self
 
@@ -306,9 +493,19 @@ class VisualDataReplacementPlan(BaseModel):
 
     @model_validator(mode="after")
     def _paths_must_be_unique_and_disjoint(self) -> "VisualDataReplacementPlan":
-        paths = [replacement.path for replacement in self.replacements]
-        if len(paths) != len(set(paths)):
+        primary_paths = [replacement.path for replacement in self.replacements]
+        if len(primary_paths) != len(set(primary_paths)):
             raise ValueError("a visual region can have at most one replacement")
+
+        paths: list[str] = []
+        for replacement in self.replacements:
+            if replacement.path in replacement.consumed_paths:
+                raise ValueError("consumed_paths must not repeat the primary path")
+            if len(replacement.consumed_paths) != len(set(replacement.consumed_paths)):
+                raise ValueError("consumed_paths must be unique per replacement")
+            paths.extend([replacement.path, *replacement.consumed_paths])
+        if len(paths) != len(set(paths)):
+            raise ValueError("visual replacements cannot consume the same source path")
         for index, path in enumerate(paths):
             prefix = f"{path}."
             if any(
@@ -630,6 +827,15 @@ def visual_data_replacement_plan_llm_json_schema() -> dict:
                     "minLength": 10,
                     "maxLength": 240,
                 },
+                "consumed_paths": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "minLength": 10,
+                        "maxLength": 240,
+                    },
+                    "maxItems": 80,
+                },
                 "position": {"$ref": "#/$defs/Position"},
                 "size": {"$ref": "#/$defs/Size"},
                 "data_json": {
@@ -638,7 +844,14 @@ def visual_data_replacement_plan_llm_json_schema() -> dict:
                     "maxLength": 120000,
                 },
             },
-            "required": ["kind", "path", "position", "size", "data_json"],
+            "required": [
+                "kind",
+                "path",
+                "consumed_paths",
+                "position",
+                "size",
+                "data_json",
+            ],
         }
     )
     alternatives.append(
@@ -652,6 +865,15 @@ def visual_data_replacement_plan_llm_json_schema() -> dict:
                     "minLength": 10,
                     "maxLength": 240,
                 },
+                "consumed_paths": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "minLength": 10,
+                        "maxLength": 240,
+                    },
+                    "maxItems": 80,
+                },
                 "position": {"$ref": "#/$defs/Position"},
                 "size": {"$ref": "#/$defs/Size"},
                 "data_json": {
@@ -660,7 +882,14 @@ def visual_data_replacement_plan_llm_json_schema() -> dict:
                     "maxLength": 120000,
                 },
             },
-            "required": ["kind", "path", "position", "size", "data_json"],
+            "required": [
+                "kind",
+                "path",
+                "consumed_paths",
+                "position",
+                "size",
+                "data_json",
+            ],
         }
     )
     schema["properties"]["replacements"]["items"] = {"anyOf": alternatives}
