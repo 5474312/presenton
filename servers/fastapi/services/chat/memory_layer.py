@@ -3820,17 +3820,22 @@ class PresentationChatMemoryLayer:
         has_value = False
         value = None
         if isinstance(name, str):
-            if preferred_content_keys is None and name_occurrences is not None:
-                preferred_content_keys = cls._template_repeated_content_keys_for_name(
-                    name,
+            if direct_value and element_type in {"container", "flex", "grid", "group"}:
+                if name in content_values:
+                    has_value = True
+                    value = content_values[name]
+            else:
+                if preferred_content_keys is None and name_occurrences is not None:
+                    preferred_content_keys = cls._template_repeated_content_keys_for_name(
+                        name,
+                        content_values,
+                        name_occurrences,
+                    )
+                has_value, value = cls._template_content_value(
                     content_values,
-                    name_occurrences,
+                    name,
+                    preferred_keys=preferred_content_keys,
                 )
-            has_value, value = cls._template_content_value(
-                content_values,
-                name,
-                preferred_keys=preferred_content_keys,
-            )
 
         if (
             has_value
@@ -4119,7 +4124,12 @@ class PresentationChatMemoryLayer:
         text: str,
         fallback_font: Any,
     ) -> list[dict[str, Any]]:
-        return replace_text_runs(existing_runs, text, fallback_font)
+        return replace_text_runs(
+            existing_runs,
+            text,
+            fallback_font,
+            parse_markdown_bold=True,
+        )
 
     @staticmethod
     def _template_asset_url(value: Any) -> str | None:

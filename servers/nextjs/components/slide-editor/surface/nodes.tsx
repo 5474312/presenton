@@ -26,7 +26,6 @@ import {
   Text,
 } from "react-konva";
 import { effectiveLineHeight } from "@/components/slide-editor/text/text-line-height";
-import { textRunsContent } from "@/components/slide-editor/text/text-runs";
 import { TRANSFORM_ANCHOR_ATTR } from "@/components/slide-editor/selection/transformSession";
 import {
   displayText,
@@ -217,7 +216,9 @@ type VectorMarkerStyle =
   | "diamond";
 
 function vectorMarkerStyle(value: unknown): VectorMarkerStyle | null {
-  const marker = readString(value);
+  const record = asRecord(value);
+  const source = readString(record?.type) ?? readString(value);
+  const marker = source === "oval" ? "circle" : source === "open" ? "arrow" : source;
   return marker && VECTOR_MARKERS.has(marker)
     ? (marker as VectorMarkerStyle)
     : null;
@@ -228,20 +229,32 @@ function VectorEndpointMarker({
   color,
   endpoint,
   marker,
+  markerSettings,
   strokeWidth: markerStrokeWidth,
 }: {
   adjacent: Point;
   color: string;
   endpoint: Point;
   marker: VectorMarkerStyle;
+  markerSettings?: unknown;
   strokeWidth: number;
 }) {
   const dx = endpoint.x - adjacent.x;
   const dy = endpoint.y - adjacent.y;
   if (Math.hypot(dx, dy) < 0.01) return null;
 
-  const length = Math.max(11, Math.min(28, 8 + markerStrokeWidth * 2.5));
-  const halfWidth = length * 0.42;
+  const markerRecord = asRecord(markerSettings);
+  const defaultLength = Math.max(11, Math.min(28, 8 + markerStrokeWidth * 2.5));
+  const length = vectorMarkerDimension(
+    markerRecord?.length,
+    markerStrokeWidth,
+    defaultLength,
+  );
+  const halfWidth = vectorMarkerDimension(
+    markerRecord?.width,
+    markerStrokeWidth,
+    defaultLength * 0.84,
+  ) / 2;
   const rotation = Math.atan2(dy, dx) * (180 / Math.PI);
   const shared = {
     fill: color,
@@ -286,6 +299,16 @@ function VectorEndpointMarker({
       )}
     </Group>
   );
+}
+
+function vectorMarkerDimension(
+  value: unknown,
+  strokeWidth: number,
+  fallback: number,
+) {
+  const size = readString(value);
+  const scale = size === "lg" ? 5 : size === "med" ? 3 : size === "sm" ? 2 : null;
+  return scale == null ? fallback : Math.max(strokeWidth, strokeWidth * scale);
 }
 
 function isComponentSideResizeAnchor(
@@ -1574,8 +1597,8 @@ function RawElementNode({
       const anchor =
         componentTransformAnchorForNode(node) ?? transformAnchorRef.current;
       const sourceBox = transformSourceBoxRef.current ?? box;
-      const scaleX = node.scaleX();
-      const scaleY = node.scaleY();
+      const scaleX = Math.abs(node.scaleX());
+      const scaleY = Math.abs(node.scaleY());
       const nextSize = {
         width: Math.max(1, sourceBox.width * scaleX),
         height: Math.max(1, sourceBox.height * scaleY),
@@ -1673,6 +1696,18 @@ function RawElementNode({
       clipWidth={clipChildren ? box.width : undefined}
       clipHeight={clipChildren ? box.height : undefined}
       rotation={readNumber(element.rotation) ?? 0}
+      scaleX={
+        type !== "image" &&
+        readBoolean(element.flip_h ?? element.flipH) === true
+          ? -1
+          : 1
+      }
+      scaleY={
+        type !== "image" &&
+        readBoolean(element.flip_v ?? element.flipV) === true
+          ? -1
+          : 1
+      }
       opacity={readNumber(element.opacity) ?? 1}
       draggable={vectorDraggable}
       onMouseDown={(event) => {
@@ -2229,14 +2264,25 @@ function RawElementVisual({
   }
   if (isVectorType(type)) {
     const vectorShape = vectorShapeForElement(element);
+    const strokeRecord = asRecord(element.stroke) ?? {};
     const stroke = colorWithOpacity(
       strokeColor(element.stroke),
       strokeOpacity(element.stroke),
     );
     const lineWidth = lineStrokeWidth(element);
-    const lineDash = readArray(asRecord(element.stroke)?.dash)
+    const lineDash = readArray(strokeRecord.dash)
       .map(readNumber)
       .filter((value): value is number => value != null);
+    const rawLineCap = readString(strokeRecord.line_cap ?? strokeRecord.lineCap);
+    const lineCap =
+      rawLineCap === "butt" || rawLineCap === "round" || rawLineCap === "square"
+        ? rawLineCap
+        : undefined;
+    const rawLineJoin = readString(strokeRecord.line_join ?? strokeRecord.lineJoin);
+    const lineJoin =
+      rawLineJoin === "bevel" || rawLineJoin === "miter" || rawLineJoin === "round"
+        ? rawLineJoin
+        : undefined;
 
     if (vectorShape === "ellipse") {
       const fill = colorWithOpacity(fillColor(element.fill), fillOpacity(element.fill));
@@ -2251,6 +2297,8 @@ function RawElementVisual({
           stroke={stroke}
           strokeWidth={stroke ? lineWidth : 0}
           dash={lineDash.length ? lineDash : undefined}
+          lineCap={lineCap}
+          lineJoin={lineJoin}
           hitStrokeWidth={Math.max(20, lineWidth)}
           {...shadowProps(element)}
           listening={interactive}
@@ -2270,11 +2318,15 @@ function RawElementVisual({
       strokeColor(element.stroke) ?? (!closed ? "#000000" : undefined),
       strokeOpacity(element.stroke),
     );
+    const startMarkerValue =
+      element.start_marker ?? element.startMarker ?? strokeRecord.start_marker;
+    const endMarkerValue =
+      element.end_marker ?? element.endMarker ?? strokeRecord.end_marker;
     const startMarker = !closed
-      ? vectorMarkerStyle(element.start_marker ?? element.startMarker)
+      ? vectorMarkerStyle(startMarkerValue)
       : null;
     const endMarker = !closed
-      ? vectorMarkerStyle(element.end_marker ?? element.endMarker)
+      ? vectorMarkerStyle(endMarkerValue)
       : null;
     if (points.length < 4) return null;
     if (!fill && !(polygonStroke && lineWidth > 0)) return null;
@@ -2296,8 +2348,8 @@ function RawElementVisual({
           strokeWidth={polygonStroke ? lineWidth : 0}
           dash={lineDash.length ? lineDash : undefined}
           hitStrokeWidth={Math.max(20, lineWidth)}
-          lineCap="round"
-          lineJoin="round"
+          lineCap={lineCap ?? "round"}
+          lineJoin={lineJoin ?? "round"}
           {...shadowProps(element)}
           listening={interactive}
         />
@@ -2307,6 +2359,7 @@ function RawElementVisual({
             color={polygonStroke}
             endpoint={firstPoint}
             marker={startMarker}
+            markerSettings={startMarkerValue}
             strokeWidth={lineWidth}
           />
         ) : null}
@@ -2316,6 +2369,7 @@ function RawElementVisual({
             color={polygonStroke}
             endpoint={lastPoint}
             marker={endMarker}
+            markerSettings={endMarkerValue}
             strokeWidth={lineWidth}
           />
         ) : null}
@@ -2439,7 +2493,9 @@ function RawRichTextElement({
     runsOverride ?? (text == null ? rawRenderTextRuns(element) : []);
   const content =
     text ??
-    (runsOverride ? textRunsContent(runsOverride) : rawTextContent(element));
+    (runsOverride
+      ? runsOverride.map((run) => run.text).join("")
+      : rawTextContent(element));
   const displayContent = displayText(content);
   const align = readString(element.alignment?.horizontal) ?? "left";
   const verticalAlign = readString(element.alignment?.vertical) ?? "top";

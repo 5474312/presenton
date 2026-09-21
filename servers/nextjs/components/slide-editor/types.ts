@@ -75,7 +75,7 @@ export type MeterInfographicData = {
 
 export type GanttInfographicPosition = {
   column: number;
-  offset: number;
+  offset?: number | null;
 };
 
 export type GanttInfographicItem = {
@@ -87,16 +87,16 @@ export type GanttInfographicItem = {
 export type GanttInfographicData = {
   type: "gantt";
   columns: Array<{ label: string }>;
-  rows: Array<{ label: string; items: GanttInfographicItem[] }>;
+  rows: Array<{ label: string; items?: GanttInfographicItem[] | null }>;
 };
 
 export type InfographicIcon = {
   url: string;
-  color: string;
+  color?: string | null;
 };
 
 export type TimelineInfographicItem = {
-  icon?: InfographicIcon | null;
+  icon?: string | InfographicIcon | null;
   heading?: string | null;
   description?: string | null;
   label?: string | null;
@@ -206,22 +206,22 @@ export type CustomerJourneyInfographicData = {
 
 export type BeforeAfterInfographicData = {
   type: "before_after";
-  before_label: string;
-  after_label: string;
+  before_label?: string | null;
+  after_label?: string | null;
   items: TimelineInfographicItem[];
 };
 
 export type ImpactEffortMatrixInfographicData = {
   type: "impact_effort_matrix";
-  x_axis_label: string;
-  y_axis_label: string;
-  low_label: string;
-  high_label: string;
+  x_axis_label?: string | null;
+  y_axis_label?: string | null;
+  low_label?: string | null;
+  high_label?: string | null;
   items: TimelineInfographicItem[];
 };
 
 export type ComparisonMatrixInfographicItem = {
-  icon?: InfographicIcon | null;
+  icon?: string | InfographicIcon | null;
   heading: string;
   values: string[];
 };
@@ -265,7 +265,7 @@ export type ItemCollectionInfographicData =
   | CustomerJourneyInfographicData;
 
 export type MindMapInfographicNode = TimelineInfographicItem & {
-  items: MindMapInfographicNode[];
+  items?: MindMapInfographicNode[] | null;
 };
 
 export type MindMapInfographicData = {
@@ -354,6 +354,16 @@ export type Stroke = {
   opacity?: number | null;
   width: number;
   dash?: number[] | null;
+  line_cap?: "butt" | "round" | "square" | null;
+  line_join?: "bevel" | "miter" | "round" | null;
+  start_marker?: StrokeMarker | null;
+  end_marker?: StrokeMarker | null;
+};
+
+export type StrokeMarker = {
+  type: "arrow" | "diamond" | "open" | "oval" | "stealth" | "triangle";
+  length?: "sm" | "med" | "lg" | null;
+  width?: "sm" | "med" | "lg" | null;
 };
 
 export type Line = Stroke;
@@ -387,8 +397,10 @@ export type ChartSeries = {
 };
 
 export type DataLabelPosition = "base" | "mid" | "top" | "outside";
+export type LegendPosition = "left" | "right" | "top" | "bottom";
 
 export type PlainTextRun = {
+  type?: "text" | null;
   text: string;
   font?: Font | null;
 };
@@ -422,6 +434,8 @@ type ElementBase = {
   position?: Position | null;
   size?: Size | null;
   rotation?: number | null;
+  flip_h?: boolean | null;
+  flip_v?: boolean | null;
   opacity?: number | null;
   shadow?: Shadow | null;
   component_id?: string | null;
@@ -430,11 +444,6 @@ type ElementBase = {
   component_slot?: string | null;
   design_variables?: DesignVariable[] | null;
   layout?: LayoutItem | null;
-};
-
-type RequiredElementBase = ElementBase & {
-  position: Position;
-  size: Size;
 };
 
 export type TextElement = ElementBase & {
@@ -460,8 +469,6 @@ export type ContainerElement = ElementBase & {
 
 export type ImageElement = ElementBase & {
   type: "image";
-  flip_h?: boolean | null;
-  flip_v?: boolean | null;
   data?: string | null;
   fit?: ImageFit | null;
   focus_x?: number | null;
@@ -496,7 +503,15 @@ export type TableCell = {
   color?: Fill | null;
   font?: Font | null;
   alignment?: HorizontalAlignment | null;
+  borders?: TableCellBorders | null;
   runs: TextRun[];
+};
+
+export type TableCellBorders = {
+  top?: Stroke | null;
+  right?: Stroke | null;
+  bottom?: Stroke | null;
+  left?: Stroke | null;
 };
 
 export type TableElement = ElementBase & {
@@ -530,10 +545,9 @@ export type VectorMarker =
   | "square"
   | "diamond";
 
-export type VectorElement = Omit<ElementBase, "decorative" | "name"> & {
+export type VectorElement = Omit<ElementBase, "decorative"> & {
   type: "vector";
   decorative?: never;
-  name?: never;
   shape?: VectorShape | null;
   points: Position[];
   closed?: boolean | null;
@@ -553,9 +567,10 @@ export type SvgElement = ElementBase & {
 export type ChartElement = ElementBase & {
   type: "chart";
   chart_type: ChartType;
-  data: ChartDatum[];
+  data?: ChartDatum[] | null;
   title?: string | null;
   title_color?: string | null;
+  text_color?: string | null;
   color?: string | null;
   axis_color?: string | null;
   grid_color?: string | null;
@@ -568,8 +583,9 @@ export type ChartElement = ElementBase & {
   y_axis_title?: string | null;
   categories?: string[] | null;
   series?: ChartSeries[] | null;
-  data_labels?: DataLabelPosition | null;
+  data_labels?: DataLabelPosition | boolean | null;
   legend?: boolean | null;
+  legend_position?: LegendPosition | null;
   legend_color?: string | null;
   source?: string | null;
 };
@@ -577,11 +593,11 @@ export type ChartElement = ElementBase & {
 export type InfographicElement = ElementBase & {
   type: "infographic";
   data: InfographicData;
-  colors: string[];
+  colors?: string[] | null;
   text_color?: string | null;
 };
 
-export type FlexElement = RequiredElementBase & {
+export type FlexElement = ElementBase & {
   type: "flex";
   direction: FlexDirection;
   wrap?: boolean | null;
@@ -596,7 +612,7 @@ export type FlexElement = RequiredElementBase & {
   min_children?: number | null;
 };
 
-export type GridElement = RequiredElementBase & {
+export type GridElement = ElementBase & {
   type: "grid";
   columns: number;
   rows?: number | null;
@@ -611,7 +627,7 @@ export type GridElement = RequiredElementBase & {
   min_children?: number | null;
 };
 
-export type GroupElement = RequiredElementBase & {
+export type GroupElement = ElementBase & {
   type: "group";
   children: SlideElement[];
   max_children?: number | null;

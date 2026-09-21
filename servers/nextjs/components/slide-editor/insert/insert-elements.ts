@@ -2664,7 +2664,7 @@ function applyTemplateThemeToElement(
         grid_color: theme.stroke,
         title_color: theme.background_text,
         legend_color: theme.background_text,
-        data: element.data.map((datum, index) => ({
+        data: (element.data ?? []).map((datum, index) => ({
           ...datum,
           color: graphColors[index % graphColors.length],
         })),

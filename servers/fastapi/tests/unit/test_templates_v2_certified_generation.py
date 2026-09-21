@@ -471,7 +471,8 @@ def test_llm_text_capacity_expansion_recalculates_text_limits():
     assert text["size"]["width"] > 100
     assert text["size"]["height"] == 20
     assert text["max_length"] > 10
-    assert text["min_length"] == (text["max_length"] + 1) // 2
+    assert text["min_length"] == 5
+    assert text["min_length"] <= len("Short text")
 
 
 def test_generate_slide_layout_runs_focused_passes(monkeypatch):
@@ -805,6 +806,7 @@ def test_visual_data_llm_schema_uses_table_envelope_only_for_gemini():
     assert table_schema["required"] == [
         "kind",
         "path",
+        "consumed_paths",
         "position",
         "size",
         "data_json",
@@ -820,6 +822,7 @@ def test_visual_data_llm_schema_uses_table_envelope_only_for_gemini():
     assert infographic_schema["required"] == [
         "kind",
         "path",
+        "consumed_paths",
         "position",
         "size",
         "data_json",
@@ -1231,7 +1234,8 @@ def test_visual_data_pass_converts_group_to_infographic(kind):
                     "position": {"x": 200, "y": 220},
                     "size": {"width": 360, "height": 140},
                     "data": {
-                        "type": kind,
+                        "type": "metric",
+                        "variant": kind,
                         "min_value": 0,
                         "max_value": 100,
                         "value": 64,
@@ -1271,7 +1275,8 @@ def test_visual_data_plan_rejects_text_color_for_metric_infographic(kind):
                         "position": {"x": 200, "y": 220},
                         "size": {"width": 360, "height": 140},
                         "data": {
-                            "type": kind,
+                            "type": "metric",
+                            "variant": kind,
                             "min_value": 0,
                             "max_value": 100,
                             "value": 64,

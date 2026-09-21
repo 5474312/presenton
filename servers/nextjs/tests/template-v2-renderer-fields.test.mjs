@@ -91,6 +91,135 @@ test("preserves text-list item and marker gaps when importing Template V2", () =
   assert.equal(slide.elements[0].marker_gap, 6);
 });
 
+test("preserves the supported PPTX JSON metadata when importing Template V2", () => {
+  const slide = importer.adaptTemplateV2LayoutToSlide({
+    id: "pptx-json-fields",
+    elements: [
+      {
+        type: "text",
+        flip_h: true,
+        runs: [{ text: "Mirrored" }],
+      },
+      {
+        type: "table",
+        columns: [
+          {
+            runs: [{ text: "Heading" }],
+            borders: {
+              bottom: { color: "#FF9999", width: 0 },
+            },
+            row_span: 2,
+          },
+        ],
+        rows: [[{ runs: [{ text: "Value" }] }]],
+        column_widths: [120],
+      },
+      {
+        type: "vector",
+        name: "connector",
+        flip_v: true,
+        points: [{ x: 0, y: 0 }, { x: 100, y: 0 }],
+        stroke: {
+          color: "#384351",
+          width: 19.56,
+          dash: [0, 12.45],
+          line_cap: "round",
+          line_join: "bevel",
+          start_marker: { type: "oval", length: "lg", width: "lg" },
+        },
+      },
+      {
+        type: "chart",
+        chart_type: "bubble",
+        text_color: "#475467",
+        legend_position: "right",
+        series: [
+          {
+            name: "Revenue",
+            values: [10, 20],
+            x_values: [2025, 2026],
+            color: "#2563EB",
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(slide.elements[0].flip_h, true);
+  assert.deepEqual(slide.elements[1].columns[0].borders, {
+    bottom: { color: "#FF9999", opacity: 1, width: 0 },
+  });
+  assert.equal(slide.elements[1].columns[0].row_span, undefined);
+  assert.equal(slide.elements[1].column_widths, undefined);
+  assert.equal(slide.elements[2].name, "connector");
+  assert.equal(slide.elements[2].flip_v, true);
+  assert.deepEqual(slide.elements[2].stroke.start_marker, {
+    type: "oval",
+    length: "lg",
+    width: "lg",
+  });
+  assert.equal(slide.elements[2].stroke.line_cap, "round");
+  assert.equal(slide.elements[2].stroke.line_join, "bevel");
+  assert.equal(slide.elements[2].stroke.width, 19.56);
+  assert.equal(slide.elements[3].legend_position, "right");
+  assert.equal(slide.elements[3].text_color, "#475467");
+  assert.equal(slide.elements[3].chart_type, "scatter");
+  assert.deepEqual(slide.elements[3].series, [
+    { name: "Revenue", values: [10, 20] },
+  ]);
+});
+
+test("accepts canonical FastAPI and export-core defaults", () => {
+  const slide = importer.adaptTemplateV2LayoutToSlide({
+    id: "canonical-model",
+    elements: [
+      {
+        type: "text",
+        alignment: { horizontal: "justify" },
+        runs: [{ text: "Justified paragraph" }],
+      },
+      {
+        type: "table",
+        columns: [{ alignment: "justify", runs: [{ text: "Heading" }] }],
+        rows: [[{ runs: [{ text: "Value" }] }]],
+      },
+      {
+        type: "chart",
+        chart_type: "bar",
+        categories: ["A"],
+        series: [{ name: "Series", values: [7] }],
+        data_labels: true,
+      },
+      {
+        type: "infographic",
+        data: {
+          type: "timeline",
+          items: [
+            { icon: "https://example.com/icon.svg", heading: "Stage" },
+          ],
+        },
+      },
+      {
+        type: "group",
+        children: [],
+      },
+    ],
+  });
+
+  assert.equal(slide.elements[0].alignment.horizontal, "justify");
+  assert.equal(slide.elements[1].columns[0].alignment, "justify");
+  assert.deepEqual(slide.elements[2].data, [
+    { label: "A", value: 7, color: "7F22FE" },
+  ]);
+  assert.equal(slide.elements[2].data_labels, "top");
+  assert.deepEqual(slide.elements[3].data.items[0].icon, {
+    url: "https://example.com/icon.svg",
+    color: "FFFFFF",
+  });
+  assert.deepEqual(slide.elements[4].position, { x: 0, y: 0 });
+  assert.deepEqual(slide.elements[4].size, { width: 1, height: 1 });
+});
+
 test("adds text-list gap only between items in the canvas layout", () => {
   const baseElement = {
     type: "text-list",

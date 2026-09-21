@@ -2,10 +2,12 @@ import type {
   GanttInfographicData,
   GanttInfographicItem,
   GanttInfographicPosition,
-  InfographicIcon,
   InfographicType,
 } from "@/components/slide-editor/types";
-import { defaultInfographicIcon } from "@/components/slide-editor/infographics/infographic-icons";
+import {
+  defaultInfographicIcon,
+  type NormalizedInfographicIcon,
+} from "@/components/slide-editor/infographics/infographic-icons";
 
 const DEFAULT_PALETTE = [
   "FFFFFF",
@@ -313,7 +315,7 @@ export function setInfographicMainUngrouped(
 export function normalizeInfographicIcon(
   value: unknown,
   legacyColor?: unknown,
-): InfographicIcon | null {
+): NormalizedInfographicIcon | null {
   const record = readInfographicRecord(value);
   const url =
     typeof value === "string"
@@ -776,7 +778,7 @@ export function removeGanttColumn(
     columns: data.columns.filter((_, columnIndex) => columnIndex !== index),
     rows: data.rows.map((row) => ({
       ...row,
-      items: row.items.map((item) =>
+      items: (row.items ?? []).map((item) =>
         normalizeGanttItem(
           {
             ...item,
@@ -816,7 +818,10 @@ export function normalizeGanttItem(
 
 export function ganttPositionToUnits(position: GanttInfographicPosition): number {
   const column = Number.isFinite(position.column) ? position.column : 0;
-  const offset = Number.isFinite(position.offset) ? position.offset : 0;
+  const offset =
+    typeof position.offset === "number" && Number.isFinite(position.offset)
+      ? position.offset
+      : 0;
   return column + offset;
 }
 

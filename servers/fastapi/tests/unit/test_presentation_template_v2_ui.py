@@ -4,6 +4,70 @@ from api.v1.ppt.endpoints import presentation as presentation_endpoint
 from services.chat.memory_layer import PresentationChatMemoryLayer
 
 
+def test_direct_structural_hydration_does_not_alias_name_to_child():
+    structural = {
+        "type": "flex",
+        "name": "title_summary",
+        "children": [
+            {
+                "type": "text",
+                "decorative": False,
+                "name": "title",
+                "runs": [{"text": "Placeholder title"}],
+            },
+            {
+                "type": "text",
+                "decorative": False,
+                "name": "summary",
+                "runs": [{"text": "Placeholder summary"}],
+            },
+        ],
+    }
+    content = {
+        "title": "Digital Fan Access",
+        "summary": "The complete supporting summary.",
+    }
+
+    hydrated = presentation_endpoint._apply_template_content_to_element(
+        structural,
+        content,
+        direct_value=True,
+    )
+    chat_hydrated = copy.deepcopy(structural)
+    PresentationChatMemoryLayer._apply_template_element_content(
+        chat_hydrated,
+        content,
+        direct_value=True,
+    )
+
+    for result in (hydrated, chat_hydrated):
+        title, summary = result["children"]
+        assert title["runs"] == [{"text": "Digital Fan Access"}]
+        assert summary["runs"] == [{"text": "The complete supporting summary."}]
+
+
+def test_chat_template_hydration_parses_bold_in_non_title_text():
+    element = {
+        "type": "text",
+        "decorative": False,
+        "name": "step_heading",
+        "font": {"family": "Inter", "size": 18},
+        "runs": [{"text": "Placeholder"}],
+    }
+
+    PresentationChatMemoryLayer._set_template_element_value(
+        element,
+        "**First Stand",
+    )
+
+    assert element["runs"] == [
+        {
+            "text": "First Stand",
+            "font": {"family": "Inter", "size": 18, "bold": True},
+        }
+    ]
+
+
 def test_apply_template_content_to_ui_hydrates_latex_tag_into_run():
     ui = {
         "id": "math-layout",
