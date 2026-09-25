@@ -27,6 +27,7 @@ from templates.presentation_layout import PresentationLayoutModel, SlideLayoutMo
 from templates.v2.schema import get_template_schema
 from templates.v2.content import (
     hydrate_repeated_top_level_groups,
+    infographic_markdown_to_plain_text,
     repeated_child_source_index,
 )
 from utils.asset_directory_utils import (
@@ -3824,6 +3825,12 @@ class PresentationChatMemoryLayer:
                 if name in content_values:
                     has_value = True
                     value = content_values[name]
+                elif len(content_values) == 1:
+                    for candidate in cls._template_content_name_candidates(name)[1:]:
+                        if candidate in content_values:
+                            has_value = True
+                            value = content_values[candidate]
+                            break
             else:
                 if preferred_content_keys is None and name_occurrences is not None:
                     preferred_content_keys = cls._template_repeated_content_keys_for_name(
@@ -4072,12 +4079,14 @@ class PresentationChatMemoryLayer:
         data = value.get("data")
         if isinstance(data, dict):
             current_data = element.get("data")
+            incoming_data = infographic_markdown_to_plain_text(data)
             if isinstance(current_data, dict):
-                incoming_data = copy.deepcopy(data)
                 current_type = current_data.get("type")
                 if isinstance(current_type, str):
                     incoming_data["type"] = current_type
                 data = {**copy.deepcopy(current_data), **incoming_data}
+            else:
+                data = incoming_data
             infographic_type = data.get("type")
             if isinstance(infographic_type, str):
                 element["data"] = normalize_infographic_data(

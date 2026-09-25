@@ -109,6 +109,7 @@ from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from templates.v2.schema import get_template_schema
 from templates.v2.content import (
     hydrate_repeated_top_level_groups,
+    infographic_markdown_to_plain_text,
     repeated_child_source_index,
 )
 from templates.v2.theme import template_theme_for_presentation
@@ -630,6 +631,12 @@ def _apply_template_content_to_element(
             if name in content_values:
                 has_value = True
                 value = content_values[name]
+            elif len(content_values) == 1:
+                for candidate in _template_content_name_candidates(name)[1:]:
+                    if candidate in content_values:
+                        has_value = True
+                        value = content_values[candidate]
+                        break
         else:
             if preferred_content_keys is None and name_occurrences is not None:
                 preferred_content_keys = _template_repeated_content_keys_for_name(
@@ -872,8 +879,8 @@ def _apply_template_infographic_content(
     data = value.get("data")
     if isinstance(data, dict):
         current_data = updated.get("data")
+        incoming_data = infographic_markdown_to_plain_text(data)
         if isinstance(current_data, dict):
-            incoming_data = copy.deepcopy(data)
             current_type = current_data.get("type")
             if isinstance(current_type, str):
                 incoming_data["type"] = current_type
@@ -882,7 +889,7 @@ def _apply_template_infographic_content(
                 **incoming_data,
             }
         else:
-            updated["data"] = copy.deepcopy(data)
+            updated["data"] = incoming_data
 
     colors = value.get("colors")
     if isinstance(colors, list) and colors:

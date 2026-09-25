@@ -46,6 +46,112 @@ def test_direct_structural_hydration_does_not_alias_name_to_child():
         assert summary["runs"] == [{"text": "The complete supporting summary."}]
 
 
+def test_prefixed_repeated_image_rows_use_normalized_content_key():
+    def image_row(prefix):
+        return {
+            "type": "flex",
+            "name": f"{prefix}_images",
+            "children": [
+                {
+                    "type": "group",
+                    "name": f"{prefix}_image_item",
+                    "children": [
+                        {
+                            "type": "image",
+                            "name": "gallery_image",
+                            "decorative": False,
+                            "is_icon": False,
+                            "data": "placeholder",
+                        }
+                    ],
+                }
+            ],
+        }
+
+    ui = {
+        "components": [
+            {
+                "id": "gallery",
+                "elements": [
+                    {
+                        "type": "group",
+                        "name": "gallery",
+                        "children": [image_row("upper"), image_row("lower")],
+                    }
+                ],
+            }
+        ]
+    }
+    content = {
+        "gallery": {
+            "gallery": [
+                {"images": [{"gallery_image": {"image_url": "https://example.com/one.png"}}]},
+                {"images": [{"gallery_image": {"image_url": "https://example.com/two.png"}}]},
+            ]
+        }
+    }
+
+    endpoint_ui = presentation_endpoint._apply_template_content_to_ui(ui, content)
+    chat_ui = copy.deepcopy(ui)
+    PresentationChatMemoryLayer._apply_template_content_to_ui(chat_ui, content)
+
+    for hydrated in (endpoint_ui, chat_ui):
+        rows = hydrated["components"][0]["elements"][0]["children"]
+        assert [row["children"][0]["children"][0]["data"] for row in rows] == [
+            "https://example.com/one.png",
+            "https://example.com/two.png",
+        ]
+
+
+def test_generated_infographic_labels_are_plain_text_in_both_hydration_paths():
+    ui = {
+        "components": [
+            {
+                "id": "journey",
+                "elements": [
+                    {
+                        "type": "infographic",
+                        "name": "customer_journey",
+                        "decorative": False,
+                        "data": {
+                            "type": "timeline",
+                            "items": [{"heading": "Placeholder"}],
+                        },
+                    }
+                ],
+            }
+        ]
+    }
+    content = {
+        "journey": {
+            "customer_journey": {
+                "data": {
+                    "type": "timeline",
+                    "items": [
+                        {
+                            "heading": "**Discover** the opportunity",
+                            "description": "Use *research*, `prototypes`, and [feedback](https://example.com).",
+                            "focus": "~~Legacy~~ Modern workflow",
+                        }
+                    ],
+                }
+            }
+        }
+    }
+
+    endpoint_ui = presentation_endpoint._apply_template_content_to_ui(ui, content)
+    chat_ui = copy.deepcopy(ui)
+    PresentationChatMemoryLayer._apply_template_content_to_ui(chat_ui, content)
+
+    for hydrated in (endpoint_ui, chat_ui):
+        item = hydrated["components"][0]["elements"][0]["data"]["items"][0]
+        assert item == {
+            "heading": "Discover the opportunity",
+            "description": "Use research, prototypes, and feedback.",
+            "focus": "Legacy Modern workflow",
+        }
+
+
 def test_chat_template_hydration_parses_bold_in_non_title_text():
     element = {
         "type": "text",
