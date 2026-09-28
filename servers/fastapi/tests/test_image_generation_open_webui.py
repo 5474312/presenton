@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
+from models.image_prompt import ImagePrompt
 from services.image_generation_service import (
     ImageGenerationService,
     resolve_open_webui_api_base,
@@ -106,37 +107,35 @@ async def test_generate_image_open_webui_bare_origin_posts_to_api_v1(
     assert posted_url == "http://127.0.0.1:8080/api/v1/images/generations"
     assert kwargs["headers"]["Authorization"] == "Bearer sk-open-webui"
     assert kwargs["json"]["prompt"] == "a lighthouse at dusk"
+    assert kwargs["json"]["size"] == "1024x1024"
     assert os.path.dirname(image_path) == str(tmp_path)
     with open(image_path, "rb") as f:
         assert f.read() == PNG_BYTES
 
 
 @pytest.mark.anyio
-async def test_generate_image_open_webui_retries_square_for_unsupported_size(tmp_path):
-    class FallbackSession(_FakeSession):
-        calls = []
-        responses = [
-            _FakeResponse(400, {"detail": "unsupported size"}),
-            _FakeResponse(200, [{"b64_json": base64.b64encode(PNG_BYTES).decode()}]),
-        ]
-
-        async def post(self, url, **kwargs):
-            kwargs["json"] = dict(kwargs["json"])
-            type(self).calls.append((url, kwargs))
-            return type(self).responses.pop(0)
-
+async def test_generate_image_open_webui_keeps_prompt_and_square_api_size(
+    tmp_path, fake_session
+):
     service = ImageGenerationService(str(tmp_path))
+    service.is_image_generation_disabled = False
+    service.is_stock_provider_selected = lambda: False
+    service.image_gen_func = service.generate_image_open_webui
     url_env, key_env = _open_webui_env("http://127.0.0.1:8080")
     with url_env, key_env, patch(
-        "services.image_generation_service.aiohttp.ClientSession", FallbackSession
+        "services.image_generation_service.is_comfyui_selected", return_value=False
     ):
-        await service.generate_image_open_webui(
-            "wide landscape", str(tmp_path), target_size=(400, 200)
+        await service.generate_image(
+            ImagePrompt(
+                prompt="wide landscape", theme_prompt="warm light",
+                target_width=400, target_height=200,
+            )
         )
 
-    assert [call[1]["json"]["size"] for call in FallbackSession.calls] == [
-        "400x200", "1024x1024"
-    ]
+    assert len(fake_session.calls) == 1
+    payload = fake_session.calls[0][1]["json"]
+    assert payload["size"] == "1024x1024"
+    assert payload["prompt"] == "wide landscape, warm light"
 
 
 @pytest.mark.anyio

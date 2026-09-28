@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, model_validator
 class ImagePrompt(BaseModel):
     prompt: str
     theme_prompt: Optional[str] = None
-    # Dimensions of the template image element; providers receive rounded values.
+    # Template image dimensions used for supported provider ratios or ComfyUI inputs.
     target_width: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
     target_height: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
 

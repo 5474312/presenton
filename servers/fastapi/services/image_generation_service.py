@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import math
 import os
 import secrets
 from weakref import WeakKeyDictionary
@@ -51,6 +52,11 @@ _IMAGE_GENERATION_LOCKS: WeakKeyDictionary[
     asyncio.AbstractEventLoop, asyncio.Lock
 ] = WeakKeyDictionary()
 DEFAULT_IMAGE_SIZE = "1024x1024"
+GPT_IMAGE_SIZES = (DEFAULT_IMAGE_SIZE, "1536x1024", "1024x1536")
+DALLE3_IMAGE_SIZES = (DEFAULT_IMAGE_SIZE, "1792x1024", "1024x1792")
+GEMINI_IMAGE_RATIOS = (
+    "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"
+)
 
 
 def _target_pixel_dimensions(
@@ -61,9 +67,44 @@ def _target_pixel_dimensions(
     return max(1, round(target_size[0])), max(1, round(target_size[1]))
 
 
-def _requested_image_size(target_size: tuple[float, float] | None) -> str:
+def _desired_image_size(target_size: tuple[float, float] | None) -> str:
     dimensions = _target_pixel_dimensions(target_size)
-    return f"{dimensions[0]}x{dimensions[1]}" if dimensions else DEFAULT_IMAGE_SIZE
+    return f"{dimensions[0]}x{dimensions[1]}" if dimensions else "unspecified"
+
+
+def _closest_ratio_option(
+    target_size: tuple[float, float] | None,
+    options: tuple[str, ...],
+    separator: str,
+) -> str | None:
+    if target_size is None:
+        return None
+    target_ratio = target_size[0] / target_size[1]
+
+    def ratio(option: str) -> float:
+        width, height = option.split(separator)
+        return float(width) / float(height)
+
+    return min(
+        options,
+        key=lambda option: abs(math.log(target_ratio / ratio(option))),
+    )
+
+
+def _openai_image_size(model: str, target_size: tuple[float, float] | None) -> str:
+    if model == "dall-e-3":
+        sizes = DALLE3_IMAGE_SIZES
+    elif model == "gpt-image-1.5":
+        sizes = GPT_IMAGE_SIZES
+    else:
+        return DEFAULT_IMAGE_SIZE
+    return _closest_ratio_option(target_size, sizes, "x") or DEFAULT_IMAGE_SIZE
+
+
+def _gemini_image_aspect_ratio(
+    target_size: tuple[float, float] | None,
+) -> str | None:
+    return _closest_ratio_option(target_size, GEMINI_IMAGE_RATIOS, ":")
 
 
 def resolve_open_webui_api_base(base_url: str) -> str:
@@ -140,10 +181,13 @@ class ImageGenerationService:
             print("No image generation function found. Using placeholder image.")
             return absolute_fastapi_asset_url("/static/images/placeholder.jpg")
 
-        image_prompt = prompt.get_image_prompt(
-            with_theme=not self.is_stock_provider_selected()
+        is_stock_provider = self.is_stock_provider_selected()
+        image_prompt = prompt.get_image_prompt(with_theme=not is_stock_provider)
+        print(
+            f"Request - Generating Image (desired size: "
+            f"{_desired_image_size(prompt.target_size)}): {image_prompt}",
+            flush=True,
         )
-        print(f"Request - Generating Image for {image_prompt}")
 
         try:
             if is_parallel_image_generation_enabled():
@@ -187,11 +231,11 @@ class ImageGenerationService:
     ) -> str:
         if self.is_stock_provider_selected():
             return await self.image_gen_func(image_prompt)
-        if target_size is None:
-            return await self.image_gen_func(image_prompt, self.output_directory)
-        return await self.image_gen_func(
-            image_prompt, self.output_directory, target_size=target_size
-        )
+        if target_size is not None:
+            return await self.image_gen_func(
+                image_prompt, self.output_directory, target_size=target_size
+            )
+        return await self.image_gen_func(image_prompt, self.output_directory)
 
     async def generate_image_openai(
         self,
@@ -202,7 +246,8 @@ class ImageGenerationService:
         target_size: tuple[float, float] | None = None,
     ) -> str:
         client = AsyncOpenAI()
-        requested_size = _requested_image_size(target_size)
+        selected_size = _openai_image_size(model, target_size)
+        print(f"OpenAI image API size: {selected_size}", flush=True)
         request = {
             "model": model,
             "prompt": prompt,
@@ -211,12 +256,17 @@ class ImageGenerationService:
             "response_format": "b64_json" if model == "dall-e-3" else NOT_GIVEN,
         }
         try:
-            result = await client.images.generate(**request, size=requested_size)
+            result = await client.images.generate(**request, size=selected_size)
         except BadRequestError as exc:
-            if requested_size == DEFAULT_IMAGE_SIZE or not any(
+            if selected_size == DEFAULT_IMAGE_SIZE or not any(
                 term in str(exc).lower() for term in ("size", "dimension")
             ):
                 raise
+            print(
+                f"OpenAI image API rejected {selected_size}; "
+                f"retrying with {DEFAULT_IMAGE_SIZE}",
+                flush=True,
+            )
             result = await client.images.generate(**request, size=DEFAULT_IMAGE_SIZE)
         image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
         with open(image_path, "wb") as f:
@@ -274,8 +324,9 @@ class ImageGenerationService:
         payload = {
             "prompt": prompt,
             "n": 1,
-            "size": _requested_image_size(target_size),
+            "size": DEFAULT_IMAGE_SIZE,
         }
+        print(f"Open WebUI image API size: {payload['size']}", flush=True)
 
         async with aiohttp.ClientSession(trust_env=True) as session:
             resp = await session.post(
@@ -284,17 +335,6 @@ class ImageGenerationService:
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=300),
             )
-
-            if resp.status in (400, 422) and payload["size"] != DEFAULT_IMAGE_SIZE:
-                error_text = await resp.text()
-                if "size" in error_text.lower() or "dimension" in error_text.lower():
-                    payload["size"] = DEFAULT_IMAGE_SIZE
-                    resp = await session.post(
-                        f"{base_url}/images/generations",
-                        json=payload,
-                        headers=headers,
-                        timeout=aiohttp.ClientTimeout(total=300),
-                    )
 
             if resp.status != 200:
                 error_text = await resp.text()
@@ -361,17 +401,19 @@ class ImageGenerationService:
     ) -> str:
         """Base method for Google image generation models."""
         client = genai.Client()
+        aspect_ratio = _gemini_image_aspect_ratio(target_size)
+        print(f"Gemini image API aspect ratio: {aspect_ratio or 'auto'}", flush=True)
+        config_kwargs = {"response_modalities": ["IMAGE"]}
+        if aspect_ratio:
+            config_kwargs["image_config"] = types.ImageConfig(
+                aspect_ratio=aspect_ratio
+            )
+        config = types.GenerateContentConfig(**config_kwargs)
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=model,
-            contents=(
-                f"{prompt}\nTarget image size: {_requested_image_size(target_size)} pixels."
-                if target_size is not None
-                else prompt
-            ),
-            config=types.GenerateContentConfig(
-                response_modalities=["IMAGE"],
-            ),
+            contents=prompt,
+            config=config,
         )
 
         # Latest SDK docs expose images in response.parts.
@@ -569,7 +611,20 @@ class ImageGenerationService:
 
         # Find and update the positive prompt node
         workflow = self._inject_prompt_into_workflow(workflow, prompt)
-        self._inject_target_size_into_workflow(workflow, target_size)
+        updated_size_nodes = self._inject_target_size_into_workflow(workflow, target_size)
+        if target_size is not None:
+            if updated_size_nodes:
+                print(
+                    f"ComfyUI workflow size set to {_desired_image_size(target_size)} "
+                    f"in {updated_size_nodes} latent node(s)",
+                    flush=True,
+                )
+            else:
+                print(
+                    "ComfyUI workflow has no editable latent width/height inputs; "
+                    "using workflow defaults",
+                    flush=True,
+                )
         randomized_seed_count = self._inject_random_seeds_into_workflow(workflow)
         if randomized_seed_count:
             print(
@@ -596,12 +651,26 @@ class ImageGenerationService:
 
     def _inject_target_size_into_workflow(
         self, workflow: dict, target_size: tuple[float, float] | None
-    ) -> None:
+    ) -> int:
         if target_size is None:
-            return
+            return 0
         target_width, target_height = _target_pixel_dimensions(target_size)
+        updated_nodes = 0
         for node in self._build_comfyui_node_index(workflow).values():
-            if "EmptyLatentImage" not in str(node.get("class_type", "")):
+            class_type = str(node.get("class_type", ""))
+            metadata = node.get("_meta")
+            title = (
+                metadata.get("title") if isinstance(metadata, dict) else None
+            ) or node.get("title")
+            is_image_size_node = (
+                isinstance(title, str) and title.strip().casefold() == "image size"
+            )
+            if not (
+                is_image_size_node
+                or class_type == "EmptySD3LatentImage"
+                or "EmptyLatentImage" in class_type
+                or (class_type.startswith("Empty") and "LatentImage" in class_type)
+            ):
                 continue
             inputs = node.get("inputs")
             if not isinstance(inputs, dict):
@@ -614,6 +683,8 @@ class ImageGenerationService:
                 continue  # Linked or custom dimensions stay under workflow control.
             inputs["width"] = target_width
             inputs["height"] = target_height
+            updated_nodes += 1
+        return updated_nodes
 
     def _inject_prompt_into_workflow(self, workflow: dict, prompt: str) -> dict:
         node_index = self._build_comfyui_node_index(workflow)
@@ -990,16 +1061,22 @@ class ImageGenerationService:
 
         client = AsyncOpenAI(base_url=base_url, api_key=api_key)
 
-        requested_size = _requested_image_size(target_size)
+        selected_size = _openai_image_size(model, target_size)
+        print(f"OpenAI-compatible image API size: {selected_size}", flush=True)
         try:
             response = await client.images.generate(
-                model=model, prompt=prompt, n=1, size=requested_size
+                model=model, prompt=prompt, n=1, size=selected_size
             )
         except BadRequestError as exc:
-            if requested_size == DEFAULT_IMAGE_SIZE or not any(
+            if selected_size == DEFAULT_IMAGE_SIZE or not any(
                 term in str(exc).lower() for term in ("size", "dimension")
             ):
                 raise
+            print(
+                f"OpenAI-compatible image API rejected {selected_size}; "
+                f"retrying with {DEFAULT_IMAGE_SIZE}",
+                flush=True,
+            )
             response = await client.images.generate(
                 model=model, prompt=prompt, n=1, size=DEFAULT_IMAGE_SIZE
             )
