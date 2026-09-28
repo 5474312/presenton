@@ -154,7 +154,7 @@ async def test_openai_provider_retries_default_when_template_size_is_rejected(tm
 
 
 @pytest.mark.anyio
-async def test_saved_generated_image_matches_template_dimensions(tmp_path):
+async def test_generated_image_is_not_resized_after_provider_returns(tmp_path):
     image_path = tmp_path / "generated.png"
     Image.new("RGB", (1024, 1024), "red").save(image_path)
     service = object.__new__(ImageGenerationService)
@@ -168,4 +168,4 @@ async def test_saved_generated_image_matches_template_dimensions(tmp_path):
     )
 
     with Image.open(image_path) as result:
-        assert result.size == (400, 200)
+        assert result.size == (1024, 1024)

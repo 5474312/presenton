@@ -11,7 +11,6 @@ from fastapi import HTTPException
 from google import genai
 from google.genai import types
 from openai import NOT_GIVEN, AsyncOpenAI, BadRequestError
-from PIL import Image, ImageOps
 from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
 from utils.get_env import (
@@ -160,8 +159,6 @@ class ImageGenerationService:
                 if image_path.startswith("http"):
                     return image_path
                 elif os.path.exists(image_path):
-                    if not self.is_stock_provider_selected():
-                        self._fit_image_to_target(image_path, prompt.target_size)
                     return ImageAsset(
                         path=image_path,
                         is_uploaded=False,
@@ -184,23 +181,6 @@ class ImageGenerationService:
             if normalized_error is e:
                 raise
             raise normalized_error from e
-
-    @staticmethod
-    def _fit_image_to_target(
-        image_path: str, target_size: tuple[float, float] | None
-    ) -> None:
-        dimensions = _target_pixel_dimensions(target_size)
-        if dimensions is None:
-            return
-        with Image.open(image_path) as source:
-            oriented = ImageOps.exif_transpose(source)
-            if oriented.size == dimensions:
-                if source.getexif().get(274, 1) == 1:
-                    return
-                fitted = oriented.copy()
-            else:
-                fitted = ImageOps.fit(oriented, dimensions, Image.Resampling.LANCZOS)
-        fitted.save(image_path)
 
     async def _call_image_provider(
         self, image_prompt: str, target_size: tuple[float, float] | None
