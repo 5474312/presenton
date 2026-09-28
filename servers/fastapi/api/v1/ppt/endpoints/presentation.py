@@ -89,6 +89,7 @@ from utils.outline_utils import (
 )
 from utils.outline_limits import normalize_outline_payload
 from utils.process_slides import (
+    image_target_sizes_from_template,
     process_slide_add_placeholder_assets,
     process_slide_and_fetch_assets,
 )
@@ -2336,6 +2337,9 @@ async def stream_presentation(
             # This will mutate slide and add placeholder assets
             process_slide_add_placeholder_assets(slide)
             slide.ui = _apply_template_content_to_ui(slide.ui, slide.content)
+            image_target_sizes = image_target_sizes_from_template(
+                slide.ui, slide.content, _apply_template_content_to_ui
+            )
 
             # This will mutate slide - start task immediately so it runs in parallel with next slide LLM generation
             asset_warnings_by_slide[i] = []
@@ -2351,6 +2355,7 @@ async def stream_presentation(
                     icon_weight=icon_weight,
                     allow_image_fallback=True,
                     image_warnings=asset_warnings_by_slide[i],
+                    image_target_sizes=image_target_sizes,
                 )
             )
             async_assets_generation_tasks.append(asset_task)
@@ -2990,6 +2995,9 @@ async def generate_presentation_handler(
                         icon_weight=layout_model.icon_weight,
                         allow_image_fallback=True,
                         image_warnings=image_warnings,
+                        image_target_sizes=image_target_sizes_from_template(
+                            slide.ui, slide.content, _apply_template_content_to_ui
+                        ),
                     )
                 )
                 for offset, slide in enumerate(batch_slides)

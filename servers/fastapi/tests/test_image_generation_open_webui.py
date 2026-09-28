@@ -112,6 +112,34 @@ async def test_generate_image_open_webui_bare_origin_posts_to_api_v1(
 
 
 @pytest.mark.anyio
+async def test_generate_image_open_webui_retries_square_for_unsupported_size(tmp_path):
+    class FallbackSession(_FakeSession):
+        calls = []
+        responses = [
+            _FakeResponse(400, {"detail": "unsupported size"}),
+            _FakeResponse(200, [{"b64_json": base64.b64encode(PNG_BYTES).decode()}]),
+        ]
+
+        async def post(self, url, **kwargs):
+            kwargs["json"] = dict(kwargs["json"])
+            type(self).calls.append((url, kwargs))
+            return type(self).responses.pop(0)
+
+    service = ImageGenerationService(str(tmp_path))
+    url_env, key_env = _open_webui_env("http://127.0.0.1:8080")
+    with url_env, key_env, patch(
+        "services.image_generation_service.aiohttp.ClientSession", FallbackSession
+    ):
+        await service.generate_image_open_webui(
+            "wide landscape", str(tmp_path), target_size=(400, 200)
+        )
+
+    assert [call[1]["json"]["size"] for call in FallbackSession.calls] == [
+        "1536x1024", "1024x1024"
+    ]
+
+
+@pytest.mark.anyio
 async def test_generate_image_open_webui_keeps_explicit_api_root(
     tmp_path, fake_session
 ):

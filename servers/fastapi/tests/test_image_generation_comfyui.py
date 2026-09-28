@@ -86,6 +86,25 @@ def test_comfyui_seed_randomization_updates_common_seed_inputs(tmp_path):
     assert workflow["4"]["inputs"]["seed_offset"] == 2
 
 
+def test_comfyui_target_size_preserves_workflow_area_and_default(tmp_path):
+    service = ImageGenerationService(str(tmp_path))
+    workflow = {"1": {
+        "class_type": "EmptyLatentImage",
+        "inputs": {"width": 1024, "height": 1024, "batch_size": 1},
+    }}
+
+    service._inject_target_size_into_workflow(workflow, None)
+    assert workflow["1"]["inputs"]["width"] == 1024
+    assert workflow["1"]["inputs"]["height"] == 1024
+
+    service._inject_target_size_into_workflow(workflow, (400, 200))
+    width = workflow["1"]["inputs"]["width"]
+    height = workflow["1"]["inputs"]["height"]
+    assert width > height
+    assert abs(width / height - 2) < 0.1
+    assert workflow["1"]["inputs"]["batch_size"] == 1
+
+
 def test_comfyui_seed_randomization_updates_linked_seed_source(tmp_path):
     service = ImageGenerationService(str(tmp_path))
     workflow = {

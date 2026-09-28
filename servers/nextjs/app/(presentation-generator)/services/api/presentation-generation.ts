@@ -306,8 +306,13 @@ export class PresentationGenerationApi {
 
   static async generateImage(imageGenerate: ImageGenerate) {
     try {
+      const params = new URLSearchParams({ prompt: imageGenerate.prompt });
+      if (imageGenerate.width && imageGenerate.height) {
+        params.set("width", String(imageGenerate.width));
+        params.set("height", String(imageGenerate.height));
+      }
       const response = await fetch(
-        getApiUrl(`/api/v1/ppt/images/generate?prompt=${imageGenerate.prompt}`),
+        getApiUrl(`/api/v1/ppt/images/generate?${params.toString()}`),
         {
           method: "GET",
           headers: getHeader(),
