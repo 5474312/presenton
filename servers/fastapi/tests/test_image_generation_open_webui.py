@@ -135,7 +135,7 @@ async def test_generate_image_open_webui_retries_square_for_unsupported_size(tmp
         )
 
     assert [call[1]["json"]["size"] for call in FallbackSession.calls] == [
-        "1536x1024", "1024x1024"
+        "400x200", "1024x1024"
     ]
 
 
