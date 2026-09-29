@@ -851,6 +851,7 @@ export function ImageToolbar({
         open={imagePickerOpen}
         currentImage={element.data}
         initialPrompt={element.prompt}
+        targetSize={element.size}
         onClose={() => setImagePickerOpen(false)}
         onSelect={(url, prompt) => {
           update({

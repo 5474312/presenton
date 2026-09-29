@@ -41,6 +41,7 @@ from utils.latex_text import normalize_latex, replace_text_runs, text_runs_to_ta
 from utils.outline_utils import get_presentation_title_from_presentation_outline
 from utils.outline_limits import normalize_outline_content
 from utils.process_slides import (
+    image_target_sizes_from_template,
     process_old_and_new_slides_and_fetch_assets,
     process_slide_and_fetch_assets,
 )
@@ -1029,6 +1030,12 @@ class PresentationChatMemoryLayer:
 
             updated_content = copy.deepcopy(content)
             image_warnings: list[dict] = []
+            old_layout = await self._get_template_raw_layout_by_id(
+                presentation=presentation, layout_id=existing_slide.layout
+            )
+            new_layout = await self._get_template_raw_layout_by_id(
+                presentation=presentation, layout_id=layout_id
+            )
             new_assets = await process_old_and_new_slides_and_fetch_assets(
                 image_generation_service=image_generation_service,
                 old_slide_content=existing_slide.content or {},
@@ -1041,6 +1048,16 @@ class PresentationChatMemoryLayer:
                 ),
                 allow_image_fallback=True,
                 image_warnings=image_warnings,
+                old_image_target_sizes=image_target_sizes_from_template(
+                    old_layout or existing_slide.ui,
+                    existing_slide.content or {},
+                    self._apply_template_content_to_ui,
+                ),
+                new_image_target_sizes=image_target_sizes_from_template(
+                    new_layout,
+                    updated_content,
+                    self._apply_template_content_to_ui,
+                ),
             )
             for warning in image_warnings:
                 LOGGER.warning(
@@ -1117,12 +1134,20 @@ class PresentationChatMemoryLayer:
             speaker_note=self._extract_speaker_note(new_slide_content),
         )
         image_warnings: list[dict] = []
+        source_layout = await self._get_template_raw_layout_by_id(
+            presentation=presentation, layout_id=layout_id
+        )
         new_assets = await process_slide_and_fetch_assets(
             image_generation_service=image_generation_service,
             slide=new_slide,
             icon_weight=icon_weight,
             allow_image_fallback=True,
             image_warnings=image_warnings,
+            image_target_sizes=image_target_sizes_from_template(
+                source_layout,
+                new_slide.content,
+                self._apply_template_content_to_ui,
+            ),
         )
         for warning in image_warnings:
             LOGGER.warning(
