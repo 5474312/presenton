@@ -22,8 +22,6 @@ const TOOL_LABELS: Record<string, string> = {
   createComponent: "Component creator",
   updateComponent: "Component updater",
   deleteComponent: "Component remover",
-  getPresentationTheme: "Theme reader",
-  setPresentationTheme: "Theme applier",
   generateAssets: "Asset generator",
 };
 
@@ -43,7 +41,6 @@ export const MUTATING_TOOLS = new Set([
   "createComponent",
   "updateComponent",
   "deleteComponent",
-  "setPresentationTheme",
 ]);
 
 // Read/open traces can happen ahead of edits and would make follow mode jumpy.
@@ -85,7 +82,6 @@ const humanizeTraceMessage = (message: string, tool?: string) => {
     "reordering outline slides": "Reordering outline slides.",
     "searching relevant slides": "Searching slides for relevant content.",
     "opening the requested slide": "Opening the selected slide.",
-    "checking available themes": "Checking available color themes.",
     "checking available layouts": "Checking available layouts.",
     "checking the layout schema": "Validating the slide schema.",
     "generating slide assets": "Generating images and icons.",
@@ -192,8 +188,6 @@ const humanActivityForTool = (
       return isDone
         ? "Prepared the visual assets."
         : "Preparing visual assets.";
-    case "setPresentationTheme":
-      return isDone ? "Updated the theme." : "Updating the theme.";
     default:
       return isDone ? "Finished that step." : "Working on it.";
   }

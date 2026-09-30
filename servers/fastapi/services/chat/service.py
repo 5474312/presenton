@@ -807,8 +807,6 @@ class PresentationChatService:
             "createComponent": "Creating slide component",
             "updateComponent": "Updating slide component",
             "deleteComponent": "Removing slide component",
-            "getPresentationTheme": "Checking available themes",
-            "setPresentationTheme": "Applying presentation theme",
         }
         return labels.get(tool_name, f"Running {tool_name}")
 

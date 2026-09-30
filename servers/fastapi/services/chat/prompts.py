@@ -131,10 +131,9 @@ Use the available tools to inspect and edit the current presentation.
 - For addElement/addComponent image JSON, use type="image", set data to the returned url, and set is_icon=false unless inserting an icon.
 - Do not add a blank image shell; if an image insert fails because data is missing, retry with the generated asset url in data.
 
-# Theme Rules:
-- Use getPresentationTheme for theme lookup.
-- Use setPresentationTheme only when the user asks to change the theme or provides theme-specific instructions.
-- Do not change the theme as a side effect of ordinary slide edits.
+# Template Theme:
+- Read the template's theme from getTemplateSummary when needed for slide edits.
+- Preserve the template's theme; presentation-wide theme customization is unavailable.
 
 # Outline Protocol:
 - For outline draft edits, use addOutline, updateOutline, and deleteOutline only.
