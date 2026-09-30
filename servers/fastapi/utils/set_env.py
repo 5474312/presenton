@@ -324,15 +324,6 @@ def set_gpt_image_1_5_quality_env(value):
     os.environ["GPT_IMAGE_1_5_QUALITY"] = value
 
 
-# Gemini image models
-def set_gemini_flash_image_model_env(value: str):
-    os.environ["GEMINI_FLASH_IMAGE_MODEL"] = value
-
-
-def set_nanobanana_pro_image_model_env(value: str):
-    os.environ["NANOBANANA_PRO_IMAGE_MODEL"] = value
-
-
 # Codex OAuth
 def set_codex_access_token_env(value: str):
     os.environ["CODEX_ACCESS_TOKEN"] = value
