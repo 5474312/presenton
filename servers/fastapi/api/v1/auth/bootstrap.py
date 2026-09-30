@@ -13,10 +13,7 @@ from models.sql.async_presentation_generation_status import (
 from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.image_asset import ImageAsset
 from models.sql.presentation import PresentationModel
-from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sql.slide import SlideModel
-from models.sql.template import TemplateModel
-from models.sql.template_create_info import TemplateCreateInfoModel
 from models.sql.template_v2 import TemplateV2
 from models.sql.webhook_subscription import WebhookSubscription
 from services.database import async_session_maker
@@ -132,13 +129,10 @@ async def _backfill_legacy_ownership(session, admin: User) -> None:
     owned_models = (
         PresentationModel,
         SlideModel,
-        PresentationLayoutCodeModel,
-        TemplateModel,
         AsyncTaskModel,
         AsyncPresentationGenerationTaskModel,
         ChatHistoryMessageModel,
         ImageAsset,
-        TemplateCreateInfoModel,
         WebhookSubscription,
     )
     for model in owned_models:

@@ -19,10 +19,7 @@ from models.sql.api_key import ApiKey
 from models.sql.image_asset import ImageAsset
 from models.sql.key_value import KeyValueSqlModel
 from models.sql.ollama_pull_status import OllamaPullStatus
-from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sql.presentation import PresentationModel
-from models.sql.template import TemplateModel
-from models.sql.template_create_info import TemplateCreateInfoModel
 from models.sql.template_v2 import TemplateV2
 from models.sql.slide import SlideModel
 from models.sql.webhook_subscription import WebhookSubscription
@@ -59,11 +56,8 @@ async_session_maker = async_sessionmaker(sql_engine, expire_on_commit=False)
 _STRICT_OWNER_MODELS = (
     PresentationModel,
     SlideModel,
-    PresentationLayoutCodeModel,
-    TemplateModel,
     ChatHistoryMessageModel,
     ImageAsset,
-    TemplateCreateInfoModel,
     AsyncTaskModel,
     AsyncPresentationGenerationTaskModel,
     WebhookSubscription,
@@ -135,9 +129,6 @@ async def create_db_and_tables():
                         ChatHistoryMessageModel.__table__,
                         ImageAsset.__table__,
                         FontUpload.__table__,
-                        PresentationLayoutCodeModel.__table__,
-                        TemplateCreateInfoModel.__table__,
-                        TemplateModel.__table__,
                         WebhookSubscription.__table__,
                         AsyncTaskModel.__table__,
                         AsyncPresentationGenerationTaskModel.__table__,
