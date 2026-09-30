@@ -1,13 +1,8 @@
-import type React from "react";
-
 // ================== Core Types ==================
 
 export interface SlideData {
   slide_number: number;
   screenshot_url: string;
-  xml_content?: string;
-  normalized_fonts?: string[];
-  markdown_content?: string;
 }
 
 export interface UploadedFont {
@@ -48,12 +43,6 @@ export interface FontUploadPreviewResponse {
   fonts: {
     [key: string]: string;
   };
-}
-
-export interface FontInfo {
-  name: string;
-  url?: string;
-  path?: string;
 }
 
 export interface TemplateCreationState {
@@ -166,7 +155,6 @@ export interface TemplateV2ImportResponse {
 // ================== Processed Slide Types ==================
 
 export interface ProcessedSlide extends SlideData {
-  react?: string;
   v2Layout?: TemplateV2Layout;
   template_v2_id?: string;
   uploaded_fonts?: string[];
@@ -179,59 +167,7 @@ export interface ProcessedSlide extends SlideData {
   layout_description?: string;
 }
 
-// ================== Component Props Types ==================
-
-export interface EachSlideProps {
-  slide: ProcessedSlide;
-  templateFonts?: Record<string, string>;
-  index: number;
-  retrySlide: (index: number) => void;
-  setSlides: React.Dispatch<React.SetStateAction<ProcessedSlide[]>>;
-  isProcessing: boolean;
-  onOpenSchemaEditor?: (index: number | null) => void;
-  isSchemaEditorOpen?: boolean;
-  schemaPreviewData?: Record<string, any> | null;  // Preview data from schema editor AI fill
-  onClearSchemaPreview?: () => void;  // Callback to clear schema preview data in parent
-}
-
-export interface FontManagerProps {
-  fontsData: FontData;
-  uploadedFonts: UploadedFont[];
-  uploadFont: (fontName: string, file: File) => string | null;
-  removeFont: (fontName: string) => void;
-  onContinue: () => void;
-  isUploading?: boolean;
-}
-
-export interface SlidePreviewSectionProps {
-  previewData: FontUploadPreviewResponse;
-  onInitTemplate: (metadata?: TemplateCreationMetadata) => void;
-  isLoading: boolean;
-  defaultTemplateName: string;
-  requiresTemplateMetadata?: boolean;
-}
-
 export interface TemplateCreationMetadata {
   name: string;
   description?: string;
-}
-
-export interface TemplateCreationProgressProps {
-  currentStep: TemplateCreationStep;
-  totalSlides: number;
-  processedSlides: number;
-}
-
-export interface DrawingCanvasProps {
-  canvasRef: React.RefObject<HTMLCanvasElement>;
-  slideDisplayRef: React.RefObject<HTMLDivElement>;
-  strokeWidth: number;
-  strokeColor: string;
-  eraserMode: boolean;
-  isDrawing: boolean;
-  canvasDimensions: { width: number; height: number };
-  onStrokeWidthChange: (width: number) => void;
-  onStrokeColorChange: (color: string) => void;
-  onEraserModeChange: (isEraser: boolean) => void;
-  onClearCanvas: () => void;
 }
