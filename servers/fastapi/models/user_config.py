@@ -120,6 +120,10 @@ class UserConfig(BaseModel):
     OPENAI_COMPAT_IMAGE_API_KEY: Optional[str] = None
     OPENAI_COMPAT_IMAGE_MODEL: Optional[str] = None
 
+    # Gemini image models
+    GEMINI_FLASH_IMAGE_MODEL: Optional[str] = None
+    NANOBANANA_PRO_IMAGE_MODEL: Optional[str] = None
+
     # GPT Image 2 Quality
     GPT_IMAGE_2_QUALITY: Optional[str] = None
     # Gpt Image 1.5 Quality

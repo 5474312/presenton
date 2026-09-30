@@ -17,6 +17,8 @@ from models.sql.image_asset import ImageAsset
 from utils.get_env import (
     get_gpt_image_2_quality_env,
     get_gpt_image_1_5_quality_env,
+    get_gemini_flash_image_model_env,
+    get_nanobanana_pro_image_model_env,
     get_pexels_api_key_env,
     get_open_webui_image_url_env,
     get_open_webui_image_api_key_env,
@@ -56,6 +58,11 @@ GPT_IMAGE_SIZES = (DEFAULT_IMAGE_SIZE, "1536x1024", "1024x1536")
 GEMINI_IMAGE_RATIOS = (
     "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"
 )
+# GA replacements for the retired gemini-2.5-flash-image and
+# gemini-3-pro-image-preview models. Override with the matching env vars when a
+# provider retires a model again.
+DEFAULT_GEMINI_FLASH_IMAGE_MODEL = "gemini-3.1-flash-image"
+DEFAULT_NANOBANANA_PRO_IMAGE_MODEL = "gemini-3-pro-image"
 
 
 def _target_pixel_dimensions(
@@ -459,9 +466,12 @@ class ImageGenerationService:
         output_directory: str,
         target_size: tuple[float, float] | None = None,
     ) -> str:
-        """Generate image using Gemini Flash (gemini-2.5-flash-image)."""
+        """Generate image using the configured Gemini Flash image model."""
+        model = (
+            get_gemini_flash_image_model_env() or DEFAULT_GEMINI_FLASH_IMAGE_MODEL
+        )
         return await self._generate_image_google(
-            prompt, output_directory, "gemini-2.5-flash-image", target_size
+            prompt, output_directory, model, target_size
         )
 
     async def generate_image_nanobanana_pro(
@@ -470,9 +480,12 @@ class ImageGenerationService:
         output_directory: str,
         target_size: tuple[float, float] | None = None,
     ) -> str:
-        """Generate image using NanoBanana Pro (gemini-3-pro-image-preview)."""
+        """Generate image using the configured Nano Banana Pro image model."""
+        model = (
+            get_nanobanana_pro_image_model_env() or DEFAULT_NANOBANANA_PRO_IMAGE_MODEL
+        )
         return await self._generate_image_google(
-            prompt, output_directory, "gemini-3-pro-image-preview", target_size
+            prompt, output_directory, model, target_size
         )
 
     async def get_image_from_pexels(

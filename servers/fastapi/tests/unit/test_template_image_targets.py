@@ -262,17 +262,7 @@ async def test_openai_compatible_known_model_sends_mapped_size(tmp_path):
     assert client.images.generate.await_args.kwargs["size"] == "1536x1024"
 
 
-@pytest.mark.anyio
-@pytest.mark.parametrize(
-    ("provider_method", "model"),
-    [
-        ("generate_image_gemini_flash", "gemini-2.5-flash-image"),
-        ("generate_image_nanobanana_pro", "gemini-3-pro-image-preview"),
-    ],
-)
-async def test_gemini_provider_sends_mapped_aspect_ratio(
-    tmp_path, provider_method, model
-):
+async def _capture_google_generate_kwargs(tmp_path, provider_method):
     service = ImageGenerationService(str(tmp_path))
     image = SimpleNamespace(save=lambda path: Path(path).write_bytes(b"image"))
     part = SimpleNamespace(
@@ -282,7 +272,9 @@ async def test_gemini_provider_sends_mapped_aspect_ratio(
     response = SimpleNamespace(parts=[part])
     client = SimpleNamespace(models=SimpleNamespace(generate_content=object()))
 
-    with patch("services.image_generation_service.genai.Client", return_value=client), patch(
+    with patch(
+        "services.image_generation_service.genai.Client", return_value=client
+    ), patch(
         "services.image_generation_service.asyncio.to_thread",
         new=AsyncMock(return_value=response),
     ) as thread:
@@ -290,10 +282,46 @@ async def test_gemini_provider_sends_mapped_aspect_ratio(
             "landscape", str(tmp_path), (1600, 900)
         )
 
-    kwargs = thread.await_args.kwargs
+    return thread.await_args.kwargs
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("provider_method", "model"),
+    [
+        ("generate_image_gemini_flash", "gemini-3.1-flash-image"),
+        ("generate_image_nanobanana_pro", "gemini-3-pro-image"),
+    ],
+)
+async def test_gemini_provider_uses_supported_model_by_default(
+    tmp_path, provider_method, model, monkeypatch
+):
+    monkeypatch.delenv("GEMINI_FLASH_IMAGE_MODEL", raising=False)
+    monkeypatch.delenv("NANOBANANA_PRO_IMAGE_MODEL", raising=False)
+
+    kwargs = await _capture_google_generate_kwargs(tmp_path, provider_method)
+
     assert kwargs["model"] == model
     assert kwargs["contents"] == "landscape"
     assert kwargs["config"].image_config.aspect_ratio == "16:9"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("provider_method", "env_var"),
+    [
+        ("generate_image_gemini_flash", "GEMINI_FLASH_IMAGE_MODEL"),
+        ("generate_image_nanobanana_pro", "NANOBANANA_PRO_IMAGE_MODEL"),
+    ],
+)
+async def test_gemini_provider_model_can_be_overridden(
+    tmp_path, provider_method, env_var, monkeypatch
+):
+    monkeypatch.setenv(env_var, "custom-image-model")
+
+    kwargs = await _capture_google_generate_kwargs(tmp_path, provider_method)
+
+    assert kwargs["model"] == "custom-image-model"
 
 
 @pytest.mark.anyio

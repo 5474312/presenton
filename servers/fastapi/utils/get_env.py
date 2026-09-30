@@ -421,6 +421,15 @@ def get_gpt_image_1_5_quality_env():
     return os.getenv("GPT_IMAGE_1_5_QUALITY")
 
 
+# Gemini image models
+def get_gemini_flash_image_model_env():
+    return os.getenv("GEMINI_FLASH_IMAGE_MODEL")
+
+
+def get_nanobanana_pro_image_model_env():
+    return os.getenv("NANOBANANA_PRO_IMAGE_MODEL")
+
+
 # Codex OAuth
 def get_codex_access_token_env():
     return os.getenv("CODEX_ACCESS_TOKEN")

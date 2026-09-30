@@ -501,6 +501,8 @@ These variables match `docker-compose.yml`. **`IMAGE_PROVIDER`** selects the bac
 | **COMFYUI_URL** / **COMFYUI_WORKFLOW** | Required for `IMAGE_PROVIDER=comfyui` | Self-hosted ComfyUI endpoint and workflow JSON. |
 | **OPEN_WEBUI_IMAGE_URL** / **OPEN_WEBUI_IMAGE_API_KEY** | Required for `IMAGE_PROVIDER=open_webui` | Open WebUI API root (`http://host:8080/api/v1`; a bare origin gets `/api/v1` appended) and API key. |
 | **OPENAI_COMPAT_IMAGE_BASE_URL** / **OPENAI_COMPAT_IMAGE_API_KEY** / **OPENAI_COMPAT_IMAGE_MODEL** | Required for `IMAGE_PROVIDER=openai_compatible` | Sends image requests to an OpenAI-compatible `/v1/images/*` endpoint such as LiteLLM, Azure, or a vLLM gateway. |
+| **GEMINI_FLASH_IMAGE_MODEL** | Default `gemini-3.1-flash-image` | Overrides the Gemini model used by `IMAGE_PROVIDER=gemini_flash`. Set this when Google retires or renames the model; current model ids are listed at https://ai.google.dev/gemini-api/docs/pricing. |
+| **NANOBANANA_PRO_IMAGE_MODEL** | Default `gemini-3-pro-image` | Overrides the Gemini model used by `IMAGE_PROVIDER=nanobanana_pro`. Set this when Google retires or renames the model; current model ids are listed at https://ai.google.dev/gemini-api/docs/pricing. |
 
 Existing `IMAGE_PROVIDER=dall-e-3` configurations automatically migrate to `gpt-image-2`. Legacy `standard` quality maps to `medium`, and `hd` maps to `high`. Set `GPT_IMAGE_2_QUALITY` to choose a different quality.
 
