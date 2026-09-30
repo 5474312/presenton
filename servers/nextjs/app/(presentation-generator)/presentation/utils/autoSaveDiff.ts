@@ -19,6 +19,14 @@ export const fingerprintValue = (value: unknown): string =>
 const getSlideId = (slide: any): string | null =>
   typeof slide?.id === "string" && slide.id.length > 0 ? slide.id : null;
 
+/** Only mutable presentation fields belong in an update request. */
+export const createPresentationUpdatePayload = (data: PresentationData) => ({
+  id: data.id,
+  title: data.title,
+  n_slides: data.n_slides,
+  slides: data.slides,
+});
+
 export const createAutoSaveSnapshot = (
   data: PresentationData
 ): AutoSaveSnapshot => {
@@ -39,7 +47,6 @@ export const createAutoSaveSnapshot = (
     slideFingerprints,
     metadataFingerprint: fingerprintValue({
       title: data.title,
-      theme: data.theme,
     }),
   };
 };
@@ -77,6 +84,6 @@ export const getAutoSaveChanges = (
     changedSlides,
     metadataChanged:
       acknowledged.metadataFingerprint !==
-      fingerprintValue({ title: data.title, theme: data.theme }),
+      fingerprintValue({ title: data.title }),
   };
 };

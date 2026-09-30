@@ -9,6 +9,7 @@ import type { Slide } from '../../types/slide';
 import type { AutoSaveSnapshot } from '../utils/autoSaveDiff';
 import {
     createAutoSaveSnapshot,
+    createPresentationUpdatePayload,
     fingerprintValue,
     getAutoSaveChanges,
 } from '../utils/autoSaveDiff';
@@ -76,7 +77,7 @@ export const useAutoSave = ({
                 // Serialize once after the debounce window. The API accepts the
                 // serialized body and avoids a second whole-deck stringify.
                 await PresentationGenerationApi.updatePresentationContent(
-                    JSON.stringify(data)
+                    JSON.stringify(createPresentationUpdatePayload(data))
                 );
                 acknowledgedDataRef.current = createAutoSaveSnapshot(data);
             } else {
@@ -91,11 +92,9 @@ export const useAutoSave = ({
                         await PresentationGenerationApi.updatePresentationContent({
                             id: data.id,
                             title: data.title,
-                            theme: data.theme,
                         });
                         nextAcknowledged.metadataFingerprint = fingerprintValue({
                             title: data.title,
-                            theme: data.theme,
                         });
                         acknowledgedDataRef.current = nextAcknowledged;
                     } catch (error) {

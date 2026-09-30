@@ -2472,7 +2472,6 @@ async def update_presentation(
     id: Annotated[uuid.UUID, Body()],
     n_slides: Annotated[Optional[int], Body()] = None,
     title: Annotated[Optional[str], Body()] = None,
-    theme: Annotated[Optional[dict], Body()] = None,
     slides: Annotated[Optional[List[SlideModel]], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
@@ -2495,8 +2494,6 @@ async def update_presentation(
         presentation_update_dict["n_slides"] = n_slides
     if title:
         presentation_update_dict["title"] = title
-    if theme or theme is None:
-        presentation_update_dict["theme"] = theme
 
     if presentation_update_dict:
         presentation.sqlmodel_update(presentation_update_dict)
