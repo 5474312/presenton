@@ -459,9 +459,9 @@ class ImageGenerationService:
         output_directory: str,
         target_size: tuple[float, float] | None = None,
     ) -> str:
-        """Generate image using Gemini Flash (gemini-2.5-flash-image)."""
+        """Generate image using Gemini Flash (gemini-3.1-flash-image)."""
         return await self._generate_image_google(
-            prompt, output_directory, "gemini-2.5-flash-image", target_size
+            prompt, output_directory, "gemini-3.1-flash-image", target_size
         )
 
     async def generate_image_nanobanana_pro(
@@ -470,9 +470,9 @@ class ImageGenerationService:
         output_directory: str,
         target_size: tuple[float, float] | None = None,
     ) -> str:
-        """Generate image using NanoBanana Pro (gemini-3-pro-image-preview)."""
+        """Generate image using NanoBanana Pro (gemini-3-pro-image)."""
         return await self._generate_image_google(
-            prompt, output_directory, "gemini-3-pro-image-preview", target_size
+            prompt, output_directory, "gemini-3-pro-image", target_size
         )
 
     async def get_image_from_pexels(

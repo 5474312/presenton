@@ -266,8 +266,8 @@ async def test_openai_compatible_known_model_sends_mapped_size(tmp_path):
 @pytest.mark.parametrize(
     ("provider_method", "model"),
     [
-        ("generate_image_gemini_flash", "gemini-2.5-flash-image"),
-        ("generate_image_nanobanana_pro", "gemini-3-pro-image-preview"),
+        ("generate_image_gemini_flash", "gemini-3.1-flash-image"),
+        ("generate_image_nanobanana_pro", "gemini-3-pro-image"),
     ],
 )
 async def test_gemini_provider_sends_mapped_aspect_ratio(
