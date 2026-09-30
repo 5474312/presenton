@@ -85,10 +85,4 @@ if (fs.existsSync(publicDir)) {
   }
 }
 
-const templatesSrc = path.join(nextjsDir, "app", "presentation-templates");
-const templatesDest = path.join(outDir, "presentation-templates");
-if (fs.existsSync(templatesSrc)) {
-  cpDir(templatesSrc, templatesDest);
-}
-
 console.log("Next.js bundle copied to:", outDir);

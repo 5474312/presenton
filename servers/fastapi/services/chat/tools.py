@@ -34,7 +34,6 @@ from services.chat.schemas import (
     SaveSlideInput,
     SaveSmartSlideInput,
     SearchSlidesInput,
-    SetPresentationThemeInput,
     UpdateComponentInput,
     UpdateSlideInput,
     UpdateSlideComponentInput,
@@ -119,8 +118,6 @@ class ChatTools:
             "createComponent": self._add_slide_component,
             "updateComponent": self._update_component,
             "deleteComponent": self._delete_slide_component,
-            "getPresentationTheme": self._get_presentation_theme_catalog,
-            "setPresentationTheme": self._set_presentation_theme,
         }
 
     def set_turn_context(self, user_message: str) -> None:
@@ -374,20 +371,6 @@ class ChatTools:
                     "or callout) from a rendered slide by componentId."
                 ),
                 schema=DeleteSlideComponentInput,
-                strict=False,
-            ),
-            Tool(
-                name="getPresentationTheme",
-                description="Read the current presentation theme and available themes.",
-                schema=NoArgsInput,
-                strict=False,
-            ),
-            Tool(
-                name="setPresentationTheme",
-                description=(
-                    "Change the deck theme by theme name/id/query or customTheme payload."
-                ),
-                schema=SetPresentationThemeInput,
                 strict=False,
             ),
             Tool(
@@ -734,7 +717,7 @@ class ChatTools:
     async def _get_template_summary(self, _: dict[str, Any]) -> dict[str, Any]:
         outline = await self._get_presentation_outline({})
         layouts = await self._get_available_layouts({})
-        theme = await self._get_presentation_theme_catalog({})
+        theme = await self._memory.get_template_theme()
         return {
             "outline": outline,
             "available_layouts": layouts,
@@ -759,10 +742,6 @@ class ChatTools:
             max_chars=payload.max_chars,
         )
 
-    async def _get_presentation_theme_catalog(
-        self, _: dict[str, Any]
-    ) -> dict[str, Any]:
-        return await self._memory.get_presentation_theme_catalog()
 
     async def _get_content_schema_from_layout_id(
         self, args: dict[str, Any]
@@ -1055,17 +1034,6 @@ class ChatTools:
             insert_index=payload.insert_index,
         )
 
-    async def _set_presentation_theme(self, args: dict[str, Any]) -> dict[str, Any]:
-        payload = SetPresentationThemeInput(**args)
-        return await self._memory.set_presentation_theme(
-            theme_query=payload.theme,
-            custom_theme=(
-                payload.custom_theme.model_dump(exclude_none=True)
-                if payload.custom_theme is not None
-                else None
-            ),
-            save_custom_theme=bool(payload.save_custom_theme),
-        )
 
     @staticmethod
     def _parse_args(arguments: str | None) -> dict[str, Any]:

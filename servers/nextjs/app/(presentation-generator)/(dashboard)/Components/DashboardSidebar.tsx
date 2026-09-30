@@ -18,7 +18,7 @@ export const defaultNavItems = [
 ];
 export const BelongingNavItems = [
     { key: "settings" as const, label: "Settings", icon: Settings },
-    
+
 ]
 
 type DashboardSidebarProps = {
@@ -86,21 +86,7 @@ const DashboardSidebar = ({
                             <UsersRound className={`h-4 w-4 ${pathname === "/community" ? "text-[#5146E5]" : "text-slate-600"}`} />
                             <span className="text-[11px] text-slate-800">Community</span>
                         </Link> : null}
-                        {/* <Link
-                            prefetch={false}
-                            href={`/theme`}
-                            className={[
-                                "flex flex-col tex-center items-center gap-2  transition-colors",
-                                pathname === "/theme" ? "" : "ring-transparent",
-                            ].join(" ")}
-                            aria-label="Theme"
-                            title="Theme"
-                        >
-                            <div className="flex flex-col cursor-pointer tex-center items-center gap-2  transition-colors">
-                                <Palette className={`h-4 w-4 ${pathname === "/theme" ? "text-[#5146E5]" : "text-slate-600"}`} />
-                                <span className="text-[11px] text-slate-800">Themes</span>
-                            </div>
-                        </Link> */}
+
                     </div>
                 </nav>
             </div>

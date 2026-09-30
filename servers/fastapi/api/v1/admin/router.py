@@ -4,7 +4,7 @@ import shutil
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.auth.schemas import (
@@ -24,7 +24,6 @@ from api.v1.auth.users import (
 )
 from models.sql.user import User
 from models.sql.api_key import ApiKey
-from models.sql.key_value import KeyValueSqlModel
 from services.database import get_async_session
 from services.provider_settings import get_provider_settings, save_provider_settings
 from services.presenton_cloud import get_presenton_provider, has_cloud_credentials
@@ -259,11 +258,6 @@ async def delete_user(
             status_code=403,
             detail="The primary administrator account cannot be deleted",
         )
-    await session.execute(
-        delete(KeyValueSqlModel).where(
-            KeyValueSqlModel.key == f"presentation_custom_themes:{user.id}"
-        )
-    )
     await session.delete(user)
     await session.commit()
     roots = (

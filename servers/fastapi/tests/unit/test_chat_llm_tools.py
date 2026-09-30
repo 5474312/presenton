@@ -108,8 +108,6 @@ def test_chat_tools_expose_only_v2_tool_names():
         "createComponent",
         "updateComponent",
         "deleteComponent",
-        "getPresentationTheme",
-        "setPresentationTheme",
         "generateAssets",
     ]
 

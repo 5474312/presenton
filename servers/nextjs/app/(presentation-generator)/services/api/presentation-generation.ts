@@ -169,31 +169,6 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async editSlide(
-    slide_id: string,
-    prompt: string
-  ) {
-    try {
-      const response = await fetch(
-        getApiUrl(`/api/v1/ppt/slide/edit`),
-        {
-          method: "POST",
-          headers: getHeader(),
-          body: JSON.stringify({
-            id: slide_id,
-            prompt,
-          }),
-          cache: "no-cache",
-        }
-      );
-
-      return await ApiResponseHandler.handleResponse(response, "Failed to update slide");
-    } catch (error) {
-      console.error("error in slide update", error);
-      throw error;
-    }
-  }
-
   static async updatePresentationContent(body: unknown) {
     try {
       const response = await fetch(

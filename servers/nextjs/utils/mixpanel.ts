@@ -101,8 +101,6 @@ export enum MixpanelEvent {
   Presentation_Slides_Reordered = 'Presentation Slides Reordered',
   Presentation_Slide_Added = 'Presentation Slide Added',
   Presentation_Slide_Deleted = 'Presentation Slide Deleted',
-  Presentation_Theme_Changed = 'Presentation Theme Changed',
-  Presentation_Theme_Reset = 'Presentation Theme Reset',
   Presentation_Export_Started = 'Presentation Export Started',
   Presentation_Export_Completed = 'Presentation Export Completed',
   Presentation_Export_Failed = 'Presentation Export Failed',
@@ -174,18 +172,6 @@ export enum MixpanelEvent {
   Templates_New_Template_Clicked = 'Templates New Template Clicked',
   Templates_Build_Template_Clicked = 'Templates Build Template Clicked',
 
-  Theme_Page_Viewed = 'Theme Page Viewed',
-  Theme_Selected = 'Theme Selected',
-  Theme_Saved = 'Theme Saved',
-  Theme_Deleted = 'Theme Deleted',
-  Theme_Font_Changed = 'Theme Font Changed',
-  Theme_Custom_Font_Uploaded = 'Theme Custom Font Uploaded',
-  Theme_Logo_Uploaded = 'Theme Logo Uploaded',
-  Theme_Tab_Switched = 'Theme Tab Switched',
-  Theme_New_Theme_Clicked = 'Theme New Theme Clicked',
-  Theme_Palette_Generated = 'Theme Palette Generated',
-  Theme_Editor_Opened = 'Theme Editor Opened',
-  Theme_Save_Started = 'Theme Save Started',
 
   CustomTemplate_Creation_Started = 'Custom Template Creation Started',
   CustomTemplate_Creation_Completed = 'Custom Template Creation Completed',
@@ -203,9 +189,6 @@ export enum MixpanelEvent {
   TemplatePreview_Loaded = 'Template Preview Loaded',
   TemplatePreview_Failed = 'Template Preview Failed',
   TemplatePreview_Not_Found = 'Template Preview Not Found',
-  CustomTemplate_Save_Started = 'Custom Template Save Started',
-  CustomTemplate_Saved = 'Custom Template Saved',
-  CustomTemplate_Save_Modal_Opened = 'Custom Template Save Modal Opened',
 }
 
 export type MixpanelProps = Record<string, unknown>;
