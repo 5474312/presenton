@@ -11,11 +11,11 @@ import aiohttp
 from fastapi import HTTPException
 from google import genai
 from google.genai import types
-from openai import NOT_GIVEN, AsyncOpenAI, BadRequestError
+from openai import AsyncOpenAI, BadRequestError
 from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
 from utils.get_env import (
-    get_dall_e_3_quality_env,
+    get_gpt_image_2_quality_env,
     get_gpt_image_1_5_quality_env,
     get_pexels_api_key_env,
     get_open_webui_image_url_env,
@@ -35,7 +35,7 @@ from utils.image_provider import (
     is_pixabay_selected,
     is_gemini_flash_selected,
     is_nanobanana_pro_selected,
-    is_dalle3_selected,
+    is_gpt_image_2_selected,
     is_comfyui_selected,
     is_open_webui_selected,
     is_openai_compatible_selected,
@@ -53,7 +53,6 @@ _IMAGE_GENERATION_LOCKS: WeakKeyDictionary[
 ] = WeakKeyDictionary()
 DEFAULT_IMAGE_SIZE = "1024x1024"
 GPT_IMAGE_SIZES = (DEFAULT_IMAGE_SIZE, "1536x1024", "1024x1536")
-DALLE3_IMAGE_SIZES = (DEFAULT_IMAGE_SIZE, "1792x1024", "1024x1792")
 GEMINI_IMAGE_RATIOS = (
     "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"
 )
@@ -92,9 +91,7 @@ def _closest_ratio_option(
 
 
 def _openai_image_size(model: str, target_size: tuple[float, float] | None) -> str:
-    if model == "dall-e-3":
-        sizes = DALLE3_IMAGE_SIZES
-    elif model == "gpt-image-1.5":
+    if model in ("gpt-image-2", "gpt-image-1.5"):
         sizes = GPT_IMAGE_SIZES
     else:
         return DEFAULT_IMAGE_SIZE
@@ -150,8 +147,8 @@ class ImageGenerationService:
             return self.generate_image_gemini_flash
         elif is_nanobanana_pro_selected():
             return self.generate_image_nanobanana_pro
-        elif is_dalle3_selected():
-            return self.generate_image_openai_dalle3
+        elif is_gpt_image_2_selected():
+            return self.generate_image_openai_gpt_image_2
         elif is_gpt_image_1_5_selected():
             return self.generate_image_openai_gpt_image_1_5
         elif is_comfyui_selected():
@@ -253,7 +250,6 @@ class ImageGenerationService:
             "prompt": prompt,
             "n": 1,
             "quality": quality,
-            "response_format": "b64_json" if model == "dall-e-3" else NOT_GIVEN,
         }
         try:
             result = await client.images.generate(**request, size=selected_size)
@@ -273,7 +269,7 @@ class ImageGenerationService:
             f.write(base64.b64decode(result.data[0].b64_json))
         return image_path
 
-    async def generate_image_openai_dalle3(
+    async def generate_image_openai_gpt_image_2(
         self,
         prompt: str,
         output_directory: str,
@@ -282,8 +278,8 @@ class ImageGenerationService:
         return await self.generate_image_openai(
             prompt,
             output_directory,
-            "dall-e-3",
-            get_dall_e_3_quality_env() or "standard",
+            "gpt-image-2",
+            get_gpt_image_2_quality_env() or "medium",
             target_size,
         )
 

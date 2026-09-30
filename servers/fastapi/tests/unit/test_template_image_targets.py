@@ -168,8 +168,8 @@ async def test_stock_image_search_keeps_original_query():
         ("gpt-image-1.5", (1200, 1100), "1024x1024"),
         ("gpt-image-1.5", (1600, 900), "1536x1024"),
         ("gpt-image-1.5", (900, 1600), "1024x1536"),
-        ("dall-e-3", (1600, 900), "1792x1024"),
-        ("dall-e-3", (900, 1600), "1024x1792"),
+        ("gpt-image-2", (1600, 900), "1536x1024"),
+        ("gpt-image-2", (900, 1600), "1024x1536"),
         ("custom-model", (1600, 900), "1024x1024"),
     ],
 )
@@ -203,9 +203,9 @@ async def test_openai_provider_sends_mapped_api_size(tmp_path):
     )))
     with patch("services.image_generation_service.AsyncOpenAI", return_value=client):
         await service.generate_image_openai(
-            "landscape", str(tmp_path), "dall-e-3", "standard", (1600, 900)
+            "landscape", str(tmp_path), "gpt-image-2", "medium", (1600, 900)
         )
-        assert client.images.generate.await_args.kwargs["size"] == "1792x1024"
+        assert client.images.generate.await_args.kwargs["size"] == "1536x1024"
         assert client.images.generate.await_args.kwargs["prompt"] == "landscape"
         assert client.images.generate.await_count == 1
 

@@ -1,8 +1,19 @@
 from typing import Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class UserConfig(BaseModel):
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_dalle3_config(cls, data):
+        if isinstance(data, dict) and data.get("IMAGE_PROVIDER") == "dall-e-3":
+            data = {**data, "IMAGE_PROVIDER": "gpt-image-2"}
+            if not data.get("GPT_IMAGE_2_QUALITY"):
+                data["GPT_IMAGE_2_QUALITY"] = (
+                    "high" if data.get("DALL_E_3_QUALITY") == "hd" else "medium"
+                )
+        return data
+
     LLM: Optional[str] = None
 
     # OpenAI
@@ -109,8 +120,8 @@ class UserConfig(BaseModel):
     OPENAI_COMPAT_IMAGE_API_KEY: Optional[str] = None
     OPENAI_COMPAT_IMAGE_MODEL: Optional[str] = None
 
-    # Dalle 3 Quality
-    DALL_E_3_QUALITY: Optional[str] = None
+    # GPT Image 2 Quality
+    GPT_IMAGE_2_QUALITY: Optional[str] = None
     # Gpt Image 1.5 Quality
     GPT_IMAGE_1_5_QUALITY: Optional[str] = None
 

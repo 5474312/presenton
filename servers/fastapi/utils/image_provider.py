@@ -30,8 +30,8 @@ def is_nanobanana_pro_selected() -> bool:
     return ImageProvider.NANOBANANA_PRO == get_selected_image_provider()
 
 
-def is_dalle3_selected() -> bool:
-    return ImageProvider.DALLE3 == get_selected_image_provider()
+def is_gpt_image_2_selected() -> bool:
+    return ImageProvider.GPT_IMAGE_2 == get_selected_image_provider()
 
 
 def is_gpt_image_1_5_selected() -> bool:
@@ -53,6 +53,9 @@ def get_selected_image_provider() -> ImageProvider | None:
         ImageProvider: The selected image provider.
     """
     image_provider_env = get_image_provider_env()
+    # Existing deployments may still have the removed model in their environment.
+    if image_provider_env == "dall-e-3":
+        return ImageProvider.GPT_IMAGE_2
     if image_provider_env:
         return ImageProvider(image_provider_env)
     return None
