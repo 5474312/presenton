@@ -1,6 +1,5 @@
-import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import { Slide } from "@/app/(presentation-generator)/types/slide";
-import type { TemplateTheme } from "@/lib/template-theme";
+import { normalizeTemplateTheme, type TemplateTheme } from "@/lib/template-theme";
 import {
   limitOutlines,
   MAX_NUMBER_OF_SLIDES,
@@ -15,7 +14,7 @@ export interface PresentationData {
   n_slides: number;
   title: string;
   slides: any;
-  theme: Theme | TemplateTheme | null;
+  theme: TemplateTheme | null;
   template_id?: string | null;
   design_v2_id?: string | null;
   version?: string;
@@ -130,7 +129,10 @@ const presentationGenerationSlice = createSlice({
     },
     // Set presentation data
     setPresentationData: (state, action: PayloadAction<PresentationData>) => {
-      state.presentationData = action.payload;
+      state.presentationData = {
+        ...action.payload,
+        theme: normalizeTemplateTheme(action.payload.theme),
+      };
       state.chatHtmlSelection = null;
     },
     setEnableHtmlSelector: (state, action: PayloadAction<boolean>) => {
@@ -565,11 +567,6 @@ const presentationGenerationSlice = createSlice({
         }
       }
     },
-    updateTheme: (state, action: PayloadAction<Theme | null>) => {
-      if (state.presentationData) {
-        state.presentationData['theme'] = action.payload;
-      }
-    },
   },
 
 });
@@ -605,7 +602,6 @@ export const {
   updateImageProperties,
   updateSlideIcon,
   addNewSlide,
-  updateTheme,
 } = presentationGenerationSlice.actions;
 
 export default presentationGenerationSlice.reducer;
