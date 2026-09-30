@@ -12,7 +12,6 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.image_asset import ImageAsset
-from models.sql.key_value import KeyValueSqlModel
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sql.slide import SlideModel
@@ -154,10 +153,5 @@ async def _backfill_legacy_ownership(session, admin: User) -> None:
         update(TemplateV2)
         .where(TemplateV2.owner_id.is_(None), TemplateV2.is_default.is_(False))
         .values(owner_id=admin.id)
-    )
-    await session.execute(
-        update(KeyValueSqlModel)
-        .where(KeyValueSqlModel.key == "presentation_custom_themes")
-        .values(key=f"presentation_custom_themes:{admin.id}")
     )
     await session.commit()
