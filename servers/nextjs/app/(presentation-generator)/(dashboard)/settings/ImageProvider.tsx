@@ -6,7 +6,7 @@ import { Select, SelectItem, SelectContent, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { LLMConfig } from '@/types/llm_config'
 import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields'
-import { DALLE_3_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, IMAGE_PROVIDERS } from '@/utils/providerConstants'
+import { GPT_IMAGE_2_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, IMAGE_PROVIDERS } from '@/utils/providerConstants'
 import { Check, ChevronUp, Eye, EyeOff } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import { MixpanelEvent, trackEvent } from '@/utils/mixpanel'
@@ -57,19 +57,19 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
     };
 
     const renderQualitySelector = (llmConfig: LLMConfig, input_field_changed: (value: string, field: string) => void) => {
-        if (llmConfig.IMAGE_PROVIDER === "dall-e-3") {
+        if (llmConfig.IMAGE_PROVIDER === "gpt-image-2") {
             return (
                 <div className="w-[205px] mr-0 ml-auto">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        DALL·E 3 Image Quality
+                        GPT Image 2 Quality
                     </label>
                     <div className="">
-                        <Select value={llmConfig.DALL_E_3_QUALITY || 'standard'} onValueChange={(value) => input_field_changed(value, "DALL_E_3_QUALITY")}>
+                        <Select value={llmConfig.GPT_IMAGE_2_QUALITY || 'medium'} onValueChange={(value) => input_field_changed(value, "GPT_IMAGE_2_QUALITY")}>
                             <SelectTrigger className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
                                 <SelectValue placeholder="Select a quality" />
                             </SelectTrigger>
                             <SelectContent>
-                                {DALLE_3_QUALITY_OPTIONS.map((option) => (
+                                {GPT_IMAGE_2_QUALITY_OPTIONS.map((option) => (
                                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -418,7 +418,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                 <label className="mb-2 block text-sm font-medium text-gray-700">Image model id</label>
                                 <input
                                     type="text"
-                                    placeholder="e.g. dall-e-3, gpt-image-1"
+                                    placeholder="e.g. gpt-image-2, gpt-image-1"
                                     className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                                     value={llmConfig.OPENAI_COMPAT_IMAGE_MODEL || ""}
                                     onChange={(e) => {

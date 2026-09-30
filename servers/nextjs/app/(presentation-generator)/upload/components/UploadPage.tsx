@@ -121,7 +121,7 @@ const getSelectedTextModel = (config?: LLMConfig): string => {
 
 const getSelectedImageQuality = (config?: LLMConfig): string => {
   if (!config) return "";
-  if (config.IMAGE_PROVIDER === "dall-e-3") return config.DALL_E_3_QUALITY || "";
+  if (config.IMAGE_PROVIDER === "gpt-image-2") return config.GPT_IMAGE_2_QUALITY || "";
   if (config.IMAGE_PROVIDER === "gpt-image-1.5") return config.GPT_IMAGE_1_5_QUALITY || "";
   return "";
 };

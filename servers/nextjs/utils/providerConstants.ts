@@ -109,9 +109,9 @@ export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
     apiKeyFieldLabel: "Pixabay API Key",
     getApiKeyUrl: "https://docs.presenton.ai/help/get-api-keys/get-pixabay-api-key",
   },
-  "dall-e-3": {
-    value: "dall-e-3",
-    label: "DALL-E 3",
+  "gpt-image-2": {
+    value: "gpt-image-2",
+    label: "GPT Image 2",
     description: "OpenAI's image generation model",
     icon: "/providers/openai.png",
     requiresApiKey: true,
@@ -304,19 +304,6 @@ export const LLM_PROVIDERS: Record<string, LLMProviderOption> = {
 
 };
 
-export const DALLE_3_QUALITY_OPTIONS = [
-  {
-    label: "Standard",
-    value: "standard",
-    description: "Faster generation with lower cost",
-  },
-  {
-    label: "HD",
-    value: "hd",
-    description: "Higher quality images with increased cost",
-  },
-];
-
 export const GPT_IMAGE_1_5_QUALITY_OPTIONS = [
   {
     label: "Low",
@@ -334,3 +321,5 @@ export const GPT_IMAGE_1_5_QUALITY_OPTIONS = [
     description: "Best quality with longer generation time",
   },
 ];
+
+export const GPT_IMAGE_2_QUALITY_OPTIONS = GPT_IMAGE_1_5_QUALITY_OPTIONS;

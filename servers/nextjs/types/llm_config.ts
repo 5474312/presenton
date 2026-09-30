@@ -105,8 +105,8 @@ export interface LLMConfig {
   OPENAI_COMPAT_IMAGE_API_KEY?: string;
   OPENAI_COMPAT_IMAGE_MODEL?: string;
 
-  // Dalle 3 Quality
-  DALL_E_3_QUALITY?: string;
+  // GPT Image 2 Quality
+  GPT_IMAGE_2_QUALITY?: string;
   // GPT Image 1.5 Quality
   GPT_IMAGE_1_5_QUALITY?: string;
 

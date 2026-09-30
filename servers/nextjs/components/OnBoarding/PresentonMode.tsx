@@ -4,7 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/colla
 import { Button } from '../ui/button';
 import { ArrowUpRight, Blocks, Check, ChevronDown, ChevronLeft, ChevronUp, Eye, EyeOff, Info, Laptop, Loader2, Search } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
-import { DALLE_3_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, IMAGE_PROVIDERS, LLM_PROVIDERS, WEB_SEARCH_PROVIDERS } from '@/utils/providerConstants';
+import { GPT_IMAGE_2_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, IMAGE_PROVIDERS, LLM_PROVIDERS, WEB_SEARCH_PROVIDERS } from '@/utils/providerConstants';
 import { cn } from '@/lib/utils';
 import { LLMConfig } from '@/types/llm_config';
 import { RootState } from '@/store/store';
@@ -284,7 +284,7 @@ const PresentonMode = ({
     };
 
     const getSelectedImageQuality = (config: LLMConfig): string => {
-        if (config.IMAGE_PROVIDER === 'dall-e-3') return config.DALL_E_3_QUALITY || '';
+        if (config.IMAGE_PROVIDER === 'gpt-image-2') return config.GPT_IMAGE_2_QUALITY || '';
         if (config.IMAGE_PROVIDER === 'gpt-image-1.5') return config.GPT_IMAGE_1_5_QUALITY || '';
         return '';
     };
@@ -460,28 +460,28 @@ const PresentonMode = ({
     };
 
     const renderQualitySelector = (llmConfig: LLMConfig) => {
-        if (llmConfig.IMAGE_PROVIDER === "dall-e-3") {
+        if (llmConfig.IMAGE_PROVIDER === "gpt-image-2") {
             return (
                 <div className="w-full ">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        DALL·E 3 Image Quality
+                        GPT Image 2 Quality
                     </label>
                     <div className="">
-                        <Select value={llmConfig.DALL_E_3_QUALITY || 'standard'} onValueChange={(value) => {
+                        <Select value={llmConfig.GPT_IMAGE_2_QUALITY || 'medium'} onValueChange={(value) => {
                             trackEvent(MixpanelEvent.Onboarding_Image_Quality_Selected, {
-                                image_provider: "dall-e-3",
+                                image_provider: "gpt-image-2",
                                 quality: value,
                             });
                             setLlmConfig((prev) => ({
                                 ...prev,
-                                DALL_E_3_QUALITY: value
+                                GPT_IMAGE_2_QUALITY: value
                             }));
                         }}>
                             <SelectTrigger className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
                                 <SelectValue placeholder="Select a quality" />
                             </SelectTrigger>
                             <SelectContent>
-                                {DALLE_3_QUALITY_OPTIONS.map((option) => (
+                                {GPT_IMAGE_2_QUALITY_OPTIONS.map((option) => (
                                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                                 ))}
                             </SelectContent>
