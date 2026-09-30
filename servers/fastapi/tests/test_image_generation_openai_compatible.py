@@ -35,7 +35,7 @@ class TestImageGenerationOpenAICompatible:
             "services.image_generation_service.is_nanobanana_pro_selected",
             return_value=False,
         ), patch(
-            "services.image_generation_service.is_dalle3_selected",
+            "services.image_generation_service.is_gpt_image_2_selected",
             return_value=False,
         ), patch(
             "services.image_generation_service.is_gpt_image_1_5_selected",

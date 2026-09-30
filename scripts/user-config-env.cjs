@@ -101,7 +101,8 @@ const USER_CONFIG_ENV_KEYS = [
   "OPENAI_COMPAT_IMAGE_BASE_URL",
   "OPENAI_COMPAT_IMAGE_API_KEY",
   "OPENAI_COMPAT_IMAGE_MODEL",
-  "DALL_E_3_QUALITY",
+  "DALL_E_3_QUALITY", // Read only to migrate legacy deployments.
+  "GPT_IMAGE_2_QUALITY",
   "GPT_IMAGE_1_5_QUALITY",
   "CODEX_MODEL",
   "CODEX_ACCESS_TOKEN",
@@ -183,6 +184,13 @@ const normalizeConfigTypes = (config) => {
 };
 
 const normalizeImageConfig = (config) => {
+  if (config.IMAGE_PROVIDER === "dall-e-3") {
+    config.IMAGE_PROVIDER = "gpt-image-2";
+    config.GPT_IMAGE_2_QUALITY = config.GPT_IMAGE_2_QUALITY ||
+      (config.DALL_E_3_QUALITY === "hd" ? "high" : "medium");
+  }
+  delete config.DALL_E_3_QUALITY;
+
   if (config.DISABLE_IMAGE_GENERATION || config.IMAGE_PROVIDER) {
     return config;
   }

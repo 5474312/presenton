@@ -228,7 +228,7 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
 - Ollama Integration — Run open-source models locally with full privacy
 - OpenAI API Compatible — Connect to any OpenAI-compatible endpoint with your own models
 - Multi-Provider Support — Mix and match text and image generation providers
-- Versatile Image Generation — Choose from DALL-E 3, Gemini Flash, Pexels, or Pixabay
+- Versatile Image Generation — Choose from GPT Image 2, Gemini Flash, Pexels, or Pixabay
 - Rich Media Support — Icons, charts, and custom graphics for professional presentations
 - Runs Locally — All processing happens on your device, no cloud dependencies
 - API Deployment — Host as your own API service for your team
@@ -487,20 +487,22 @@ Docker images install the default spaCy model (`en_core_web_sm`) during build so
 
 #### Image generation
 
-These variables match `docker-compose.yml`. **`IMAGE_PROVIDER`** selects the backend (`pexels`, `pixabay`, `gemini_flash`, `nanobanana_pro`, `dall-e-3`, `gpt-image-1.5`, `comfyui`, `open_webui`). Use **OPENAI_API_KEY** for OpenAI image modes and **GOOGLE_API_KEY** for Gemini image modes (same keys as the LLM section).
+These variables match `docker-compose.yml`. **`IMAGE_PROVIDER`** selects the backend (`pexels`, `pixabay`, `gemini_flash`, `nanobanana_pro`, `gpt-image-2`, `gpt-image-1.5`, `comfyui`, `open_webui`). Use **OPENAI_API_KEY** for OpenAI image modes and **GOOGLE_API_KEY** for Gemini image modes (same keys as the LLM section).
 
 | Variable | Values / default | Purpose |
 | --- | --- | --- |
 | **DISABLE_IMAGE_GENERATION** | `true` / `false` | Disables slide image generation. |
 | **ENABLE_PARALLEL_IMAGE_GENERATION** | `true` (default), `false` | Allows concurrent image-provider requests. Set to `false` for providers with strict rate limits. |
-| **IMAGE_PROVIDER** | `pexels`, `pixabay`, `gemini_flash`, `nanobanana_pro`, `dall-e-3`, `gpt-image-1.5`, `comfyui`, `open_webui`, `openai_compatible` | Selects the image backend. |
+| **IMAGE_PROVIDER** | `pexels`, `pixabay`, `gemini_flash`, `nanobanana_pro`, `gpt-image-2`, `gpt-image-1.5`, `comfyui`, `open_webui`, `openai_compatible` | Selects the image backend. |
 | **PEXELS_API_KEY** | Required for `IMAGE_PROVIDER=pexels` | Pexels stock-image API key. |
 | **PIXABAY_API_KEY** | Required for `IMAGE_PROVIDER=pixabay` | Pixabay stock-image API key. |
-| **DALL_E_3_QUALITY** | `standard` (default), `hd` | DALL-E 3 image quality. |
+| **GPT_IMAGE_2_QUALITY** | `low`, `medium` (default), `high` | GPT Image 2 image quality. |
 | **GPT_IMAGE_1_5_QUALITY** | `low`, `medium` (default), `high` | GPT Image 1.5 image quality. |
 | **COMFYUI_URL** / **COMFYUI_WORKFLOW** | Required for `IMAGE_PROVIDER=comfyui` | Self-hosted ComfyUI endpoint and workflow JSON. |
 | **OPEN_WEBUI_IMAGE_URL** / **OPEN_WEBUI_IMAGE_API_KEY** | Required for `IMAGE_PROVIDER=open_webui` | Open WebUI API root (`http://host:8080/api/v1`; a bare origin gets `/api/v1` appended) and API key. |
 | **OPENAI_COMPAT_IMAGE_BASE_URL** / **OPENAI_COMPAT_IMAGE_API_KEY** / **OPENAI_COMPAT_IMAGE_MODEL** | Required for `IMAGE_PROVIDER=openai_compatible` | Sends image requests to an OpenAI-compatible `/v1/images/*` endpoint such as LiteLLM, Azure, or a vLLM gateway. |
+
+Existing `IMAGE_PROVIDER=dall-e-3` configurations automatically migrate to `gpt-image-2`. Legacy `standard` quality maps to `medium`, and `hd` maps to `high`. Set `GPT_IMAGE_2_QUALITY` to choose a different quality.
 
 The parallel image generation option applies everywhere images are generated: initial presentation generation, slide editing and regeneration, direct image requests, and assistant image tools.
 
@@ -662,7 +664,7 @@ Notes:
 Same variables as compose; use `-e` instead of `.env` when running `docker run` directly.
 
 - Using OpenAI
-    <pre><code class="language-bash">docker run -it --name presenton -p 5001:80 -e LLM="openai" -e OPENAI_API_KEY="******" -e IMAGE_PROVIDER="dall-e-3" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
+    <pre><code class="language-bash">docker run -it --name presenton -p 5001:80 -e LLM="openai" -e OPENAI_API_KEY="******" -e IMAGE_PROVIDER="gpt-image-2" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
 
 - Using Google
     <pre><code class="language-bash">docker run -it --name presenton -p 5001:80 -e LLM="google" -e GOOGLE_API_KEY="******" -e IMAGE_PROVIDER="gemini_flash" -e CAN_CHANGE_KEYS="false" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>

@@ -21,6 +21,9 @@ test.before(async () => {
     entryFile,
     `export { readRuntimeProviderConfig } from ${JSON.stringify(
       path.resolve("lib/runtime-provider-config.ts")
+    )};
+    export { IMAGE_PROVIDERS, GPT_IMAGE_2_QUALITY_OPTIONS } from ${JSON.stringify(
+      path.resolve("utils/providerConstants.ts")
     )};`
   );
   await build({
@@ -74,4 +77,36 @@ test("regular-user runtime config keeps provider choices and redacts secrets", a
     if (previousPath === undefined) delete process.env.USER_CONFIG_PATH;
     else process.env.USER_CONFIG_PATH = previousPath;
   }
+});
+
+test("runtime config migrates the removed DALL-E provider and keeps GPT Image 2 quality", async () => {
+  const configPath = path.join(temporaryDirectory, "legacy-image-config.json");
+  await writeFile(configPath, JSON.stringify({
+    LLM: "openai", OPENAI_MODEL: "test-model", OPENAI_API_KEY: "shared-key",
+    IMAGE_PROVIDER: "dall-e-3", DALL_E_3_QUALITY: "hd",
+  }));
+  const previousPath = process.env.USER_CONFIG_PATH;
+  process.env.USER_CONFIG_PATH = configPath;
+  try {
+    const result = runtimeConfig.readRuntimeProviderConfig();
+    assert.equal(result.configured, true);
+    assert.equal(result.config.IMAGE_PROVIDER, "gpt-image-2");
+    assert.equal(result.config.GPT_IMAGE_2_QUALITY, "high");
+    assert.equal(result.config.OPENAI_API_KEY, "__configured__");
+    assert.equal("DALL_E_3_QUALITY" in result.config, false);
+  } finally {
+    if (previousPath === undefined) delete process.env.USER_CONFIG_PATH;
+    else process.env.USER_CONFIG_PATH = previousPath;
+  }
+});
+
+test("image provider choices replace DALL-E 3 with GPT Image 2 and supported qualities", () => {
+  assert.equal("dall-e-3" in runtimeConfig.IMAGE_PROVIDERS, false);
+  const provider = runtimeConfig.IMAGE_PROVIDERS["gpt-image-2"];
+  assert.equal(provider.value, "gpt-image-2");
+  assert.equal(provider.label, "GPT Image 2");
+  assert.equal(provider.apiKeyField, "OPENAI_API_KEY");
+  assert.deepEqual(runtimeConfig.GPT_IMAGE_2_QUALITY_OPTIONS.map(({ value }) => value), [
+    "low", "medium", "high",
+  ]);
 });

@@ -301,7 +301,7 @@ export default function OpenAICompatibleImageFields({
             <input
               type="text"
               required
-              placeholder="e.g. dall-e-3, gpt-image-1"
+              placeholder="e.g. gpt-image-2, gpt-image-1"
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               value={model}
               onChange={(e) => onModelChange(e.target.value)}

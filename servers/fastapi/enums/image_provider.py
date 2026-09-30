@@ -6,7 +6,7 @@ class ImageProvider(Enum):
     PIXABAY = "pixabay"
     GEMINI_FLASH = "gemini_flash"
     NANOBANANA_PRO = "nanobanana_pro"
-    DALLE3 = "dall-e-3"
+    GPT_IMAGE_2 = "gpt-image-2"
     GPT_IMAGE_1_5 = "gpt-image-1.5"
     COMFYUI = "comfyui"
     OPEN_WEBUI = "open_webui"

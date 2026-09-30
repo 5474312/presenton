@@ -75,7 +75,7 @@ def _check_image_provider_configuration() -> None:
             raise Exception("GOOGLE_API_KEY must be provided")
 
     elif (
-        selected_image_provider == ImageProvider.DALLE3
+        selected_image_provider == ImageProvider.GPT_IMAGE_2
         or selected_image_provider == ImageProvider.GPT_IMAGE_1_5
     ):
         openai_api_key = get_openai_api_key_env()

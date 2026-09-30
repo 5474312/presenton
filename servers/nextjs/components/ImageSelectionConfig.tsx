@@ -5,22 +5,9 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command';
 import { LLMConfig } from '@/types/llm_config';
 import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields';
-import { IMAGE_PROVIDERS } from '@/utils/providerConstants';
+import { GPT_IMAGE_2_QUALITY_OPTIONS, IMAGE_PROVIDERS } from '@/utils/providerConstants';
 import { cn } from '@/lib/utils';
 import { Select, SelectItem, SelectContent, SelectTrigger, SelectValue } from './ui/select';
-
-const DALLE_3_QUALITY_OPTIONS = [
-    {
-        label: "Standard",
-        value: "standard",
-        description: "Faster generation with lower cost",
-    },
-    {
-        label: "HD",
-        value: "hd",
-        description: "Higher quality images with increased cost",
-    },
-];
 
 const GPT_IMAGE_1_5_QUALITY_OPTIONS = [
     {
@@ -40,45 +27,23 @@ const GPT_IMAGE_1_5_QUALITY_OPTIONS = [
     },
 ];
 const renderQualitySelector = (llmConfig: LLMConfig, input_field_changed: (value: string, field: string) => void) => {
-    if (llmConfig.IMAGE_PROVIDER === "dall-e-3") {
+    if (llmConfig.IMAGE_PROVIDER === "gpt-image-2") {
         return (
             <div className="w-[295px]">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                    DALL·E 3 Image Quality
+                    GPT Image 2 Quality
                 </label>
                 <div className="">
-                    <Select value={llmConfig.DALL_E_3_QUALITY} onValueChange={(value) => input_field_changed(value, "dall_e_3_quality")}>
+                    <Select value={llmConfig.GPT_IMAGE_2_QUALITY || "medium"} onValueChange={(value) => input_field_changed(value, "gpt_image_2_quality")}>
                         <SelectTrigger className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
                             <SelectValue placeholder="Select a quality" />
                         </SelectTrigger>
                         <SelectContent>
-                            {DALLE_3_QUALITY_OPTIONS.map((option) => (
+                            {GPT_IMAGE_2_QUALITY_OPTIONS.map((option) => (
                                 <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
-                    {/* {DALLE_3_QUALITY_OPTIONS.map((option) => (
-                        <button
-                            key={option.value}
-                            type="button"
-                            className={cn(
-                                "border rounded-lg p-3 text-left transition-colors",
-                                llmConfig.DALL_E_3_QUALITY === option.value
-                                    ? "border-blue-500 bg-blue-50"
-                                    : "border-gray-200 hover:border-gray-300"
-                            )}
-                            onClick={() =>
-                                input_field_changed(option.value, "dall_e_3_quality")
-                            }
-                        >
-                            <div className="text-sm font-medium text-gray-900">
-                                {option.label}
-                            </div>
-                            <div className="text-xs text-gray-600 mt-1">
-                                {option.description}
-                            </div>
-                        </button>
-                    ))} */}
                 </div>
             </div>
         );
@@ -240,7 +205,7 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
 
                                     // Show info message when using same API key as main provider
                                     if (
-                                        provider.value === "dall-e-3" &&
+                                        provider.value === "gpt-image-2" &&
                                         llmConfig.LLM === "openai"
                                     ) {
                                         return <></>;

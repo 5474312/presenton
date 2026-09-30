@@ -12,7 +12,7 @@ from utils.get_env import (
     get_deepseek_api_key_env,
     get_deepseek_base_url_env,
     get_deepseek_model_env,
-    get_dall_e_3_quality_env,
+    get_gpt_image_2_quality_env,
     get_disable_image_generation_env,
     get_disable_thinking_env,
     get_google_api_key_env,
@@ -109,7 +109,7 @@ from utils.set_env import (
     set_deepseek_api_key_env,
     set_deepseek_base_url_env,
     set_deepseek_model_env,
-    set_dall_e_3_quality_env,
+    set_gpt_image_2_quality_env,
     set_disable_image_generation_env,
     set_disable_thinking_env,
     set_extended_reasoning_env,
@@ -311,7 +311,7 @@ def get_user_config():
         PEXELS_API_KEY=existing_config.PEXELS_API_KEY or get_pexels_api_key_env(),
         COMFYUI_URL=existing_config.COMFYUI_URL or get_comfyui_url_env(),
         COMFYUI_WORKFLOW=existing_config.COMFYUI_WORKFLOW or get_comfyui_workflow_env(),
-        DALL_E_3_QUALITY=existing_config.DALL_E_3_QUALITY or get_dall_e_3_quality_env(),
+        GPT_IMAGE_2_QUALITY=existing_config.GPT_IMAGE_2_QUALITY or get_gpt_image_2_quality_env(),
         GPT_IMAGE_1_5_QUALITY=existing_config.GPT_IMAGE_1_5_QUALITY
         or get_gpt_image_1_5_quality_env(),
         DISABLE_THINKING=(
@@ -522,8 +522,8 @@ def update_env_with_user_config():
         set_comfyui_url_env(user_config.COMFYUI_URL)
     if user_config.COMFYUI_WORKFLOW:
         set_comfyui_workflow_env(user_config.COMFYUI_WORKFLOW)
-    if user_config.DALL_E_3_QUALITY:
-        set_dall_e_3_quality_env(user_config.DALL_E_3_QUALITY)
+    if user_config.GPT_IMAGE_2_QUALITY:
+        set_gpt_image_2_quality_env(user_config.GPT_IMAGE_2_QUALITY)
     if user_config.GPT_IMAGE_1_5_QUALITY:
         set_gpt_image_1_5_quality_env(user_config.GPT_IMAGE_1_5_QUALITY)
     if user_config.DISABLE_THINKING is not None:

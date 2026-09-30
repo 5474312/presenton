@@ -27,6 +27,14 @@ function parseOptionalBool(value: unknown): boolean | undefined {
 
 export const normalizeLLMConfig = (llmConfig: LLMConfig): LLMConfig => {
   const normalizedConfig: LLMConfig = { ...llmConfig };
+  if (normalizedConfig.IMAGE_PROVIDER === "dall-e-3") {
+    normalizedConfig.IMAGE_PROVIDER = "gpt-image-2";
+    normalizedConfig.GPT_IMAGE_2_QUALITY ||= (
+      (normalizedConfig as Record<string, unknown>).DALL_E_3_QUALITY === "hd"
+        ? "high" : "medium"
+    );
+  }
+  delete (normalizedConfig as Record<string, unknown>).DALL_E_3_QUALITY;
 
   const parsedDisableImageGeneration = parseOptionalBool(
     (normalizedConfig as Record<string, unknown>).DISABLE_IMAGE_GENERATION
@@ -261,9 +269,9 @@ export const getLLMConfigValidationError = (
           return "Pixabay API key is required.";
         }
         break;
-      case "dall-e-3":
+      case "gpt-image-2":
         if (!isProvided(llmConfig.OPENAI_API_KEY)) {
-          return "OpenAI API key is required for DALL·E 3.";
+          return "OpenAI API key is required for GPT Image 2.";
         }
         break;
       case "gpt-image-1.5":
